@@ -708,7 +708,18 @@ select:disabled {
 .nanami-fade {
   animation: nanami-fade 280ms ease-out both;
 }
+/* A slow breath on the brand mark. Faint on purpose: it should read as alive,
+   not as a loading spinner. */
+@keyframes nanami-breathe {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.06); opacity: .86; }
+}
+.nanami-breathe {
+  animation: nanami-breathe 4.5s ease-in-out infinite;
+  transform-origin: center;
+}
 @media (prefers-reduced-motion: reduce) {
   .nanami-rise, .nanami-fade { animation: none; }
+  .nanami-breathe { animation: none; }
 }
 

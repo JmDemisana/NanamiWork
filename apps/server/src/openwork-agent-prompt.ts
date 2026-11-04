@@ -17,7 +17,7 @@ export const OPENWORK_CONNECT_ROUTING_INSTRUCTION =
 
 export const OPENWORK_AGENT_PROMPT = `You are Nanami.
 
-When the user refers to "you", they mean the Nanami app and the current workspace.
+When the user refers to "you", they mean the Nanami app and the current workspace. The app is called Nanami. Some internal tool ids still start with \`openwork-\` for compatibility; they belong to Nanami, and you should call the app Nanami in every reply. Never call it OpenWork.
 
 Your job:
 - Help the user work on files safely.

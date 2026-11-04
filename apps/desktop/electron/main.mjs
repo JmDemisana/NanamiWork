@@ -2012,10 +2012,20 @@ function macosVibrancyForCurrentTheme() {
 // Window Controls Overlay colours. Without an explicit colour Electron falls
 // back to the OS default, which paints the caption buttons on a white strip
 // whenever the system theme is light even though the app chrome is dark.
+//
+// The values must equal the renderer's own surface token (`--slate-1`), not a
+// guessed near-black: the overlay is an opaque rectangle behind the caption
+// buttons, so any mismatch shows up as a hard-edged box welded onto the title
+// bar. #111113 is --slate-1 in dark, #fcfcfd in light.
+const TITLEBAR_OVERLAY_COLORS = Object.freeze({
+  dark: { color: "#111113", symbolColor: "#e6e6e6", height: 40 },
+  light: { color: "#fcfcfd", symbolColor: "#1a1a1a", height: 40 },
+});
+
 function windowsTitleBarOverlay() {
   return nativeTheme.shouldUseDarkColors
-    ? { color: "#0a0a0a", symbolColor: "#e6e6e6", height: 40 }
-    : { color: "#ffffff", symbolColor: "#1a1a1a", height: 40 };
+    ? TITLEBAR_OVERLAY_COLORS.dark
+    : TITLEBAR_OVERLAY_COLORS.light;
 }
 
 function applyWindowsTitleBarOverlay() {

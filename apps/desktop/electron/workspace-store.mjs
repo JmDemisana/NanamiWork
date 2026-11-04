@@ -788,7 +788,7 @@ export function createWorkspaceStore({
     const home = process.env.OPENWORK_DEV_MODE === "1" && process.env.OPENWORK_DEV_SHARED_STATE !== "1"
       ? path.join(app.getPath("userData"), "openwork-dev-data", "home")
       : os.homedir();
-    const folderPath = await normalizeLocalWorkspacePath(path.join(home, "OpenWork Chat"));
+    const folderPath = await normalizeLocalWorkspacePath(path.join(home, "Nanami Chat"));
     try {
       await createWorkspace({ folderPath });
       return null;

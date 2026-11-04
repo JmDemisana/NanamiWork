@@ -19,7 +19,7 @@ export function automationRuntimeKnowledge(runtimeProvider = process.env.DEN_RUN
   }
   return [
     ...shared,
-    "This chat is running in OpenWork Desktop. For new recurring work, use openwork_execute id automation.propose so the person can review and create it in the app. Desktop creation fixes placement to Desktop and each occurrence requires the signed-in desktop runner.",
+    "This chat is running in Nanami Desktop. For new recurring work, use openwork_execute id automation.propose so the person can review and create it in the app. Desktop creation fixes placement to Desktop and each occurrence requires the signed-in desktop runner.",
     "Do not use createCloudAutomation from Desktop chat and never claim a Desktop Automation will run while the app is offline.",
   ].map((line) => `- ${line}`).join("\n");
 }

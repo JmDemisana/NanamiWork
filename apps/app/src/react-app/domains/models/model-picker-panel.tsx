@@ -13,14 +13,13 @@ import { isAutoRouterModel, managesOwnBehavior, type ModelPickerCatalogState, ty
 const chordClass = "hidden shrink-0 rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-sans text-xs leading-none text-muted-foreground sm:inline-flex";
 
 /** The picker's settings for the current model and its way out, under one hairline. */
-export function ModelPickerFooter({ effortButtonRef, effortLabel, effortShortcut, canChangeEffort, onOpenEffort, fast, onConnectProvider }: {
+export function ModelPickerFooter({ effortButtonRef, effortLabel, effortShortcut, canChangeEffort, onOpenEffort, fast }: {
   effortButtonRef?: React.Ref<HTMLButtonElement>;
   effortLabel: string;
   effortShortcut: string;
   canChangeEffort: boolean;
   onOpenEffort: () => void;
   fast?: { on: boolean; shortcut: string; disabled: boolean; onToggle: () => void };
-  onConnectProvider?: () => void;
 }) {
   return <div className="border-t border-border p-1.5" data-testid="model-behavior-rows">
     <button ref={effortButtonRef} type="button" data-testid="model-effort" disabled={!canChangeEffort} onClick={onOpenEffort}
@@ -35,10 +34,8 @@ export function ModelPickerFooter({ effortButtonRef, effortLabel, effortShortcut
       <kbd className={chordClass}>{fast.shortcut}</kbd>
       <Switch aria-label="Fast mode" size="sm" checked={fast.on} disabled={fast.disabled} onCheckedChange={fast.onToggle} />
     </div> : null}
-    {/* The list above already holds every model; there is no second, larger picker. */}
-    {onConnectProvider ? <div className="flex items-center pt-0.5">
-      <Button variant="ghost" size="sm" className="h-8 px-2 font-normal text-muted-foreground" onClick={onConnectProvider}>Connect more providers</Button>
-    </div> : null}
+    {/* The list above already holds every model; there is no second, larger picker.
+        Nanami ships with a single gateway, so there is nothing to connect here. */}
   </div>;
 }
 
@@ -94,7 +91,7 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
   const shortcutOs = resolveThinkingModeShortcutOs(undefined, typeof navigator === "undefined" ? "" : navigator.platform);
   const autoSelected = managesOwnBehavior(current);
   const canChangeEffort = Boolean(selected && onBehaviorChange && !autoSelected && hasEffort);
-  const effortValueLabel = autoSelected ? (isAutoRouterModel(current) ? "Managed by Smart Router" : "Managed by OpenWork") : hasEffort ? controls.options.find((option) => option.value === behaviorValue)?.label ?? selectedBehavior.label : "Unavailable";
+  const effortValueLabel = autoSelected ? (isAutoRouterModel(current) ? "Managed by Smart Router" : "Managed by Nanami") : hasEffort ? controls.options.find((option) => option.value === behaviorValue)?.label ?? selectedBehavior.label : "Unavailable";
 
   if (effort && selected) {
     return <div data-slot="model-thinking-submenu" className="overflow-y-auto p-2">
@@ -115,8 +112,7 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
     openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} footer={<>
       <ModelPickerFooter effortButtonRef={effortButtonRef} effortLabel={effortValueLabel} effortShortcut={thinkingModeShortcutLabel(shortcutOs)} canChangeEffort={canChangeEffort} onOpenEffort={() => setEffort(true)}
         fast={selected && onBehaviorChange && !autoSelected && controls.hasFast ? { on: controls.fast, shortcut: fastModeShortcutLabel(shortcutOs), disabled: controls.toggleValue === undefined,
-          onToggle: () => { if (controls.toggleValue !== undefined) onBehaviorChange(controls.toggleValue); } } : undefined}
-        onConnectProvider={props.onConnectProvider} />
+          onToggle: () => { if (controls.toggleValue !== undefined) onBehaviorChange(controls.toggleValue); } } : undefined} />
       {props.footerExtra}
       <AutoAccessFooter available={props.autoVisible} syncing={props.autoVisible && Boolean(props.openWorkModelsSyncing)} />
     </>} />;

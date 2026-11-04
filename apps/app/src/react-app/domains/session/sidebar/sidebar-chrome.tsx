@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -59,7 +59,7 @@ export function SidebarTitlebar({ history }: { history?: ConversationHistoryCont
 }
 
 /** One search/bell pair, in the brand row or the main titlebar when hidden. */
-export function SidebarActions({ onOpenSessionSearch }: { onOpenSessionSearch?: () => void }) {
+export function SidebarActions({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void }) {
   return (
     <div data-sidebar-actions className="flex shrink-0 items-center gap-0.5 titlebar-no-drag">
       {onOpenSessionSearch ? (
@@ -75,12 +75,26 @@ export function SidebarActions({ onOpenSessionSearch }: { onOpenSessionSearch?: 
           <TooltipContent>{t("workspace_list.search_sessions")} ({isMacPlatform() ? "⌘⇧F" : "Ctrl+Shift+F"})</TooltipContent>
         </Tooltip>
       ) : null}
+      {onOpenSettings ? (
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+              aria-label="Settings"
+              aria-keyshortcuts={isMacPlatform() ? "Meta+," : "Control+,"}
+              data-sidebar-settings
+              onClick={onOpenSettings}>
+              <Settings strokeWidth={1.5} />
+            </Button>
+          } />
+          <TooltipContent>Settings ({isMacPlatform() ? "⌘," : "Ctrl+,"})</TooltipContent>
+        </Tooltip>
+      ) : null}
       <NotificationBell align="start" />
     </div>
   );
 }
 
-export function MainSidebarControls({ onOpenSessionSearch }: { onOpenSessionSearch?: () => void }) {
+export function MainSidebarControls({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void }) {
   const { open, isMobile, openMobile } = useSidebar();
   const { config } = useShellConfig();
   if (open && !isMobile) return null;
@@ -92,7 +106,7 @@ export function MainSidebarControls({ onOpenSessionSearch }: { onOpenSessionSear
           {onOpenSessionSearch ? <span className="size-8" /> : null}
           {config.notifications ? <span className="size-8" /> : null}
         </div>
-      ) : <SidebarActions onOpenSessionSearch={onOpenSessionSearch} />}
+      ) : <SidebarActions onOpenSessionSearch={onOpenSessionSearch} onOpenSettings={onOpenSettings} />}
     </div>
   );
 }

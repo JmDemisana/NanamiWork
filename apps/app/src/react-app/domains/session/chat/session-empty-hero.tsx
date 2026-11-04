@@ -2,10 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
-import { DescriptiveButton, DescriptiveButtonTitle } from "@/components/descriptive-button";
 import type { ComposerAttachment } from "@/app/types";
-import { resolveOrganizationPromptCardContent } from "@/components/chat/task-suggestions";
-import { useOrgRestrictions } from "@/react-app/domains/cloud/desktop-config-provider";
 import { persistableComposerDraftText, useComposerStateStore } from "@/react-app/domains/session/surface/composer-state-store";
 import { useNewTaskDraftState } from "@/react-app/domains/session/sync/draft-store";
 import {
@@ -15,35 +12,6 @@ import {
 } from "./new-task-composer";
 import { consumePendingChatSeed, pendingChatSeedEvent } from "./pending-chat-seed";
 import { hideEmptyHeroIntroduction } from "./empty-hero-introduction";
-
-type HeroSuggestion = {
-  title: string;
-  description: string;
-  prompt: string;
-};
-
-const DEFAULT_SUGGESTIONS: HeroSuggestion[] = [
-  {
-    title: "Summarize my week",
-    description: "Pull highlights from email and calendar.",
-    prompt: "Summarize my week: pull the highlights from my connected email and calendar and give me a short digest of what happened and what needs my attention.",
-  },
-  {
-    title: "Clean up a spreadsheet",
-    description: "Drop in a CSV and describe the result you want.",
-    prompt: "Create a sample CSV file with 20 rows of fake customer data (name, email, company, revenue). Then show me a summary of the data.",
-  },
-  {
-    title: "Draft a document",
-    description: "Reports, emails, or briefs from a few bullet points.",
-    prompt: "Draft a one-page project brief. Ask me for the bullet points you need, then turn them into a clear, well-structured document.",
-  },
-  {
-    title: "Automate a web task",
-    description: "Use the built-in browser for repetitive steps.",
-    prompt: "Open craigslist.org in the browser and search for couches for sale. Show me the top 5 results with prices.",
-  },
-];
 
 export type SessionEmptyHeroProps = {
   providerCount: number;
@@ -61,10 +29,8 @@ export type SessionEmptyHeroProps = {
 };
 
 /**
- * Paper "first chat" empty state: the real session composer front and
- * center with suggestion cards below. Suggestions come from desktop
- * policies (organization onboarding prompts) when configured, with
- * built-in defaults otherwise.
+ * Paper "first chat" empty state: the real session composer front and center,
+ * with nothing else competing for attention.
  */
 export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   // The session is created on submit, so until then the prompt has no
@@ -111,7 +77,6 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
     // Attachment chips only exist in memory (File objects); the stored text drops their tokens.
     persistPrompt({ text: persistableComposerDraftText(value), mode: "prompt" });
   }, [persistPrompt]);
-  const orgRestrictions = useOrgRestrictions();
 
   // A chat deep link (Den's connector "Chat" action) seeds the composer with
   // the connector chip and its starter prompt; the person reviews and sends.
@@ -126,18 +91,6 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
     window.addEventListener(pendingChatSeedEvent, seed);
     return () => window.removeEventListener(pendingChatSeedEvent, seed);
   }, []);
-
-  const organizationPrompts = orgRestrictions.onboardingPrompts;
-  const suggestions: HeroSuggestion[] = organizationPrompts !== undefined
-    ? organizationPrompts.map((orgPrompt, index) => {
-      const card = resolveOrganizationPromptCardContent({
-        prompt: orgPrompt,
-        description: orgRestrictions.onboardingPromptDescriptions?.[index],
-        index,
-      });
-      return { title: card.title, description: card.description, prompt: card.selectionPrompt };
-    })
-    : DEFAULT_SUGGESTIONS;
 
   const submit = async (
     resolvedPrompt: string,
@@ -164,20 +117,15 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
     }
   };
 
-  const fillPrompt = (value: string) => {
-    setPrompt(value);
-    window.dispatchEvent(new Event("openwork:focusPrompt"));
-  };
-
   return (
     <div data-chat-empty-hero className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 max-lg:h-full max-lg:min-h-0 max-lg:gap-4 max-lg:overflow-y-auto max-lg:px-3 max-lg:pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6">
-      <div data-empty-greeting hidden={hideIntroduction} className="nanami-fade text-center max-lg:pt-6">
+      <div data-empty-greeting hidden={hideIntroduction} className="nanami-rise text-center max-lg:pt-6">
         <h2 className="text-lg font-medium tracking-tight text-foreground">
           What do you need done?
         </h2>
       </div>
 
-      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock className="max-lg:sticky max-lg:bottom-0 max-lg:order-last max-lg:mt-auto max-lg:shrink-0 max-lg:bg-dls-surface">
+      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise max-lg:sticky max-lg:bottom-0 max-lg:order-last max-lg:mt-auto max-lg:shrink-0 max-lg:bg-dls-surface">
       <NewTaskComposer
         draft={prompt}
         onDraftChange={setPrompt}
@@ -185,20 +133,6 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
         busy={props.busy ?? false}
         context={props.composer ?? null}
       />
-      </div>
-
-      <div data-empty-suggestions hidden={hideIntroduction} className={hideIntroduction ? "hidden" : "grid gap-2 sm:grid-cols-2"}>
-        {suggestions.map((suggestion, index) => (
-          <DescriptiveButton
-            key={suggestion.title}
-            style={{ animationDelay: `${120 + index * 60}ms` }}
-            className="nanami-rise min-h-10 items-center rounded-xl bg-background px-3 py-2 text-foreground transition-[border-color,background-color,transform] duration-200 ease-out hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-muted/60 motion-reduce:transform-none max-lg:min-h-11"
-            aria-label={`${suggestion.title}: ${suggestion.description}`}
-            onClick={() => fillPrompt(suggestion.prompt)}
-          >
-            <DescriptiveButtonTitle>{suggestion.title}</DescriptiveButtonTitle>
-          </DescriptiveButton>
-        ))}
       </div>
     </div>
   );

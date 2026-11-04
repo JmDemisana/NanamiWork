@@ -853,11 +853,11 @@ export function AppSidebar(props: AppSidebarProps) {
           </div>
         ) : (
           <div data-sidebar-brand className="flex h-11 min-w-0 flex-1 items-center gap-1.5 pl-4 pr-1">
-            <img src={resolveExtensionIconSrc("/openwork-sidebar-mark.svg")} alt="" className="size-5 shrink-0 object-contain dark:invert" />
+            <img src={resolveExtensionIconSrc("/openwork-sidebar-mark.svg")} alt="" className="nanami-breathe size-5 shrink-0 object-contain dark:invert" />
             <span className="truncate text-[15px] font-medium tracking-[-0.4px]" title={brandAppName}>{brandAppName}</span>
           </div>
         )}
-        {open || isMobile ? <SidebarActions onOpenSessionSearch={props.onOpenSessionSearch} /> : null}
+        {open || isMobile ? <SidebarActions onOpenSessionSearch={props.onOpenSessionSearch} onOpenSettings={props.onOpenAccountSettings} /> : null}
         </div>
         <SidebarHeader className="mb-0 mt-2">
           <SidebarMenu>
