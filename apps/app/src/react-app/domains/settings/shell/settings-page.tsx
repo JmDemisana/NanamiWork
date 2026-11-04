@@ -57,11 +57,6 @@ import {
   SettingsPanelDescription,
   SettingsPanelHeading,
   SettingsPanelTitle,
-  SettingsPanelToolbar,
-  SettingsPanelToolbarActions,
-  SettingsPanelToolbarButton,
-  SettingsPanelToolbarMessage,
-  SettingsPanelToolbarStatus,
 } from "./panel";
 import { SidebarDestination } from "../../session/sidebar/sidebar-destination";
 import { useDesktopFeature } from "../../session/status/use-desktop-feature";
@@ -210,25 +205,21 @@ export function getSettingsTabDescription(tab: SettingsTab) {
 }
 
 export function getWorkspaceSettingsTabs(): SettingsTab[] {
-  return ["preferences", "permissions", "extensions", "import", "advanced"];
+  return ["preferences", "permissions", "import", "advanced"];
 }
 
 export function getGlobalSettingsTabs(
   developerMode: boolean,
-  capabilities: Pick<PlatformCapabilities, "autoUpdate">,
+  _capabilities: Pick<PlatformCapabilities, "autoUpdate">,
   options: { computerUse?: boolean } = {},
 ): SettingsTab[] {
-  const tabs: SettingsTab[] = ["ai", "ollama", "appearance", "shortcuts", "environment"];
+  const tabs: SettingsTab[] = ["appearance", "shortcuts", "environment"];
   if (options.computerUse) tabs.push("computer");
-  if (capabilities.autoUpdate) tabs.push("updates");
   if (developerMode) tabs.push("debug");
   return tabs;
 }
 
-export const CLOUD_SETTINGS_TABS: SettingsTab[] = [
-  "cloud-account",
-  "usage",
-];
+export const CLOUD_SETTINGS_TABS: SettingsTab[] = [];
 
 export function isSettingsTabBeta(_tab: SettingsTab) {
   return false;
@@ -442,35 +433,9 @@ export function SettingsPageHeading({ activeTab }: Pick<SettingsPageProps, "acti
 export function SettingsPage(props: SettingsPageProps) {
   return (
     <SettingsContent>
-      {props.activeTab !== "extensions" && props.activeTab !== "ai" ? <SettingsPanel>
+      <SettingsPanel>
         <SettingsPageHeading activeTab={props.activeTab} />
-
-        {props.showUpdateToolbar && props.activeTab === "general" ? (
-          <SettingsPanelToolbar>
-            <SettingsPanelToolbarActions>
-              <SettingsPanelToolbarStatus
-                tone={props.updateToolbarTone}
-                title={props.updateToolbarTitle}
-                spinning={props.updateToolbarSpinning}
-              >
-                {props.updateToolbarLabel}
-              </SettingsPanelToolbarStatus>
-              {props.updateToolbarActionLabel ? (
-                <SettingsPanelToolbarButton
-                  onClick={props.onUpdateToolbarAction}
-                  disabled={props.updateToolbarDisabled}
-                  title={props.updateRestartBlockedMessage ?? ""}
-                >
-                  {props.updateToolbarActionLabel}
-                </SettingsPanelToolbarButton>
-              ) : null}
-            </SettingsPanelToolbarActions>
-            {props.updateRestartBlockedMessage ? (
-              <SettingsPanelToolbarMessage>{props.updateRestartBlockedMessage}</SettingsPanelToolbarMessage>
-            ) : null}
-          </SettingsPanelToolbar>
-        ) : null}
-      </SettingsPanel> : null}
+      </SettingsPanel>
 
       {props.children}
     </SettingsContent>

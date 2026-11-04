@@ -691,3 +691,24 @@ select:disabled {
 @media (prefers-reduced-motion: reduce) {
   .ow-app-progress-dot, .ow-app-loading-grid { animation: none; }
 }
+
+/* Nanami entrance motion: gentle upward settle, used for settings cards and
+   panels so the app feels alive without being busy. */
+@keyframes nanami-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes nanami-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.nanami-rise {
+  animation: nanami-rise 320ms cubic-bezier(.22,.61,.36,1) both;
+}
+.nanami-fade {
+  animation: nanami-fade 280ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nanami-rise, .nanami-fade { animation: none; }
+}
+

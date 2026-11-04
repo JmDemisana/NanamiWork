@@ -2009,10 +2009,31 @@ function macosVibrancyForCurrentTheme() {
   return nativeTheme.shouldUseDarkColors ? "under-window" : "sidebar";
 }
 
+// Window Controls Overlay colours. Without an explicit colour Electron falls
+// back to the OS default, which paints the caption buttons on a white strip
+// whenever the system theme is light even though the app chrome is dark.
+function windowsTitleBarOverlay() {
+  return nativeTheme.shouldUseDarkColors
+    ? { color: "#0a0a0a", symbolColor: "#e6e6e6", height: 40 }
+    : { color: "#ffffff", symbolColor: "#1a1a1a", height: 40 };
+}
+
+function applyWindowsTitleBarOverlay() {
+  if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  try {
+    mainWindow.setTitleBarOverlay(windowsTitleBarOverlay());
+  } catch (error) {
+    console.warn("[titlebar] failed to update window controls overlay", error);
+  }
+}
+
 function applyNativeTheme(mode) {
   nativeTheme.themeSource = mode;
 
   if (process.platform !== "darwin") {
+    applyWindowsTitleBarOverlay();
     return true;
   }
 
@@ -2794,7 +2815,7 @@ async function createMainWindowInner() {
   } else {
     Object.assign(windowAppearanceOptions, {
       titleBarStyle: "hidden",
-      titleBarOverlay: { height: 40 },
+      titleBarOverlay: windowsTitleBarOverlay(),
     });
   }
 
@@ -2849,6 +2870,12 @@ async function createMainWindowInner() {
   windowState.track(mainWindow);
   applicationMenu.applyVisibility(mainWindow);
   browserPanel.registerWindowShortcuts(mainWindow);
+
+  // Keep the caption buttons in step with a live OS theme change.
+  nativeTheme.on("updated", applyWindowsTitleBarOverlay);
+  mainWindow.once("closed", () => {
+    nativeTheme.off("updated", applyWindowsTitleBarOverlay);
+  });
 
   // Native fullscreen is independent of the DOM Fullscreen API. The preload
   // also reads the initial value, so reloading in fullscreen keeps its layout.

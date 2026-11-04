@@ -2,11 +2,11 @@
   "name": "@openwork/desktop",
   "private": true,
   "version": "0.0.0-dev",
-  "desktopName": "com.differentai.openwork",
-  "description": "OpenWork desktop shell",
+  "desktopName": "ai.nanami.workbench",
+  "description": "Nanami desktop shell",
   "author": {
-    "name": "OpenWork",
-    "email": "support@openworklabs.com"
+    "name": "Nanami",
+    "email": "support@nanami-ai.pages.dev"
   },
   "main": "electron/main.mjs",
   "type": "module",

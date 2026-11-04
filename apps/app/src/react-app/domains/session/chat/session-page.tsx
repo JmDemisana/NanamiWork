@@ -8,7 +8,6 @@ import { PendingConversationView } from "./pending-conversation";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
-import { DesktopUpdateButton } from "../../settings/state/desktop-updater-provider";
 import { ArrowLeft, CheckCheck, Cloud, FileText, Globe, Maximize2, MoreHorizontal, PanelRight, TextSearch, Undo2, X, Zap } from "lucide-react";
 
 import { resolveExtensionIconSrc } from "@/react-app/design-system/extension-icon-src";
@@ -1636,7 +1635,6 @@ export function SessionPage(props: SessionPageProps) {
             {props.mainContentHeaderActionsRef ? (
               <div ref={props.mainContentHeaderActionsRef} className="shrink-0 titlebar-no-drag" />
             ) : <div className="flex shrink-0 items-center gap-1.5 text-gray-10 titlebar-no-drag">
-              <DesktopUpdateButton />
               {!props.primarySlot && findButtonSessionId && !hasMainContentTakeover ? (
                 <Tooltip>
                   <TooltipTrigger

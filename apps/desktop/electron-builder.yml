@@ -1,6 +1,6 @@
 extends: ./electron-builder.base.yml
-appId: com.differentai.openwork
-productName: OpenWork
+appId: ai.nanami.workbench
+productName: Nanami
 protocols:
   - name: OpenWork
     schemes:

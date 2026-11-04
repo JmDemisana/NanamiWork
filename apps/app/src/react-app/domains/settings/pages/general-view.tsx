@@ -1,23 +1,16 @@
 /** @jsxImportSource react */
 import {
   ArrowRight,
-  ArrowUpRight,
-  Cloud,
   Cog,
   FolderLock,
   Keyboard,
-  LifeBuoy,
-  MessageCircle,
   Paintbrush,
-  RefreshCcw,
   Sparkles,
   Terminal,
   Wrench,
 } from "lucide-react";
 
-import { t } from "../../../../i18n";
 import type { SettingsTab } from "../../../../app/types";
-import { Button } from "@/components/ui/button";
 
 export type GeneralSettingsViewProps = {
   onNavigateTab: (tab: SettingsTab) => void;
@@ -27,10 +20,7 @@ export type GeneralSettingsViewProps = {
   onReportIssue: () => void;
 };
 
-type SettingsCardDefinition = { tab: SettingsTab; icon: typeof Sparkles } & (
-  | { title: string; desc: string }
-  | { titleKey: string; descKey: string }
-);
+type SettingsCardDefinition = { tab: SettingsTab; icon: typeof Sparkles; title: string; desc: string };
 
 const workspaceCards: SettingsCardDefinition[] = [
   { tab: "preferences", icon: Cog, title: "Preferences", desc: "Default model, reasoning, and compaction." },
@@ -39,127 +29,72 @@ const workspaceCards: SettingsCardDefinition[] = [
 ];
 
 const globalCards: SettingsCardDefinition[] = [
-  { tab: "ai", icon: Sparkles, title: "AI Providers", desc: "Connect services that provide AI models." },
-  { tab: "cloud-account", icon: Cloud, title: "Cloud", desc: "OpenWork Cloud account and organization." },
   { tab: "appearance", icon: Paintbrush, title: "Appearance", desc: "Theme, font size, and display." },
   { tab: "shortcuts", icon: Keyboard, title: "Keyboard shortcuts", desc: "Keys that switch to your saved models." },
   { tab: "environment", icon: Terminal, title: "Environment", desc: "Environment variables and paths." },
-  { tab: "updates", icon: RefreshCcw, title: "Updates", desc: "App version and update channel." },
 ];
-
-function cardTitle(card: SettingsCardDefinition) {
-  return "titleKey" in card ? t(card.titleKey) : card.title;
-}
-
-function cardDescription(card: SettingsCardDefinition) {
-  return "descKey" in card ? t(card.descKey) : card.desc;
-}
 
 function SettingsCard(props: {
   icon: typeof Sparkles;
   title: string;
   desc: string;
+  index: number;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={props.onClick}
-      className="flex items-center gap-3 rounded-2xl border border-dls-border bg-dls-surface p-4 text-left transition-colors hover:bg-dls-hover"
+      style={{ animationDelay: `${props.index * 40}ms` }}
+      className="nanami-rise group flex items-center gap-3 rounded-2xl border border-dls-border bg-dls-surface p-4 text-left transition-[background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-dls-hover hover:shadow-[0_6px_18px_-10px_rgba(0,0,0,0.55)] motion-reduce:transform-none motion-reduce:transition-none"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dls-border bg-dls-hover">
-        <props.icon size={16} className="text-dls-secondary" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-dls-border bg-dls-hover transition-colors duration-200 group-hover:border-dls-secondary/40">
+        <props.icon size={16} className="text-dls-secondary transition-colors duration-200 group-hover:text-dls-text" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-medium text-dls-text">{props.title}</div>
         <div className="text-[11px] text-dls-secondary">{props.desc}</div>
       </div>
-      <ArrowRight size={14} className="shrink-0 text-dls-secondary" />
+      <ArrowRight
+        size={14}
+        className="shrink-0 text-dls-secondary transition-transform duration-200 ease-out group-hover:translate-x-0.5"
+      />
     </button>
+  );
+}
+
+function SettingsGroup(props: { label: string; cards: SettingsCardDefinition[]; onNavigateTab: (tab: SettingsTab) => void }) {
+  return (
+    <div className="space-y-3">
+      <div className="nanami-fade text-[11px] font-semibold uppercase tracking-[0.15em] text-dls-secondary">
+        {props.label}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {props.cards.map((card, index) => (
+          <SettingsCard
+            key={card.tab}
+            icon={card.icon}
+            title={card.title}
+            desc={card.desc}
+            index={index}
+            onClick={() => props.onNavigateTab(card.tab)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
 export function GeneralSettingsView(props: GeneralSettingsViewProps) {
   return (
     <div className="w-full max-w-3xl space-y-8">
-      {/* Workspace settings */}
-      <div className="space-y-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-dls-secondary">
-          Workspace
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {workspaceCards.map((card) => (
-            <SettingsCard
-              key={card.tab}
-              icon={card.icon}
-              title={cardTitle(card)}
-              desc={cardDescription(card)}
-              onClick={() => props.onNavigateTab(card.tab)}
-            />
-          ))}
-        </div>
-      </div>
+      <SettingsGroup label="Workspace" cards={workspaceCards} onNavigateTab={props.onNavigateTab} />
+      <SettingsGroup label="Global" cards={globalCards} onNavigateTab={props.onNavigateTab} />
 
-      {/* Global settings */}
-      <div className="space-y-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-dls-secondary">
-          Global
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {globalCards.map((card) => (
-            <SettingsCard
-              key={card.tab}
-              icon={card.icon}
-              title={cardTitle(card)}
-              desc={cardDescription(card)}
-              onClick={() => props.onNavigateTab(card.tab)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Feedback */}
-      <div className="space-y-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-dls-secondary">
-          Help
-        </div>
-        <div className="rounded-2xl border border-dls-border bg-dls-surface p-4">
-          <div className="space-y-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <LifeBuoy size={14} className="text-dls-secondary" />
-                <div className="text-[13px] font-medium text-dls-text">{t("settings.feedback_title")}</div>
-              </div>
-              <div className="mt-1 max-w-[58ch] text-[11px] text-dls-secondary">{t("settings.feedback_desc")}</div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={props.onSendFeedback}
-              >
-                <MessageCircle size={12} />
-                {t("settings.send_feedback")}
-                <ArrowUpRight size={11} />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={props.onJoinDiscord}
-              >
-                {t("settings.join_discord")}
-                <ArrowUpRight size={11} />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={props.onReportIssue}
-              >
-                {t("settings.report_issue")}
-                <ArrowUpRight size={11} />
-              </Button>
-            </div>
-          </div>
+      <div className="nanami-fade space-y-2 rounded-2xl border border-dls-border bg-dls-surface p-4">
+        <div className="text-[13px] font-medium text-dls-text">Nanami AI</div>
+        <div className="max-w-[58ch] text-[11px] text-dls-secondary">
+          This build runs on the Nanami Gateway. Every model request goes through it.
         </div>
       </div>
     </div>

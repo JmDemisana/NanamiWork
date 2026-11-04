@@ -11,17 +11,13 @@ import { hasPendingComposerAutoSend, subscribeComposerAutoSend } from "../surfac
 import { getQueuedDrainState, subscribeQueuedDrain } from "../surface/queued-drain-machine";
 import {
   AlertCircle,
-  AlertTriangle,
   Archive,
   ArchiveRestore,
-  Blocks,
   CheckCheck,
   Folder,
-  Clock3,
   ChevronRight,
   Columns2,
   FolderPlus,
-  LayoutGrid,
   ListFilter,
   MoreHorizontal,
   Pencil,
@@ -111,8 +107,7 @@ import {
 
 import { SidebarContext, useSidebarContext } from "./app-sidebar-provider";
 import { RemoteTaskSidebarRows } from "./remote-task-sidebar-rows";
-import { AccountStatusMenu, type AccountStatusMenuProps } from "./account-status-menu";
-import { ActivationCard } from "../../cloud/activation/activation-card";
+import type { AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
   sessionNumberAriaKeyShortcut,
@@ -168,7 +163,6 @@ import {
 import { WorkspaceAvatarPicker } from "./workspace-avatar-picker";
 import { isSameWorkbenchSession, useWorkbenchStore } from "../chat/workbench-store";
 import { shouldHideAttachedSideChat } from "./side-chat-status";
-import { SidebarDestination } from "./sidebar-destination";
 import { SessionTitle } from "./session-title";
 import { isKeyboardFocus } from "./session-title-marquee";
 import { getSessionOrder } from "./session-order";
@@ -885,40 +879,6 @@ export function AppSidebar(props: AppSidebarProps) {
                 </kbd>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {props.onOpenDashboard ? (
-              <SidebarDestination
-                active={props.dashboardActive === true}
-                icon={Blocks}
-                label={props.dashboardLabel ?? "Dashboard"}
-                onSelect={props.onOpenDashboard}
-              />
-            ) : null}
-            {props.onOpenAutomations ? (
-              <SidebarDestination
-                active={props.automationsActive === true}
-                icon={Clock3}
-                label="Automations"
-                labelContent={(
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate">Automations</span>
-                    {props.automationsNeedAttention ? (
-                      <AlertTriangle
-                        data-automations-attention-indicator
-                        className="ml-auto size-3.5 shrink-0 text-warning"
-                        aria-label="An Automation needs attention"
-                      />
-                    ) : null}
-                  </span>
-                )}
-                onSelect={props.onOpenAutomations}
-              />
-            ) : null}
-            <SidebarDestination
-              active={props.extensionsActive === true}
-              icon={LayoutGrid}
-              label={t("settings.tab_extensions")}
-              onSelect={props.onOpenExtensions}
-            />
             {props.mobileChatActions}
           </SidebarMenu>
         </SidebarHeader>
@@ -999,8 +959,9 @@ export function AppSidebar(props: AppSidebarProps) {
         </SidebarReorderScope>
 
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
-          <ActivationCard onOpenExtensions={props.onOpenExtensions} />
-          <AccountStatusMenu {...props.status} onOpenAccountSettings={props.onOpenAccountSettings} />
+          <div className="flex min-w-0 items-center gap-2 px-2.5 py-2 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
+            <span className="truncate">A fork of OpenWork for Nanami AI.</span>
+          </div>
         </SidebarFooter>
 
         <SidebarRail
