@@ -8,7 +8,7 @@ import { PendingConversationView } from "./pending-conversation";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
-import { ArrowLeft, CheckCheck, Cloud, FileText, Globe, Maximize2, MoreHorizontal, PanelRight, TextSearch, Undo2, X, Zap } from "lucide-react";
+import { ArrowLeft, CheckCheck, FileText, Globe, Maximize2, MoreHorizontal, PanelRight, TextSearch, Undo2, X, Zap } from "lucide-react";
 
 import { resolveExtensionIconSrc } from "@/react-app/design-system/extension-icon-src";
 import { t } from "../../../../i18n";
@@ -50,7 +50,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ConfirmModal } from "../../../design-system/modals/confirm-modal";
-import { useDenAuth } from "../../cloud/den-auth-provider";
 import { WorkbenchPanelGroup, PRIMARY_PANEL_ID, SECONDARY_PANEL_ID } from "./workbench-panel-group";
 import ProviderAuthModal, { type ProviderAuthModalProps } from "../../connections/provider-auth/provider-auth-modal";
 import { RenameSessionModal } from "../modals/rename-session-modal";
@@ -174,7 +173,7 @@ export type SessionPageSidebarProps = {
   developerMode: boolean;
   sessionStatusById: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
-  /** The Workspaces · Feed switch ships with `settledSessions`. */
+  /** The Workspaces Â· Feed switch ships with `settledSessions`. */
   feedEnabled?: boolean;
   sessionAttentionLabelById?: Record<string, string>;
   sessionAttentionSourceById?: Record<string, "child" | "descendant">;
@@ -479,7 +478,6 @@ export function SessionPage(props: SessionPageProps) {
     return session ? Boolean(session.time?.archived) : undefined;
   };
   const { config: shellConfig } = useShellConfig();
-  const denAuth = useDenAuth();
   const isMobile = useIsMobile();
   const bootOverlayVisible = useBootOverlayVisible();
   const sidebarOpen = useUiStateStore((state) => state.sidebarOpen);
@@ -514,7 +512,8 @@ export function SessionPage(props: SessionPageProps) {
   const panelRailActive = activeSidePanel === "panel";
   const browserRailActive = panelRailActive && activePanelTab?.type === "browser";
   const filesRailActive = panelRailActive && activePanelTab?.type !== "browser";
-  const showCloudSignIn = shellConfig.cloudSignin && !denAuth.isSignedIn && denAuth.status !== "checking";
+  // Nanami runs on the local gateway only; cloud sign-in has no entry point.
+  const showCloudSignIn = false;
   const cloudSignIn = useCloudSignIn();
   // The browser opens on Den's sign-up tab (label stays "Sign in").
   // This conversation stays on screen and sign-in returns to it.
@@ -1054,7 +1053,7 @@ export function SessionPage(props: SessionPageProps) {
         pendingConversationHistoryNavigation.targetSessionId === historySessionId
       ) {
         setConversationHistory(pendingConversationHistoryNavigation.history);
-        // The workbench restores the destination session’s own side chat.
+        // The workbench restores the destination sessionâ€™s own side chat.
         setPendingConversationHistoryNavigation(null);
         return;
       }
@@ -1615,7 +1614,7 @@ export function SessionPage(props: SessionPageProps) {
                   className="hidden min-w-0 shrink-0 items-center gap-1.5 text-[12px] text-dls-secondary lg:flex"
                   data-session-header-workspace={workspaceName}
                 >
-                  <span aria-hidden="true">·</span>
+                  <span aria-hidden="true">Â·</span>
                   <span className="max-w-40 truncate">{workspaceName}</span>
                 </span>
               ) : null}
@@ -1650,7 +1649,7 @@ export function SessionPage(props: SessionPageProps) {
                       </Button>
                     }
                   />
-                  <TooltipContent>Find in conversation ({isMacPlatform() ? "⌘F" : "Ctrl+F"})</TooltipContent>
+                  <TooltipContent>Find in conversation ({isMacPlatform() ? "âŒ˜F" : "Ctrl+F"})</TooltipContent>
                 </Tooltip>
               ) : null}
               {showSettleButton && currentSessionSettle ? (
@@ -1670,21 +1669,8 @@ export function SessionPage(props: SessionPageProps) {
                       </Button>
                     }
                   />
-                  <TooltipContent>{settleLabel} ({isMacPlatform() ? "⌘⇧E" : "Ctrl+Shift+E"})</TooltipContent>
+                  <TooltipContent>{settleLabel} ({isMacPlatform() ? "âŒ˜â‡§E" : "Ctrl+Shift+E"})</TooltipContent>
                 </Tooltip>
-              ) : null}
-              {showCloudSignIn ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="hidden lg:inline-flex"
-                  onClick={openCloudSignIn}
-                  title={t("den.signin_title")}
-                  aria-label={t("den.signin_title")}
-                >
-                  <Cloud className="size-3.5" />
-                  <span>{t("den.signin_button")}</span>
-                </Button>
               ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -1718,12 +1704,6 @@ export function SessionPage(props: SessionPageProps) {
                     <FileText className="size-4" />
                     Files{artifactTargetCount > 0 ? ` (${artifactTargetCount})` : ""}
                   </DropdownMenuItem>
-                  {showCloudSignIn ? (
-                    <DropdownMenuItem onClick={openCloudSignIn}>
-                      <Cloud className="size-4" />
-                      {t("den.signin_button")}
-                    </DropdownMenuItem>
-                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
               {props.developerMode ? (
@@ -2069,7 +2049,7 @@ export function SessionPage(props: SessionPageProps) {
                       </div>
                     </div>
                   ) : showWorkspaceSetupEmptyState ? (
-                    // Chat-first: no workspace yet — the composer creates a
+                    // Chat-first: no workspace yet â€” the composer creates a
                     // default chat workspace instead of asking where to put it.
                     <SessionEmptyHero
                       providerCount={providerCount}
