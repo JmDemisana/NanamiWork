@@ -2013,13 +2013,14 @@ function macosVibrancyForCurrentTheme() {
 // back to the OS default, which paints the caption buttons on a white strip
 // whenever the system theme is light even though the app chrome is dark.
 //
-// The values must equal the renderer's own surface token (`--slate-1`), not a
-// guessed near-black: the overlay is an opaque rectangle behind the caption
-// buttons, so any mismatch shows up as a hard-edged box welded onto the title
-// bar. #111113 is --slate-1 in dark, #fcfcfd in light.
+// The values must equal the sidebar background (`--sidebar`, i.e. `--slate-2`),
+// not the content surface and not a guessed near-black: the overlay is an
+// opaque rectangle behind the caption buttons, so any mismatch shows up as a
+// hard-edged box welded onto the title bar. The window chrome and the sidebar
+// read as one continuous surface. #18191b is --slate-2 in dark, #f9f9fb in light.
 const TITLEBAR_OVERLAY_COLORS = Object.freeze({
-  dark: { color: "#111113", symbolColor: "#e6e6e6", height: 40 },
-  light: { color: "#fcfcfd", symbolColor: "#1a1a1a", height: 40 },
+  dark: { color: "#18191b", symbolColor: "#e6e6e6", height: 40 },
+  light: { color: "#f9f9fb", symbolColor: "#1a1a1a", height: 40 },
 });
 
 function windowsTitleBarOverlay() {
