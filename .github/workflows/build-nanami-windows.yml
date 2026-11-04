@@ -1,0 +1,71 @@
+name: Build Nanami Windows Build
+
+# Windows only. Upstream builds four platforms and two macOS jobs that need
+# Apple signing secrets we do not have, so this fork keeps one cheap job:
+# a private repo is billed per minute, and windows-latest already costs 2x.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # Required by the server build and package-time helpers.
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the renderer, the server (including the Nanami provider), the
+      # sidecars, and stages everything into apps/desktop.
+      - name: Build Electron app
+        run: pnpm --filter @openwork/desktop build:electron
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Verify the Nanami wiring survived the build
+        shell: pwsh
+        run: |
+          $dist = Join-Path $PWD "apps/desktop/server/dist"
+          if (-not (Test-Path $dist)) { throw "Built server is missing at $dist" }
+          $hit = Get-ChildItem -Path $dist -Recurse -Filter *.js |
+            Select-String -Pattern "nanami-ai\.pages\.dev" -List
+          if (-not $hit) { throw "Nanami gateway URL is missing from the built server" }
+          $hit | ForEach-Object { Write-Host "found in $($_.Path)" }
+
+      - name: Package Windows installer
+        shell: pwsh
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanami-openwork-windows
+          if-no-files-found: error
+          path: |
+            apps/desktop/dist-electron/*.exe
+            apps/desktop/dist-electron/*.blockmap
+            apps/desktop/dist-electron/win-unpacked/**
