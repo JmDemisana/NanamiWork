@@ -173,7 +173,7 @@ export type SessionPageSidebarProps = {
   developerMode: boolean;
   sessionStatusById: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
-  /** The Workspaces Â· Feed switch ships with `settledSessions`. */
+  /** The Workspaces · Feed switch ships with `settledSessions`. */
   feedEnabled?: boolean;
   sessionAttentionLabelById?: Record<string, string>;
   sessionAttentionSourceById?: Record<string, "child" | "descendant">;
@@ -1053,7 +1053,7 @@ export function SessionPage(props: SessionPageProps) {
         pendingConversationHistoryNavigation.targetSessionId === historySessionId
       ) {
         setConversationHistory(pendingConversationHistoryNavigation.history);
-        // The workbench restores the destination sessionâ€™s own side chat.
+        // The workbench restores the destination session's own side chat.
         setPendingConversationHistoryNavigation(null);
         return;
       }
@@ -1613,7 +1613,7 @@ export function SessionPage(props: SessionPageProps) {
                   className="hidden min-w-0 shrink-0 items-center gap-1.5 text-[12px] text-dls-secondary lg:flex"
                   data-session-header-workspace={workspaceName}
                 >
-                  <span aria-hidden="true">Â·</span>
+                  <span aria-hidden="true">·</span>
                   <span className="max-w-40 truncate">{workspaceName}</span>
                 </span>
               ) : null}
@@ -2048,7 +2048,7 @@ export function SessionPage(props: SessionPageProps) {
                       </div>
                     </div>
                   ) : showWorkspaceSetupEmptyState ? (
-                    // Chat-first: no workspace yet â€” the composer creates a
+                    // Chat-first: no workspace yet — the composer creates a
                     // default chat workspace instead of asking where to put it.
                     <SessionEmptyHero
                       providerCount={providerCount}
