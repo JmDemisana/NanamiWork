@@ -99,7 +99,7 @@ const INITIAL_PREFS: LocalPreferences = {
   releaseChannel: "stable",
   featureFlags: { workspaceRunMode: false },
   hasCompletedOnboarding: false,
-  analyticsEnabled: true,
+  analyticsEnabled: false,
   desktopNotifications: DEFAULT_DESKTOP_NOTIFICATION_PREFERENCE,
   linkOpenDestination: "openwork",
   askBeforeOpeningLinks: true,

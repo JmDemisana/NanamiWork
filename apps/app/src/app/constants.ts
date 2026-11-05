@@ -151,46 +151,8 @@ export const MCP_QUICK_CONNECT: McpDirectoryInfo[] = [
     iconSlug: "semanticscholar",
     iconSrc: "/ext-context7.svg",
   },
-  {
-    get name() { return t("mcp.quick_connect_openwork_cloud_title"); },
-    serverName: "openwork-cloud",
-    get description() { return t("mcp.quick_connect_openwork_cloud_desc"); },
-    get url() {
-      // The desktop app connects to the minimal, harness-facing surface
-      // (/mcp/agent: search_capabilities + execute_capability only), not the
-      // full catalog at bare /mcp. getDenMcpUrl heals stale web-app origins;
-      // never at the web app's root (see
-      // packages/docs/cloud/run-in-the-cloud/cloud-mcp.mdx).
-      try {
-        return `${getDenMcpUrl()}/agent`;
-      } catch {
-        return "https://api.app.openworklabs.com/mcp/agent";
-      }
-    },
-    type: "remote",
-    oauth: true,
-    managedBy: "openwork-connect",
-    kind: "mcp",
-    iconSrc: "/openwork-mark.svg",
-    // Auto-managed by the signed-in cloud reconciler (syncCloudControlMcp):
-    // configured + enabled while signed in to OpenWork Cloud. Hidden from the
-    // default catalog; "Show hidden" reveals it.
-    defaultHidden: true,
-  },
-  {
-    get name() { return t("mcp.quick_connect_openwork_ui_title"); },
-    serverName: "openwork-ui",
-    get description() { return t("mcp.quick_connect_openwork_ui_desc"); },
-    type: "local",
-    // Dev builds replace this with the local checkout path before writing config.
-    command: ["npx", "-y", "openwork-ui-mcp"],
-    oauth: false,
-    kind: "ui-control",
-    iconSrc: "/openwork-mark.svg",
-    // Internal UI-control surface for agents driving the desktop app. Hidden
-    // from the default catalog; "Show hidden" reveals it.
-    defaultHidden: true,
-  },
+  /* openwork-cloud removed */
+  /* openwork-ui removed */
   ...BUILT_IN_OPENWORK_EXTENSION_MANIFESTS.map(extensionManifestToDirectoryInfo),
 ];
 

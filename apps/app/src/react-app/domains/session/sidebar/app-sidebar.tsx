@@ -65,7 +65,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -702,7 +701,6 @@ export type AppSidebarProps = {
   /** Back/forward across recently viewed conversations, rendered at the top of the sidebar. */
   conversationHistory?: ConversationHistoryControls;
   onReorderWorkspaces?: (workspaceIds: string[]) => void;
-  onStartResize?: React.PointerEventHandler<HTMLButtonElement>;
   onOpenAccountSettings?: () => void;
   onOpenExtensions: () => void;
   mobileChatActions?: React.ReactNode;
@@ -857,7 +855,7 @@ export function AppSidebar(props: AppSidebarProps) {
             <span className="truncate text-[15px] font-medium tracking-[-0.4px]" title={brandAppName}>{brandAppName}</span>
           </div>
         )}
-        {open || isMobile ? <SidebarActions onOpenSessionSearch={props.onOpenSessionSearch} onOpenSettings={props.onOpenAccountSettings} /> : null}
+        {open ? <SidebarActions onOpenSessionSearch={props.onOpenSessionSearch} onOpenSettings={props.onOpenAccountSettings} /> : null}
         </div>
         <SidebarHeader className="mb-0 mt-2">
           <SidebarMenu>
@@ -959,20 +957,10 @@ export function AppSidebar(props: AppSidebarProps) {
         </SidebarReorderScope>
 
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
-          <div className="flex min-w-0 items-center gap-2 px-2.5 py-2 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
-            <span className="truncate">A fork of OpenWork for Nanami AI.</span>
+          <div className="flex min-w-0 select-none cursor-default items-center gap-2 px-2.5 py-2 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
+            <span className="truncate select-none cursor-default">A fork of OpenWork.</span>
           </div>
         </SidebarFooter>
-
-        <SidebarRail
-          style={{ cursor: "col-resize" }}
-          aria-label={props.onStartResize ? t("session.resize_workspace_column") : undefined}
-          title={props.onStartResize ? t("session.resize_workspace_column") : undefined}
-          onClick={props.onStartResize ? (event) => {
-            event.preventDefault();
-          } : undefined}
-          onPointerDown={props.onStartResize}
-        />
       </Sidebar>
     </SidebarContext.Provider>
   );

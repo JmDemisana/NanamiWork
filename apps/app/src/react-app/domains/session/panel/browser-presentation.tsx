@@ -76,11 +76,11 @@ function BrowserFullscreenDialog({ sessionId, controller }: BrowserFullscreenDia
                 </Tooltip>
                 <DialogPrimitive.Close
                   ref={exitRef}
-                  render={<Button variant="outline" size="sm" data-testid="browser-fullscreen-exit" />}
+                  render={<Button variant="outline" size="sm" className="h-7 gap-1.5 px-2 text-xs font-normal" data-testid="browser-fullscreen-exit" />}
                 >
-                  <Minimize2 />
-                  Exit full screen
-                  <kbd className="ml-1 font-sans text-[11px] text-muted-foreground">esc</kbd>
+                  <Minimize2 className="size-3.5 text-muted-foreground" />
+                  <span>Exit full screen</span>
+                  <kbd className="ml-1 rounded border border-border/60 bg-muted/50 px-1 py-0.5 font-sans text-[10px] text-muted-foreground">esc</kbd>
                 </DialogPrimitive.Close>
               </div>
             </header>

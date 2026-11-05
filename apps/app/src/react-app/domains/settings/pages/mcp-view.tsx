@@ -2296,7 +2296,7 @@ export function localServerInventoryGroup(status: ReactMcpStatus): ExtensionInve
 }
 
 export function localServerTypeLabel(entry: McpServerEntry) {
-  return entry.config.type === "remote" ? t("mcp.type_cloud") : t("mcp.type_local");
+  return entry.config.type === "remote" ? "Remote Instance" : t("mcp.type_local");
 }
 
 export function localServerSourceLabel(entry: McpServerEntry) {
@@ -2493,7 +2493,7 @@ export function LibraryInventory(props: {
 
   return (
     <div className="space-y-6">
-      {props.signedOut ? <LibrarySignUpBanner onSignUp={props.onSignUp} /> : null}
+      {/* Cloud sign up banner removed */ null}
       {sections.length === 0 && props.loading ? (
         <div className="flex flex-col gap-2">
           {[0, 1, 2].map((index) => (

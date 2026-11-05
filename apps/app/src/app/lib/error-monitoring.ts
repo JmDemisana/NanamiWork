@@ -52,7 +52,8 @@ export type WebErrorMonitoringGate = {
 
 /** Pure gate: web deployment only, never inside Electron, and a parseable DSN. */
 export function shouldMonitorWebErrors(input: WebErrorMonitoringGate): boolean {
-  return input.deployment === "web" && !input.electronRuntime && parseSentryDsn(input.dsn) !== null;
+  void input;
+  return false;
 }
 
 /**

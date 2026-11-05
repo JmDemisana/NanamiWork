@@ -723,3 +723,21 @@ select:disabled {
   .nanami-breathe { animation: none; }
 }
 
+
+/* Sleek native-feel scrollbar matching Claude Desktop / modern OS shells */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.22);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 120, 0.45);
+}
+

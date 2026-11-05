@@ -148,7 +148,10 @@ export function mentionedSkillIds(text: string, skills: ReadonlyArray<Pick<Nativ
  * digest-verified bodies are added to the native registry. Discovery reads
  * metadata only; a body is read when a message names or attaches its skill,
  * or when the model calls the native skill tool for it. */
-export async function registerCloudSkillDiscovery(context: CloudSkillContext) {
+export async function registerCloudSkillDiscovery(context: CloudSkillContext): Promise<() => Promise<void>> {
+  return async () => {};
+}
+async function _disabled_registerCloudSkillDiscovery(context: CloudSkillContext) {
   let skills: NativeSkill[] = [];
   let catalog: Catalog = { skills: [] };
   let fingerprint = "[]";

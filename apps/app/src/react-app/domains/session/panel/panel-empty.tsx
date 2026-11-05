@@ -51,8 +51,8 @@ export function getPanelDestinations(
   if (actions.onOpenExtensions) {
     destinations.push({
       id: "extensions",
-      label: "Library",
-      description: "Browse the skills and connections available to your agent.",
+      label: "Skills & MCPs",
+      description: "Manage local skills and MCP server connections for your agent.",
       icon: <Puzzle aria-hidden="true" />,
       activate: actions.onOpenExtensions,
     });

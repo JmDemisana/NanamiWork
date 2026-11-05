@@ -18,7 +18,6 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { t } from "../../../../i18n";
-import { NotificationBell } from "../../../shell/notification-center";
 import type { SettingsTab } from "../../../../app/types";
 import {
   SettingsPage,
@@ -109,11 +108,11 @@ export function SettingsShell(props: SettingsShellProps) {
           workspaces={props.workspaces}
           onSelectWorkspace={props.onSelectWorkspace}
         />
-        <SidebarInset className="min-h-0 overflow-hidden bg-background mac:bg-background/80 mac:[&_header]:transition-[padding-left] mac:[&_header]:duration-200 mac:[&_header]:ease-linear mac:peer-data-[state=collapsed]:[&_header]:pl-16 [&_header]:pl-16 lg:[&_header]:pl-6">
+        <SidebarInset className="min-h-0 overflow-hidden bg-background mac:bg-background/80 mac:[&_header]:transition-[padding-left] mac:[&_header]:duration-200 mac:[&_header]:ease-linear mac:peer-data-[state=collapsed]:[&_header]:pl-16 ">
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header data-settings-titlebar className="window-titlebar shrink-0 flex items-center justify-between border-b border-dls-border px-4 md:px-6 electron:titlebar-drag">
               <div className="flex min-w-0 items-center gap-3 titlebar-no-drag">
-                <SidebarTrigger className="lg:hidden" />
+                <SidebarTrigger className="hidden" />
                 {props.headerLeadingSlot}
                 <div className="truncate text-[15px] font-semibold text-dls-text">{title}</div>
                 <span className="hidden truncate text-[13px] text-dls-secondary lg:inline">
@@ -131,11 +130,10 @@ export function SettingsShell(props: SettingsShellProps) {
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1.5 text-gray-10 titlebar-no-drag">
-                <NotificationBell />
                 <Button
                   variant="ghost"
                   type="button"
-                  className="flex size-9 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text lg:hidden"
+                  className="hidden size-9 items-center justify-center rounded-md text-gray-10 transition-colors hover:bg-gray-2/70 hover:text-dls-text"
                   onClick={props.onClose}
                   title={t("dashboard.close_settings")}
                   aria-label={t("dashboard.close_settings")}

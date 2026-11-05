@@ -737,7 +737,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
         initialFocus={() => isMobile ? titleRef.current : searchInputRef.current ?? titleRef.current}
         className="flex max-h-[min(680px,calc(100dvh-2rem))] min-h-0 w-[calc(100vw-2rem)] max-w-[34rem] flex-col overflow-hidden sm:max-w-[34rem]">
         <DialogHeader className="pr-8">
-          <DialogTitle ref={titleRef} tabIndex={-1}>Connect a provider</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1}>Add Instance</DialogTitle>
           <DialogDescription className="text-pretty">
             Adds a key to this device only.{props.organizationName ? ` Providers from ${props.organizationName} are already included and managed in Den.` : ""}
           </DialogDescription>

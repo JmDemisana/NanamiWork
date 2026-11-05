@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed z-50 grid gap-6 overflow-hidden bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-closed:hidden max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:max-h-[min(92dvh,calc(100dvh-env(safe-area-inset-top)))] max-lg:w-full max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-t-3xl max-lg:rounded-b-none max-lg:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-lg:data-open:slide-in-from-bottom-4 lg:top-1/2 lg:inset-s-1/2 lg:w-[calc(100%-2rem)] lg:max-w-md lg:-translate-x-1/2 rtl:lg:translate-x-1/2 lg:-translate-y-1/2 lg:rounded-4xl lg:data-open:zoom-in-95",
+          "fixed z-50 grid w-[min(calc(100vw-2rem),32rem)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 overflow-y-auto overscroll-contain bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-closed:hidden top-[max(1rem,calc(env(safe-area-inset-top)+1rem))] left-1/2 -translate-x-1/2 data-open:zoom-in-95 sm:top-1/2 sm:-translate-y-1/2",
           className
         )}
         {...props}

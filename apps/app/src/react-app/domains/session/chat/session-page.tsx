@@ -5,7 +5,6 @@ import { childOrigin, prepareChildReturn } from "@/lib/child-navigation";
 import { newSessionDraftOwnerKey } from "./new-session-destination";
 import { usePendingConversationStore } from "./pending-conversation-store";
 import { PendingConversationView } from "./pending-conversation";
-import type { CSSProperties } from "react";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { ArrowLeft, CheckCheck, FileText, Globe, Maximize2, MoreHorizontal, PanelRight, TextSearch, Undo2, X, Zap } from "lucide-react";
@@ -729,19 +728,13 @@ export function SessionPage(props: SessionPageProps) {
     return () => { unsubOpen?.(); unsubClose?.(); };
   }, [browserIsPoppedOut, handleBrowserPanelClosed, openOwnerSidePanel, openTab, placeOpenedBrowser, props.selectedSessionId, setCurrentSidePanel, setSidePanelState, sidePanelSessionKey]);
   const {
-    leftSidebarResizing,
-    leftSidebarWidth,
     rightSidebarExpandedWidth: browserPanelWidth,
     setRightSidebarExpandedWidth: setBrowserPanelWidth,
-    startLeftSidebarResize,
   } = useWorkspaceShellLayout({
     expandedRightWidth: 520,
     minRightWidth: 320,
   });
   const [browserPanelDefaultWidth, setBrowserPanelDefaultWidth] = useState(browserPanelWidth);
-  const sidebarProviderStyle: CSSProperties & Record<"--sidebar-width", string> = {
-    "--sidebar-width": `${leftSidebarWidth}px`,
-  };
   useEffect(() => {
     if (sidePanelOpen) return;
     setBrowserPanelDefaultWidth(browserPanelWidth);
@@ -1471,11 +1464,8 @@ export function SessionPage(props: SessionPageProps) {
         onOpenChange={setSidebarOpen}
         className={cn(
           "relative min-h-0 flex-1 mac:bg-transparent",
-          leftSidebarResizing &&
-            "**:data-[slot=sidebar-container]:transition-none **:data-[slot=sidebar-gap]:transition-none",
           !shellConfig.sidebar && "**:data-[slot=sidebar-container]:hidden **:data-[slot=sidebar-gap]:hidden",
         )}
-        style={sidebarProviderStyle}
       >
         <AppSidebar
           sessionNumberShortcuts={props.sessionNumberShortcuts}
@@ -1530,7 +1520,6 @@ export function SessionPage(props: SessionPageProps) {
             onNavigate: navigateConversationHistory,
           }}
           onReorderWorkspaces={props.sidebar.onReorderWorkspaces}
-          onStartResize={startLeftSidebarResize}
           onOpenAccountSettings={props.onOpenSettings}
           onOpenExtensions={props.onOpenExtensions}
           mobileChatActions={sidebarOnlyChrome ? (
@@ -1677,7 +1666,7 @@ export function SessionPage(props: SessionPageProps) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="rounded-xl text-gray-10 transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+                      className="hidden rounded-xl text-gray-10 transition-colors hover:bg-muted hover:text-foreground"
                       aria-label="More actions"
                     >
                       <MoreHorizontal size={18} />
@@ -1730,7 +1719,7 @@ export function SessionPage(props: SessionPageProps) {
                       variant="ghost"
                       size="icon-sm"
                       className={cn(
-                        "hidden rounded-xl text-gray-10 transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                        "inline-flex rounded-xl text-gray-10 transition-colors hover:bg-muted hover:text-foreground",
                         sidePanelOpen && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                       )}
                       aria-label={sidePanelOpen ? "Close side panel" : "Open side panel"}
@@ -2039,7 +2028,7 @@ export function SessionPage(props: SessionPageProps) {
               ) : null}
 
               {!props.primarySlot && !hasMainContentTakeover && !showDelayedSessionLoadingState && !canRenderReactSurface && !showStartupSkeleton ? (
-                <div className={`mx-auto flex w-full max-w-[800px] flex-col px-6 max-lg:h-full max-lg:min-h-0 max-lg:w-full max-lg:px-0 max-lg:pt-0 lg:h-full lg:justify-center ${showWorkspaceSetupEmptyState ? "pt-20 lg:pt-0" : "pt-10 lg:pt-0"}`}>
+                <div className={`mx-auto flex w-full flex-1 flex-col max-md:h-full max-md:min-h-0 max-md:w-full max-md:px-0 max-md:pt-0 md:h-full md:justify-end pb-4 ${showWorkspaceSetupEmptyState ? "pt-20 md:pt-0" : "pt-10 md:pt-0"}`}>
                   {props.notFoundMessage ? (
                     <div className="px-6 py-16 text-center">
                       <div className="mx-auto max-w-md rounded-2xl border border-dls-border bg-dls-card px-5 py-6 shadow-[var(--dls-card-shadow)]">
@@ -2050,13 +2039,15 @@ export function SessionPage(props: SessionPageProps) {
                   ) : showWorkspaceSetupEmptyState ? (
                     // Chat-first: no workspace yet — the composer creates a
                     // default chat workspace instead of asking where to put it.
-                    <SessionEmptyHero
-                      providerCount={providerCount}
-                      busy={props.chatFirstBusy}
-                      onRunTask={(prompt, attachments, handoff) => props.onChatFirstTask?.(prompt, attachments, handoff)}
-                      onOpenProviderAuth={props.onOpenProviderAuth}
-                      composer={props.newTaskComposer}
-                    />
+                    <div className="flex flex-1 flex-col justify-end h-full min-h-0">
+                      <SessionEmptyHero
+                        providerCount={providerCount}
+                        busy={props.chatFirstBusy}
+                        onRunTask={(prompt, attachments, handoff) => props.onChatFirstTask?.(prompt, attachments, handoff)}
+                        onOpenProviderAuth={props.onOpenProviderAuth}
+                        composer={props.newTaskComposer}
+                      />
+                    </div>
                   ) : showSelectedWorkspaceError ? (
                     <div className="px-6 py-16">
                       <TaskRecovery title={selectedWorkspaceErrorTitle}
@@ -2068,7 +2059,7 @@ export function SessionPage(props: SessionPageProps) {
                       {t("session.loading_detail")}
                     </div>
                   ) : (
-                    <div className="flex flex-1 items-center justify-center py-16 max-lg:h-full max-lg:min-h-0 max-lg:py-0">
+                    <div className="flex flex-1 flex-col justify-end h-full min-h-0">
                       <SessionEmptyHero
                         // Remount per draft owner so the hero reads that
                         // workspace's persisted new-task draft instead of
@@ -2108,13 +2099,13 @@ export function SessionPage(props: SessionPageProps) {
               {sidePanelOpen && !isMobile ? (
               <>
                 {/* Discoverable: a grip shows on hover and keyboard focus, so a narrow artifact can be widened. */}
-                <ResizableHandle withHandle aria-label="Resize side panel" className="hidden bg-transparent transition-colors hover:bg-border focus-visible:bg-border lg:flex [&>div]:opacity-0 [&>div]:transition-opacity hover:[&>div]:opacity-100 focus-visible:[&>div]:opacity-100" />
+                <ResizableHandle withHandle aria-label="Resize side panel" className="flex bg-transparent transition-colors hover:bg-border focus-visible:bg-border [&>div]:opacity-0 [&>div]:transition-opacity hover:[&>div]:opacity-100 focus-visible:[&>div]:opacity-100" />
                 <ResizablePanel
                   panelRef={browserPanelRef}
                   defaultSize={`${activeSidePanel === "extensions" ? Math.max(browserPanelDefaultWidth, 480) : browserPanelDefaultWidth}px`}
                   minSize={activeSidePanel === "extensions" ? "420px" : "320px"}
                   maxSize="70%"
-                  className="min-h-0 overflow-hidden lg:flex lg:flex-col"
+                  className="min-h-0 overflow-hidden flex flex-col"
                 >
                   <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border bg-dls-surface mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150">
                     {sidePanelContent}

@@ -46,18 +46,7 @@ const queue: QueuedEvent[] = [];
 let initialized = false;
 
 export function isAnalyticsEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const raw = window.localStorage.getItem(PREFS_STORAGE_KEY);
-    if (!raw) return true;
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && "analyticsEnabled" in parsed) {
-      return (parsed as { analyticsEnabled?: unknown }).analyticsEnabled !== false;
-    }
-    return true;
-  } catch {
-    return true;
-  }
+  return false;
 }
 
 export function getAnalyticsDistinctId(): string {
@@ -84,23 +73,8 @@ function baseProperties(): AnalyticsProperties {
  * Queue an analytics event. Always mirrored to the local inspector;
  * only sent over the network when enabled and a key is configured.
  */
-export function captureAnalyticsEvent(event: string, properties: AnalyticsProperties = {}) {
-  try {
-    recordInspectorEvent(`analytics.${event}`, properties);
-  } catch {
-    // Inspector unavailable (non-browser context).
-  }
-
-  if (!POSTHOG_KEY || !isAnalyticsEnabled()) return;
-
-  queue.push({
-    event,
-    properties: { ...baseProperties(), ...properties },
-    timestamp: new Date().toISOString(),
-  });
-  if (queue.length >= MAX_BATCH) {
-    void flushAnalytics();
-  }
+export function captureAnalyticsEvent(_event: string, _properties: AnalyticsProperties = {}) {
+  return;
 }
 
 /**
@@ -170,19 +144,6 @@ export function takeTaskRunStart(sessionId: string): number | null {
  * Mounted from AppRoot.
  */
 export function initAnalytics() {
-  if (initialized || typeof window === "undefined") return;
-  initialized = true;
-
-  setInterval(() => void flushAnalytics(), FLUSH_INTERVAL_MS);
-
-  window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void flushAnalytics();
-  });
-
-  window.addEventListener(denSessionUpdatedEvent, ((event: CustomEvent<DenSessionUpdatedDetail>) => {
-    if (event.detail?.status !== "success") return;
-    const userId = event.detail.user?.id?.trim() ?? "";
-    if (userId) identify(userId);
-    captureAnalyticsEvent("cloud_signed_in", {});
-  }) as EventListener);
+  // Nanami Workbench is local-first. Product telemetry is permanently inert.
+  return;
 }

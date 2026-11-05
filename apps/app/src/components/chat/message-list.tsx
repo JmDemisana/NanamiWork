@@ -1217,19 +1217,7 @@ const LoadingMessage = React.memo(({ elapsedSeconds, starting, backgroundShells 
         {backgroundStale ? background : null}
         {/* Hover the Working line to see which model is writing this turn. It
             sits right after the timer, outside the shimmer, on the same line. */}
-        {model ? (
-          <span
-            data-working-model=""
-            className="opacity-0 transition-opacity duration-150 ease-out group-hover/working:opacity-100 pointer-coarse:opacity-100 motion-reduce:transition-none"
-          >
-            <span aria-hidden="true"> · </span>
-            <span className="sr-only">{t("session.reply_model_live_prefix")}</span>
-            <span className="inline-flex items-center gap-1 align-[-2px]">
-              {model.providerId ? <span aria-hidden="true" className="flex size-3 shrink-0 items-center justify-center"><ProviderIcon providerId={model.providerId} size={12} /></span> : null}
-              <span>{model.label}</span>
-            </span>
-          </span>
-        ) : null}
+{/* Working model on hover suppressed */}
       </div>
     </Message>
   )
@@ -1894,16 +1882,7 @@ function MessageGroup({
           </div>
           {/* Keep caption ink readable (DESIGN.md V1/V2); hierarchy comes from size,
               not compounded opacity. Hidden actions retain their layout slot. */}
-          {!isLiveGroup && resolvedReplyModel ? <span
-            data-testid="reply-model"
-            className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground dark:text-foreground/70 opacity-0 transition-opacity duration-150 ease-out motion-reduce:transition-none group-hover/message-group:opacity-100 group-focus-within/message-group:opacity-100 pointer-coarse:opacity-100"
-          >
-            <span className="sr-only">Replied with </span>
-            <span aria-hidden="true" className="flex size-3 shrink-0 items-center justify-center">
-              {replyModelProviderId ? <ProviderIcon providerId={replyModelProviderId} size={12} /> : null}
-            </span>
-            <span className="truncate">{resolvedReplyModel}</span>
-          </span> : null}
+{/* Reply model on hover suppressed */}
           {/* <MessageSources messages={items.map((item) => item.message)} /> */}
         </div>
       )}

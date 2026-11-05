@@ -5,8 +5,6 @@ import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isMacPlatform } from "@/app/utils";
 import { t } from "@/i18n";
-import { NotificationBell } from "../../../shell/notification-center";
-import { useShellConfig } from "../../../shell/shell-config";
 
 export type ConversationHistoryControls = {
   canGoBack: boolean;
@@ -15,17 +13,16 @@ export type ConversationHistoryControls = {
 };
 
 function SidebarToggle({ surface }: { surface: "sidebar" | "main" }) {
-  const { open, openMobile, isMobile } = useSidebar();
+  const { open } = useSidebar();
   return (
     <SidebarTrigger
       data-sidebar-toggle={surface}
       data-testid={`${surface}-sidebar-toggle`}
       className="size-8! rounded-lg text-muted-foreground transition-colors hover:bg-muted titlebar-no-drag"
-      aria-expanded={isMobile ? openMobile : open}
+      aria-expanded={open}
       aria-keyshortcuts={isMacPlatform() ? "Meta+B" : "Control+B"}
       title={`Toggle sidebar (${isMacPlatform() ? "⌘B" : "Ctrl+B"})`}
       onClick={() => {
-        if (isMobile) return;
         // The clicked control moves with the sidebar. Keep keyboard focus on
         // its visible counterpart rather than inside the now-inert panel.
         requestAnimationFrame(() => {
@@ -60,6 +57,9 @@ export function SidebarTitlebar({ history }: { history?: ConversationHistoryCont
 
 /** One search/bell pair, in the brand row or the main titlebar when hidden. */
 export function SidebarActions({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void }) {
+  const triggerSettings = onOpenSettings ?? (() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true }));
+  });
   return (
     <div data-sidebar-actions className="flex shrink-0 items-center gap-0.5 titlebar-no-drag">
       {onOpenSessionSearch ? (
@@ -75,38 +75,29 @@ export function SidebarActions({ onOpenSessionSearch, onOpenSettings }: { onOpen
           <TooltipContent>{t("workspace_list.search_sessions")} ({isMacPlatform() ? "⌘⇧F" : "Ctrl+Shift+F"})</TooltipContent>
         </Tooltip>
       ) : null}
-      {onOpenSettings ? (
-        <Tooltip>
-          <TooltipTrigger render={
-            <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-              aria-label="Settings"
-              aria-keyshortcuts={isMacPlatform() ? "Meta+," : "Control+,"}
-              data-sidebar-settings
-              onClick={onOpenSettings}>
-              <Settings strokeWidth={1.5} />
-            </Button>
-          } />
-          <TooltipContent>Settings ({isMacPlatform() ? "⌘," : "Ctrl+,"})</TooltipContent>
-        </Tooltip>
-      ) : null}
-      <NotificationBell align="start" />
+      <Tooltip>
+        <TooltipTrigger render={
+          <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
+            aria-label="Settings"
+            aria-keyshortcuts={isMacPlatform() ? "Meta+," : "Control+,"}
+            data-sidebar-settings
+            onClick={triggerSettings}>
+            <Settings strokeWidth={1.5} className="size-4" />
+          </Button>
+        } />
+        <TooltipContent>Settings ({isMacPlatform() ? "⌘," : "Ctrl+,"})</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
 
 export function MainSidebarControls({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void }) {
-  const { open, isMobile, openMobile } = useSidebar();
-  const { config } = useShellConfig();
-  if (open && !isMobile) return null;
+  const { open } = useSidebar();
+  if (open) return null;
   return (
     <div className="flex shrink-0 items-center gap-1 titlebar-no-drag">
       <SidebarToggle surface="main" />
-      {isMobile && openMobile ? (
-        <div aria-hidden="true" className="flex gap-0.5">
-          {onOpenSessionSearch ? <span className="size-8" /> : null}
-          {config.notifications ? <span className="size-8" /> : null}
-        </div>
-      ) : <SidebarActions onOpenSessionSearch={onOpenSessionSearch} onOpenSettings={onOpenSettings} />}
+      <SidebarActions onOpenSessionSearch={onOpenSessionSearch} onOpenSettings={onOpenSettings} />
     </div>
   );
 }

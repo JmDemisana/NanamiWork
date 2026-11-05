@@ -118,14 +118,14 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   };
 
   return (
-    <div data-chat-empty-hero className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-4 max-lg:h-full max-lg:min-h-0 max-lg:gap-4 max-lg:overflow-y-auto max-lg:px-3 max-lg:pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6">
-      <div data-empty-greeting hidden={hideIntroduction} className="nanami-rise text-center max-lg:pt-6">
+    <div data-chat-empty-hero className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-1 flex-col justify-between px-4 pb-4 lg:px-8">
+      <div data-empty-greeting hidden={hideIntroduction} className="nanami-rise my-auto text-center pt-8">
         <h2 className="text-lg font-medium tracking-tight text-foreground">
           What do you need done?
         </h2>
       </div>
 
-      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise max-lg:sticky max-lg:bottom-0 max-lg:order-last max-lg:mt-auto max-lg:shrink-0 max-lg:bg-dls-surface">
+      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise max-md:sticky max-md:bottom-0 max-md:order-last max-md:mt-auto max-md:shrink-0 max-md:bg-dls-surface">
       <NewTaskComposer
         draft={prompt}
         onDraftChange={setPrompt}
