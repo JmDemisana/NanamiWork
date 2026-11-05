@@ -20,6 +20,8 @@ const NEW_PROVIDERS_DEDUPE_KEY = "new-providers";
 export const openModelPickerEvent = "openwork-open-model-picker";
 /** Custom event to request the provider auth (connect API keys) modal to open. */
 export const openProviderAuthEvent = "openwork-open-provider-auth";
+/** Custom event to request Nanami Workbench's curated instance chooser. */
+export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
 
 function readSeenProviderIds(): Set<string> {
   try {

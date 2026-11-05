@@ -13,7 +13,7 @@ import { useWorkspace } from "@/react-app/shell/workspace-provider";
 import { useSetWorkspaceDefaultModel } from "@/react-app/kernel/use-workspace-model-default";
 import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-config-provider";
 import { openAutoProviderSettings } from "@/react-app/domains/cloud/auto-access-ui";
-import { openProviderAuthEvent } from "@/react-app/shell/new-providers-listener";
+import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import { openComposerModelPickerEvent } from "@/app/lib/inference-access";
 import { fixedModelTitle, managesOwnBehavior, modelTitle, nonDefaultModelSummary, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
@@ -88,7 +88,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     if (behavior && !managesOwnBehavior(option)) onBehaviorChange?.(behavior.variant);
     onOpenChange(false);
   });
-  const openProvider = () => { onOpenChange(false); window.dispatchEvent(new Event(openProviderAuthEvent)); };
+  const openProvider = () => { onOpenChange(false); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); };
   const openSettings = () => { onOpenChange(false); openAutoProviderSettings(); };
   return <Popover open={open} onOpenChange={(next) => {
     // A provider sign-in opened from this picker owns focus until it finishes or is cancelled.

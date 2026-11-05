@@ -76,6 +76,7 @@ import type { SessionCloudMcpMaintenanceState } from "../../connections/use-sess
 import { OwDotTicker } from "../../../shell/dot-ticker";
 import { useReactRenderWatchdog } from "../../../shell/react-render-watchdog";
 import { useShellConfig } from "../../../shell/shell-config";
+import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listener";
 import { type SidePanelItem, useUiStateStore } from "../../../shell/ui-state-store";
 import type { SessionNumberShortcutsState } from "../../../shell/session-number-shortcuts";
 import { useBootOverlayVisible } from "../../../shell/boot-state";
@@ -473,6 +474,11 @@ function controlStringArg(args: unknown, key: string) {
 
 export function SessionPage(props: SessionPageProps) {
   const [instancesOpen, setInstancesOpen] = useState(false);
+  useEffect(() => {
+    const openInstances = () => setInstancesOpen(true);
+    window.addEventListener(openWorkbenchInstancesEvent, openInstances);
+    return () => window.removeEventListener(openWorkbenchInstancesEvent, openInstances);
+  }, []);
   const archivedInWorkspace = (workspaceId: string, sessionId: string | null) => {
     const session = props.sidebar.workspaceSessionGroups.find(group => group.workspace.id === workspaceId)
       ?.sessions.find(session => session.id === sessionId);
@@ -1522,7 +1528,7 @@ export function SessionPage(props: SessionPageProps) {
             onNavigate: navigateConversationHistory,
           }}
           onReorderWorkspaces={props.sidebar.onReorderWorkspaces}
-          onOpenAccountSettings={() => setInstancesOpen(true)}
+          onOpenAccountSettings={props.onOpenSettings}
           onOpenExtensions={props.onOpenExtensions}
           mobileChatActions={sidebarOnlyChrome ? (
             <MobileChatActions
@@ -1563,7 +1569,7 @@ export function SessionPage(props: SessionPageProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={() => setInstancesOpen(true)} /> : null}
+              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} /> : null}
               {props.primaryHeader && !hasMainContentTakeover ? props.primaryHeader : null}
               {!props.primaryHeader && parentSessionLink && !props.primarySlot && !hasMainContentTakeover ? (
                 <Tooltip>
@@ -1954,7 +1960,7 @@ export function SessionPage(props: SessionPageProps) {
                                   key={splitSession.sessionId}
                                   providerCount={providerCount}
                                   onRunTask={(prompt, attachments, handoff) => props.sidebar.onCreateTaskWithPrompt?.(splitSession.workspaceId, prompt, attachments, handoff)}
-                                  onOpenProviderAuth={props.onOpenProviderAuth}
+                                  onOpenProviderAuth={() => setInstancesOpen(true)}
                                   composer={{
                                     ...props.newTaskComposer,
                                     draftOwnerKey: newSessionDraftOwnerKey(props.newTaskComposer.draftScope, splitSession.draftDestination),
@@ -2046,7 +2052,7 @@ export function SessionPage(props: SessionPageProps) {
                         providerCount={providerCount}
                         busy={props.chatFirstBusy}
                         onRunTask={(prompt, attachments, handoff) => props.onChatFirstTask?.(prompt, attachments, handoff)}
-                        onOpenProviderAuth={props.onOpenProviderAuth}
+                        onOpenProviderAuth={() => setInstancesOpen(true)}
                         composer={props.newTaskComposer}
                       />
                     </div>
@@ -2071,7 +2077,7 @@ export function SessionPage(props: SessionPageProps) {
                         onRunTask={(prompt, attachments, handoff) =>
                           props.sidebar.onCreateTaskWithPrompt?.(props.selectedWorkspaceId, prompt, attachments, handoff)
                         }
-                        onOpenProviderAuth={props.onOpenProviderAuth}
+                        onOpenProviderAuth={() => setInstancesOpen(true)}
                         composer={props.newTaskComposer}
                       />
                     </div>
