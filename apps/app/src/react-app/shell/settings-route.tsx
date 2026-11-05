@@ -341,7 +341,6 @@ export function parseSettingsPath(pathname: string): {
         || tail === "commands"
         || tail === "agents"
         || tail === "plugins"
-        || tail === "needs-sign-in"
         || tail === "needs-admin-setup"
         || tail === "ready"
       ) {

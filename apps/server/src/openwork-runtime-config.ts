@@ -3,7 +3,6 @@ import { DESKTOP_POLICY_ENFORCEMENT_ENABLED, desktopCapabilityConfig } from "@op
 import { materializeLegacyFastProviders } from "@openwork/types/cloud-model-fast";
 import { isManagedPolicyPlugin } from "./managed-policy-plugin.js";
 import { isLegacyBrowserPlugin } from "./workspace-init.js";
-import { ORGANIZATION_PROVIDER_ID, organizationProviderGate } from "./organization-provider-gate.js";
 /**
  * Runtime OpenCode configuration injected via a server-managed config file
  * passed to the engine as OPENCODE_CONFIG.
@@ -75,16 +74,19 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
   const permissions = legacyExecutionPermissions(runtimeConfig.managedPolicy?.execution);
   const { managedPolicy: _managedPolicy, managedPrompt, ...engineConfig } = runtimeConfig;
   const provider = materializeLegacyFastProviders(runtimeProviderMap(runtimeConfig));
-  const allowsProvider = organizationProviderGate(runtimeConfig.managedPolicy);
   const nanamiOnly = nanamiOnlyEnabled();
   return {
     ...engineConfig,
-    ...(nanamiOnly
-      ? { enabled_providers: [NANAMI_PROVIDER_ID] }
-      : allowsProvider ? { enabled_providers: [
-        ...Object.keys(provider).filter((id) => ORGANIZATION_PROVIDER_ID.test(id)),
-        ...(allowsProvider("opencode") ? ["opencode"] : []),
-      ] } : {}),
+    enabled_providers: nanamiOnly
+      ? [NANAMI_PROVIDER_ID]
+      : [...new Set([
+        NANAMI_PROVIDER_ID,
+        ...Object.keys(provider),
+        // Native OpenCode catalog routes used by the local instance picker.
+        "google",
+        "github-copilot",
+        "opencode",
+      ])],
     permission: { ...engineConfig.permission, ...permissions },
     default_agent: runtimeConfig.default_agent ?? "openwork",
     agent: {
@@ -128,9 +130,7 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
     ...(disabledProviders.length ? { disabled_providers: disabledProviders } : {}),
     mcp: Object.fromEntries(Object.entries(runtimeMcpMap(runtimeConfig))
       .filter(([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))),
-    ...(Object.keys(provider).length || nanamiOnly ? { provider: nanamiOnly
-      ? { ...provider, [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() }
-      : provider } : {}),
+    provider: { ...provider, [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() },
   };
 }
 

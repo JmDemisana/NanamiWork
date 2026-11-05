@@ -18,7 +18,7 @@ export const NANAMI_GATEWAY_BASE_URL = "https://nanami-ai.pages.dev/api/v1";
 export const NANAMI_API_KEY_ENV = "NANAMI_API_KEY";
 /** Overrides the gateway base URL, e.g. a local proxy while developing. */
 export const NANAMI_GATEWAY_URL_ENV = "NANAMI_GATEWAY_BASE_URL";
-/** Opt out of Nanami-only mode. Anything other than 0/false/off keeps it on. */
+/** Enable gateway-only mode explicitly. The default keeps local provider routes available. */
 export const NANAMI_ONLY_ENV = "OPENWORK_NANAMI_ONLY";
 
 /** Both gateway models accept images, tools, and reasoning, and cap at 128k/16k. */
@@ -33,7 +33,7 @@ function nanamiModelConfig(): Record<string, unknown> {
 
 export function nanamiOnlyEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[NANAMI_ONLY_ENV]?.trim().toLowerCase();
-  return raw !== "0" && raw !== "false" && raw !== "off";
+  return raw === "1" || raw === "true" || raw === "on";
 }
 
 export function nanamiGatewayBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
@@ -155,6 +155,15 @@ export function enforceNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], a
     baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(),
     apiKey: configured.apiKey || apiKey,
   }];
+}
+
+/** Add the local default gateway without hiding any independently configured provider. */
+export function withNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], apiKey = nanamiApiKey()): OpencodeV2ProviderSpec[] {
+  const configured = specs.find((spec) => spec.id === NANAMI_PROVIDER_ID);
+  const gateway = configured
+    ? { ...configured, name: configured.name || "Nanami Gateway", baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(), apiKey: configured.apiKey || apiKey }
+    : nanamiProviderSpec(apiKey);
+  return [...specs.filter((spec) => spec.id !== NANAMI_PROVIDER_ID), gateway];
 }
 
 /**

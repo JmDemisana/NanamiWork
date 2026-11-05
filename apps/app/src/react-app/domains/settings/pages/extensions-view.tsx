@@ -14,7 +14,6 @@ export type ExtensionsSection =
   | "commands"
   | "agents"
   | "plugins"
-  | "needs-sign-in"
   | "needs-admin-setup"
   | "ready";
 
@@ -61,7 +60,6 @@ export function sectionForFilter(filter: ExtensionInventoryFilter): ExtensionsSe
 }
 
 export function stateForSection(section: ExtensionsSection | undefined): ExtensionInventoryState {
-  if (section === "needs-sign-in") return "needs_signin";
   if (section === "needs-admin-setup") return "needs_admin_setup";
   if (section === "ready") return "ready";
   return "ready";

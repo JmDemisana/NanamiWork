@@ -16,9 +16,9 @@ unavoidable setup item when the local profile has no existing Nanami key.
 
 ## Optional local instances
 
-Set `OPENWORK_NANAMI_ONLY=0` before launching the desktop app to expose the
-stock OpenCode provider catalog alongside the default gateway. Add the matching
-credentials from **Settings → Add Instance** or the local OpenCode config.
+The gateway is added beside the stock local provider catalog by default. Add the
+matching credentials from **Settings → Add Instance** or the local OpenCode
+config. Set `OPENWORK_NANAMI_ONLY=1` only when a gateway-only catalog is wanted.
 
 | Instance | Provider route | Required local credential / limitation |
 | --- | --- | --- |

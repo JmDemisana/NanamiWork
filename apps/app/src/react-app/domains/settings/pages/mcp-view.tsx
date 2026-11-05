@@ -427,7 +427,6 @@ export function McpView(props: McpViewProps) {
   const [openworkUiMcpEnvironment, setOpenworkUiMcpEnvironment] = useState<Record<string, string> | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ExtensionInventoryFilter>(primaryLibraryFilter(props.initialFilter));
-  const [onlyNeedsSignIn, setOnlyNeedsSignIn] = useState(props.initialState === "needs_signin");
   const [screen, setScreen] = useState<LibraryScreen>({ kind: "list" });
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [, setExtensionStateVersion] = useState(0);
@@ -519,11 +518,6 @@ export function McpView(props: McpViewProps) {
   const setInventoryFilter = (nextFilter: ExtensionInventoryFilter) => {
     setFilter(nextFilter);
     props.onFilterChange?.(nextFilter);
-  };
-  const toggleNeedsSignIn = () => {
-    const next = !onlyNeedsSignIn;
-    setOnlyNeedsSignIn(next);
-    props.onStateChange?.(next ? "needs_signin" : "all", filter);
   };
   const libraryCloudSignedIn = cloudSession.isSignedIn
     || (Boolean(cloudSession.authToken.trim()) && denAuth.isSignedIn);
@@ -1939,7 +1933,6 @@ export function McpView(props: McpViewProps) {
   const sharedOwned = ownedPlugins.filter((plugin) => isLibraryAudienceShared(libraryCloud.audienceFor(plugin.id)));
   const firstSharedOwned = sharedOwned[0];
   const openworkRowCount = rows.filter((row) => row.section === "openwork").length;
-  const needsSignInCount = rows.filter((row) => row.needsSignIn === true).length;
   const sectionMeta: Partial<Record<LibrarySection, string | null>> = {
     mine: firstSharedOwned
       ? t("extensions.section_mine_shared", { count: String(sharedOwned.length), audience: libraryAudienceName(libraryCloud.audienceFor(firstSharedOwned.id)) })
@@ -1954,7 +1947,7 @@ export function McpView(props: McpViewProps) {
       filter={filter}
       search={search}
       sectionMeta={sectionMeta}
-      onlyNeedsSignIn={onlyNeedsSignIn}
+      onlyNeedsSignIn={false}
       signedOut={signedOut}
       onSignUp={props.onOpenCloudAccount}
       emptyState={(
@@ -2139,26 +2132,6 @@ export function McpView(props: McpViewProps) {
             </button>
           );
         })}
-        {needsSignInCount > 0 || onlyNeedsSignIn ? (
-          <>
-            <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-            <button
-              type="button"
-              aria-pressed={onlyNeedsSignIn}
-              onClick={toggleNeedsSignIn}
-              data-testid="library-needs-sign-in-filter"
-              className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-ring ${
-                onlyNeedsSignIn
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground"
-              }`}
-            >
-              <span className="size-1.5 rounded-full bg-amber-9" aria-hidden />
-              {t("extensions.filter_needs_sign_in")}
-              <span className={onlyNeedsSignIn ? "text-background/70" : "text-dls-secondary"}>{needsSignInCount}</span>
-            </button>
-          </>
-        ) : null}
         <div className="ml-auto flex items-center gap-1">
           <div className="mr-1 w-[min(220px,40vw)]">
             <SettingsListSearchInput
@@ -2407,7 +2380,7 @@ export type LibraryRow = {
   section: LibrarySection;
   taxonomy: ExtensionTaxonomy;
   searchText: string;
-  /** Waits on the member's own sign-in; the "Needs sign-in" filter keeps only these. */
+  /** Waits on the member's own sign-in; shown inline with the connection state. */
   needsSignIn?: boolean;
   node: ReactNode;
 };

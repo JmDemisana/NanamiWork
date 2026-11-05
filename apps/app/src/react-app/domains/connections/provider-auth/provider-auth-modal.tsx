@@ -60,7 +60,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   opencode: "OpenCode Zen",
   openai: "OpenAI",
   anthropic: "Anthropic",
-  google: "Google",
+  google: "Google AI Studio",
   openrouter: "OpenRouter",
 };
 
