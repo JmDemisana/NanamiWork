@@ -1,13 +1,13 @@
 /**
- * Nanami Gateway as the only model provider.
+ * Nanami Gateway default provider integration.
  *
  * This fork routes every model through `https://nanami-ai.pages.dev/api/v1`,
  * an OpenAI-compatible router. The gateway exposes exactly two model ids
  * (`gemini-router` and `openrouter`) and rejects a `nanami/` prefix, so those
  * ids are also the ids the engine must send upstream.
  *
- * Set `OPENWORK_NANAMI_ONLY=0` to restore the stock multi-provider behaviour
- * (for example while comparing against upstream).
+ * Local providers remain available by default. Set `OPENWORK_NANAMI_ONLY=1`
+ * only when a gateway-only runtime is explicitly wanted.
  */
 import type { OpencodeV2ProviderSpec } from "./managed-opencode-v2.js";
 import { readFileSync } from "node:fs";
