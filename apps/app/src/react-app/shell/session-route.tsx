@@ -3287,8 +3287,8 @@ export function SessionRoute() {
   }), [sessionProviderAuthStore]);
   useControlAction(addProviderControlAction);
 
-  const handleOpenProviderAuth = useCallback(() => {
-    if (sessionProviderAuthStore.isProviderAddRestricted()) {
+  const handleOpenProviderAuth = useCallback((preferredProviderId?: string) => {
+    if (sessionProviderAuthStore.isProviderAddRestricted(preferredProviderId)) {
       restrictionNotice.show({
         title: t("restrictions.add_custom_providers_disabled_title"),
         message: t("restrictions.add_custom_providers_disabled_message"),
@@ -3298,7 +3298,7 @@ export function SessionRoute() {
 
     // Pre-workspace (chat-first) there is no opencode client yet, so the
     // modal cannot load auth methods — fall back to the AI Providers page.
-    void sessionProviderAuthStore.openProviderAuthModal({ returnFocusTarget: "composer" }).catch(() => {
+    void sessionProviderAuthStore.openProviderAuthModal({ returnFocusTarget: "composer", ...(preferredProviderId ? { preferredProviderId } : {}) }).catch(() => {
       handleOpenSettings("/settings/ai");
     });
   }, [handleOpenSettings, restrictionNotice, sessionProviderAuthStore]);

@@ -70,6 +70,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { SessionEmptyHero } from "./session-empty-hero";
+import { WorkbenchInstancesModal } from "./workbench-instances-modal";
 import type { NewTaskComposerContext, NewTaskComposerHandoff } from "./new-task-composer";
 import type { SessionCloudMcpMaintenanceState } from "../../connections/use-session-mcp-maintenance";
 import { OwDotTicker } from "../../../shell/dot-ticker";
@@ -302,7 +303,7 @@ export type SessionPageProps = {
   mainContentTitle?: string;
   mainContentHeaderActionsRef?: React.Ref<HTMLDivElement>;
   extensionsActive?: boolean;
-  onOpenProviderAuth?: () => void;
+  onOpenProviderAuth?: (providerId?: string) => void;
   /** Chat-first: create a default workspace and start a task from the empty-state composer. */
   onChatFirstTask?: (prompt: string, attachments?: ComposerAttachment[], handoff?: NewTaskComposerHandoff) => Promise<void>;
   chatFirstBusy?: boolean;
@@ -471,6 +472,7 @@ function controlStringArg(args: unknown, key: string) {
 }
 
 export function SessionPage(props: SessionPageProps) {
+  const [instancesOpen, setInstancesOpen] = useState(false);
   const archivedInWorkspace = (workspaceId: string, sessionId: string | null) => {
     const session = props.sidebar.workspaceSessionGroups.find(group => group.workspace.id === workspaceId)
       ?.sessions.find(session => session.id === sessionId);
@@ -1520,7 +1522,7 @@ export function SessionPage(props: SessionPageProps) {
             onNavigate: navigateConversationHistory,
           }}
           onReorderWorkspaces={props.sidebar.onReorderWorkspaces}
-          onOpenAccountSettings={props.onOpenSettings}
+          onOpenAccountSettings={() => setInstancesOpen(true)}
           onOpenExtensions={props.onOpenExtensions}
           mobileChatActions={sidebarOnlyChrome ? (
             <MobileChatActions
@@ -1561,7 +1563,7 @@ export function SessionPage(props: SessionPageProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} /> : null}
+              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={() => setInstancesOpen(true)} /> : null}
               {props.primaryHeader && !hasMainContentTakeover ? props.primaryHeader : null}
               {!props.primaryHeader && parentSessionLink && !props.primarySlot && !hasMainContentTakeover ? (
                 <Tooltip>
@@ -2167,6 +2169,15 @@ export function SessionPage(props: SessionPageProps) {
       </SidebarProvider>
 
       {props.providerAuthModal ? <ProviderAuthModal {...props.providerAuthModal} /> : null}
+      <WorkbenchInstancesModal
+        open={instancesOpen}
+        onOpenChange={setInstancesOpen}
+        connectedProviderIds={props.providerConnectedIds}
+        onOpenProviderAuth={(providerId) => {
+          setInstancesOpen(false);
+          props.onOpenProviderAuth?.(providerId);
+        }}
+      />
 
       {props.onRenameSession ? (
         <RenameSessionModal
