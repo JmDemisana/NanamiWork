@@ -13,6 +13,9 @@ import { requestMemberActivityRefresh } from "@/react-app/kernel/activity-types"
 import { notifyEvent } from "./notifications";
 import { orgOnboardingVisibilityEvent } from "./reload-coordinator";
 
+import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile } from "@/app/lib/desktop";
+import { applyEdits, modify, parse } from "jsonc-parser";
+
 const SEEN_KEY = "openwork.seenProviderIds";
 const NEW_PROVIDERS_DEDUPE_KEY = "new-providers";
 
@@ -20,8 +23,28 @@ const NEW_PROVIDERS_DEDUPE_KEY = "new-providers";
 export const openModelPickerEvent = "openwork-open-model-picker";
 /** Custom event to request the provider auth (connect API keys) modal to open. */
 export const openProviderAuthEvent = "openwork-open-provider-auth";
-/** Custom event to request Nanami Workbench's curated instance chooser. */
+/** Custom event to request Nanami Workbench's Antigravity account sign-in. */
 export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
+
+export async function ensureAntigravityPluginInstalled(): Promise<void> {
+  try {
+    const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+    const raw = configRes?.content?.trim()
+      ? configRes.content
+      : "{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n";
+    const parsed = (parse(raw) ?? {}) as { plugin?: unknown };
+    const plugins = Array.isArray(parsed.plugin) ? (parsed.plugin as string[]) : [];
+    const installed = plugins.some((entry) => String(entry).startsWith("opencode-antigravity-auth"));
+    if (!installed) {
+      const edits = modify(raw, ["plugin"], [...plugins, "opencode-antigravity-auth@latest"], {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      });
+      await writeOpencodeConfig("global", "", applyEdits(raw, edits));
+    }
+  } catch (err) {
+    console.warn("Could not ensure opencode-antigravity-auth plugin:", err);
+  }
+}
 
 function readSeenProviderIds(): Set<string> {
   try {

@@ -70,13 +70,12 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { SessionEmptyHero } from "./session-empty-hero";
-import { WorkbenchInstancesModal } from "./workbench-instances-modal";
 import type { NewTaskComposerContext, NewTaskComposerHandoff } from "./new-task-composer";
 import type { SessionCloudMcpMaintenanceState } from "../../connections/use-session-mcp-maintenance";
 import { OwDotTicker } from "../../../shell/dot-ticker";
 import { useReactRenderWatchdog } from "../../../shell/react-render-watchdog";
 import { useShellConfig } from "../../../shell/shell-config";
-import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listener";
+import { openWorkbenchInstancesEvent, ensureAntigravityPluginInstalled } from "../../../shell/new-providers-listener";
 import { type SidePanelItem, useUiStateStore } from "../../../shell/ui-state-store";
 import type { SessionNumberShortcutsState } from "../../../shell/session-number-shortcuts";
 import { useBootOverlayVisible } from "../../../shell/boot-state";
@@ -474,12 +473,14 @@ function controlStringArg(args: unknown, key: string) {
 }
 
 export function SessionPage(props: SessionPageProps) {
-  const [instancesOpen, setInstancesOpen] = useState(false);
+  const handleAddAntigravity = useCallback(() => {
+    void ensureAntigravityPluginInstalled().then(() => props.onOpenProviderAuth?.("google"));
+  }, [props.onOpenProviderAuth]);
+
   useEffect(() => {
-    const openInstances = () => setInstancesOpen(true);
-    window.addEventListener(openWorkbenchInstancesEvent, openInstances);
-    return () => window.removeEventListener(openWorkbenchInstancesEvent, openInstances);
-  }, []);
+    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+    return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+  }, [handleAddAntigravity]);
   const archivedInWorkspace = (workspaceId: string, sessionId: string | null) => {
     const session = props.sidebar.workspaceSessionGroups.find(group => group.workspace.id === workspaceId)
       ?.sessions.find(session => session.id === sessionId);
@@ -1570,7 +1571,7 @@ export function SessionPage(props: SessionPageProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} onOpenInstances={() => setInstancesOpen(true)} /> : null}
+              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} onOpenInstances={() => { void ensureAntigravityPluginInstalled().then(() => props.onOpenProviderAuth?.("google")); }} /> : null}
               {props.primaryHeader && !hasMainContentTakeover ? props.primaryHeader : null}
               {!props.primaryHeader && parentSessionLink && !props.primarySlot && !hasMainContentTakeover ? (
                 <Tooltip>
@@ -1961,7 +1962,7 @@ export function SessionPage(props: SessionPageProps) {
                                   key={splitSession.sessionId}
                                   providerCount={providerCount}
                                   onRunTask={(prompt, attachments, handoff) => props.sidebar.onCreateTaskWithPrompt?.(splitSession.workspaceId, prompt, attachments, handoff)}
-                                  onOpenProviderAuth={() => setInstancesOpen(true)}
+                                  onOpenProviderAuth={handleAddAntigravity}
                                   composer={{
                                     ...props.newTaskComposer,
                                     draftOwnerKey: newSessionDraftOwnerKey(props.newTaskComposer.draftScope, splitSession.draftDestination),
@@ -2053,7 +2054,7 @@ export function SessionPage(props: SessionPageProps) {
                         providerCount={providerCount}
                         busy={props.chatFirstBusy}
                         onRunTask={(prompt, attachments, handoff) => props.onChatFirstTask?.(prompt, attachments, handoff)}
-                        onOpenProviderAuth={() => setInstancesOpen(true)}
+                        onOpenProviderAuth={handleAddAntigravity}
                         composer={props.newTaskComposer}
                       />
                     </div>
@@ -2078,7 +2079,7 @@ export function SessionPage(props: SessionPageProps) {
                         onRunTask={(prompt, attachments, handoff) =>
                           props.sidebar.onCreateTaskWithPrompt?.(props.selectedWorkspaceId, prompt, attachments, handoff)
                         }
-                        onOpenProviderAuth={() => setInstancesOpen(true)}
+                        onOpenProviderAuth={handleAddAntigravity}
                         composer={props.newTaskComposer}
                       />
                     </div>
@@ -2176,16 +2177,6 @@ export function SessionPage(props: SessionPageProps) {
       </SidebarProvider>
 
       {props.providerAuthModal ? <ProviderAuthModal {...props.providerAuthModal} /> : null}
-      <WorkbenchInstancesModal
-        open={instancesOpen}
-        onOpenChange={setInstancesOpen}
-        connectedProviderIds={props.providerConnectedIds}
-        onOpenProviderAuth={(providerId) => {
-          setInstancesOpen(false);
-          props.onOpenProviderAuth?.(providerId);
-        }}
-        onRefreshProviders={props.onRefreshProviders}
-      />
 
       {props.onRenameSession ? (
         <RenameSessionModal

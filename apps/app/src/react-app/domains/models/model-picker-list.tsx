@@ -268,8 +268,8 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       </>}>{retainedCopy.detail}</PickerNotice> : null}
       {autoRow && autoRow.state !== "ready" ? <AutoPickerRecovery state={autoRow.state} code={autoRow.code} resetsAt={autoRow.resetsAt} onRetry={onRetryAuto} onReload={onReloadWorkspace} hasAlternatives={Boolean(alternativeKey)} />
         : openWorkModelsSyncing ? <AutoPickerRecovery state="sync" onReload={onReloadWorkspace} /> : null}
-      {empty ? <PickerNotice action={onConnectProvider ? <Button size="sm" onClick={onConnectProvider}>Add Instance</Button> : null}>Nothing is connected in this workspace.</PickerNotice> : null}
-      {focusAlternative && !alternativeKey && hasOptions && onConnectProvider ? <PickerNotice action={<Button size="sm" variant="outline" onClick={onConnectProvider}>Add Instance</Button>}>Nothing else is connected in this workspace.</PickerNotice> : null}
+      {empty ? <PickerNotice action={onConnectProvider ? <Button size="sm" onClick={onConnectProvider}>Add Antigravity Account</Button> : null}>Nothing is connected in this workspace.</PickerNotice> : null}
+      {focusAlternative && !alternativeKey && hasOptions && onConnectProvider ? <PickerNotice action={<Button size="sm" variant="outline" onClick={onConnectProvider}>Add Antigravity Account</Button>}>Nothing else is connected in this workspace.</PickerNotice> : null}
       {onConnectProvider && hasOptions && !empty ? (
         <div className="border-t border-border p-1.5">
           <Button
@@ -279,7 +279,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
             onClick={onConnectProvider}
           >
             <Plus className="size-3.5" />
-            <span>Add Instance...</span>
+            <span>Add Antigravity Account</span>
           </Button>
         </div>
       ) : null}

@@ -965,7 +965,7 @@ export function AppSidebar(props: AppSidebarProps) {
               className="cursor-pointer text-[11px] font-medium text-dls-accent transition-colors hover:underline focus-visible:outline-none"
               onClick={() => window.dispatchEvent(new Event(openWorkbenchInstancesEvent))}
             >
-              Add Instance
+              Add Antigravity Account
             </button>
           </div>
         </SidebarFooter>

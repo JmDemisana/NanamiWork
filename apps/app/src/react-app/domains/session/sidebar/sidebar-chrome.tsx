@@ -82,13 +82,13 @@ export function SidebarActions({ onOpenSessionSearch, onOpenSettings, onOpenInst
       <Tooltip>
         <TooltipTrigger render={
           <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-            aria-label="Add Instance"
+            aria-label="Add Antigravity Account"
             data-sidebar-instances
             onClick={triggerInstances}>
             <Layers strokeWidth={1.5} className="size-4" />
           </Button>
         } />
-        <TooltipContent>Add Instance (Workbench Instances)</TooltipContent>
+        <TooltipContent>Add Antigravity Account</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger render={
