@@ -85,6 +85,8 @@ import {
 } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { createProviderAuthStore, useProviderAuthStoreSnapshot } from "@/react-app/domains/connections/provider-auth/store";
 import ProviderAuthModal, { PROVIDER_LABELS } from "@/react-app/domains/connections/provider-auth/provider-auth-modal";
+import { WorkbenchInstancesModal } from "@/react-app/domains/session/chat/workbench-instances-modal";
+import { openWorkbenchInstancesEvent } from "./new-providers-listener";
 import { keylessProviderIds } from "@/react-app/domains/connections/provider-auth/provider-policy";
 import ConnectionsModals from "@/react-app/domains/connections/modals";
 import { AiSettingsView } from "@/react-app/domains/settings/pages/ai-view";
@@ -523,6 +525,12 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [activeClient, setActiveClient] = useState<Client | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [instancesOpen, setInstancesOpen] = useState(false);
+  useEffect(() => {
+    const openInstances = () => setInstancesOpen(true);
+    window.addEventListener(openWorkbenchInstancesEvent, openInstances);
+    return () => window.removeEventListener(openWorkbenchInstancesEvent, openInstances);
+  }, []);
   const workspacesRef = useRef<RouteWorkspace[]>([]);
   const lastRequestedRouteWorkspaceIdRef = useRef("");
   const refreshLifecycleRef = useRef(createRouteRefreshLifecycle());
@@ -2700,6 +2708,16 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         extraItems={checkDesktopRestriction({ restriction: "allowControlSettings" }) ? [] : [developerModePaletteItem]}
       />
 
+      <WorkbenchInstancesModal
+        open={instancesOpen}
+        onOpenChange={setInstancesOpen}
+        connectedProviderIds={providerConnectedIds}
+        onOpenProviderAuth={(providerId) => {
+          setInstancesOpen(false);
+          providerAuthStore.openProviderAuthModal({ preferredProviderId: providerId });
+        }}
+        onRefreshProviders={() => void providerAuthStore.refreshProviders({ force: true })}
+      />
       <ProviderAuthModal
         open={providerAuthSnapshot.providerAuthModalOpen}
         loading={false}

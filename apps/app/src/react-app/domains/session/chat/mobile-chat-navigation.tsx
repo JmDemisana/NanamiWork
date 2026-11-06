@@ -5,12 +5,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { t } from "../../../../i18n";
 
 export function MobileChatNavigation() {
-  const { openMobile } = useSidebar();
+  const { open } = useSidebar();
   return (
     <SidebarTrigger
       data-mobile-chat-navigation
       aria-label="Open sidebar"
-      aria-expanded={openMobile}
+      aria-expanded={open}
       className="ms-[max(0.5rem,env(safe-area-inset-left))] mt-[env(safe-area-inset-top)] size-11 shrink-0 self-start motion-reduce:transition-none"
     />
   );
@@ -26,9 +26,9 @@ export type MobileChatActionsProps = {
 
 /** The former chat-header overflow lives inside the existing mobile sidebar. */
 export function MobileChatActions(props: MobileChatActionsProps) {
-  const { setOpenMobile } = useSidebar();
+  const { setOpen } = useSidebar();
   const select = (action: () => void) => () => {
-    setOpenMobile(false);
+    setOpen(false);
     action();
   };
   return (

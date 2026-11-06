@@ -48,6 +48,7 @@ import {
   isWindowsPlatform,
 } from "../../../../app/utils";
 import { t } from "../../../../i18n";
+import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listener";
 import { resolveExtensionIconSrc } from "../../../design-system/extension-icon-src";
 import { useBrandAppName, useBrandLogoUrl } from "../../cloud/brand-theme";
 import { canCreateWorkspaces } from "../../../../app/lib/workspace-creation-policy";
@@ -957,8 +958,15 @@ export function AppSidebar(props: AppSidebarProps) {
         </SidebarReorderScope>
 
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
-          <div className="flex min-w-0 select-none cursor-default items-center gap-2 px-2.5 py-2 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
+          <div className="flex min-w-0 select-none cursor-default items-center justify-between gap-2 px-2.5 py-1.5 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
             <span className="truncate select-none cursor-default">A fork of OpenWork.</span>
+            <button
+              type="button"
+              className="cursor-pointer text-[11px] font-medium text-dls-accent transition-colors hover:underline focus-visible:outline-none"
+              onClick={() => window.dispatchEvent(new Event(openWorkbenchInstancesEvent))}
+            >
+              Add Instance
+            </button>
           </div>
         </SidebarFooter>
       </Sidebar>

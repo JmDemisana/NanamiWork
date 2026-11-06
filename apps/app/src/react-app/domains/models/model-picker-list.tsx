@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Sparkles } from "lucide-react";
+import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Plus, Sparkles } from "lucide-react";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -270,6 +270,19 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         : openWorkModelsSyncing ? <AutoPickerRecovery state="sync" onReload={onReloadWorkspace} /> : null}
       {empty ? <PickerNotice action={onConnectProvider ? <Button size="sm" onClick={onConnectProvider}>Add Instance</Button> : null}>Nothing is connected in this workspace.</PickerNotice> : null}
       {focusAlternative && !alternativeKey && hasOptions && onConnectProvider ? <PickerNotice action={<Button size="sm" variant="outline" onClick={onConnectProvider}>Add Instance</Button>}>Nothing else is connected in this workspace.</PickerNotice> : null}
+      {onConnectProvider && hasOptions && !empty ? (
+        <div className="border-t border-border p-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-full justify-start gap-2 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+            onClick={onConnectProvider}
+          >
+            <Plus className="size-3.5" />
+            <span>Add Instance...</span>
+          </Button>
+        </div>
+      ) : null}
       {footer}
     </Command>
   </div>;

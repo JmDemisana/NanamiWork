@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import type { SettingsTab } from "../../../../app/types";
+import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listener";
 
 export type GeneralSettingsViewProps = {
   onNavigateTab: (tab: SettingsTab) => void;
@@ -75,7 +76,13 @@ function SettingsGroup(props: { label: string; cards: SettingsCardDefinition[]; 
             title={card.title}
             desc={card.desc}
             index={index}
-            onClick={() => props.onNavigateTab(card.tab)}
+            onClick={() => {
+              if (card.tab === ("instances" as any)) {
+                window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
+              } else {
+                props.onNavigateTab(card.tab);
+              }
+            }}
           />
         ))}
       </div>

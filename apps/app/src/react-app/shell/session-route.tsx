@@ -3959,6 +3959,7 @@ export function SessionRoute() {
       onOpenSettings={() => handleOpenSettings("/settings/general")}
       onOpenExtensions={() => handleOpenExtensions()}
       onOpenProviderAuth={handleOpenProviderAuth}
+      onRefreshProviders={() => void sessionProviderAuthStore.refreshProviders({ force: true })}
       onChatFirstTask={handleChatFirstTask}
       chatFirstBusy={createWorkspaceBusy}
       newTaskComposer={newTaskComposerContext}

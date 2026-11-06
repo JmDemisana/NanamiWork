@@ -13,6 +13,7 @@ import { useDenAuth } from "../../cloud/den-auth-provider";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { openAutoProviderSettings } from "../../cloud/auto-access-ui";
 import { isAutoModel, managesOwnBehavior, type ModelCatalogOption, type ModelPickerCatalogState, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
+import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 
 export const MODEL_PICKER_DEFAULT_SUBTITLE = "Select a model for this session.";
 export const MODEL_PICKER_UNAVAILABLE_SUBTITLE = "The model you were using is no longer available, please select a different model for this session.";
@@ -96,7 +97,7 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
         })}
         onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
         catalogState={catalogState} retainedSelection={retained}
-        onConnectProvider={!restrictToCloud ? props.onOpenSettings : undefined}
+        onConnectProvider={!restrictToCloud ? () => { props.onClose(); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
         onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? openSettings : undefined}
         onSetWorkspaceDefault={props.onSetWorkspaceDefault ?? setWorkspaceDefault}
         openWorkModelsSyncing={props.openWorkModelsSyncing} autoVisible={autoVisible} onReloadWorkspace={props.onReloadWorkspace}

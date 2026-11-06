@@ -28,20 +28,40 @@ config. Set `OPENWORK_NANAMI_ONLY=1` only when a gateway-only catalog is wanted.
 | OpenCode Zen | `opencode` | An OpenCode key from `https://opencode.ai/auth`; free availability and model access are controlled by Zen. |
 | Nanami Gateway | `nanami` | The default instance above. |
 
-### Custom bridge example
+### Custom bridge & multi-instance example
 
-Use a local-only placeholder and replace it with the address exposed by your
-authenticated Antigravity bridge. Do not put a real token in this file:
+Multiple instances of Antigravity or any custom OpenAI-compatible provider can be
+added directly from the in-app **Nanami Workbench Instances** modal (via the sidebar
+Layers icon, footer "Add Instance", model picker "+ Add Instance...", or Settings).
+Each instance is saved as a separate provider in your global `opencode.json`:
 
 ```jsonc
 {
   "provider": {
     "antigravity-personal": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Google Antigravity Personal",
+      "name": "Google Antigravity (Personal)",
       "options": {
-        "baseURL": "http://127.0.0.1:PORT/v1",
+        "baseURL": "http://127.0.0.1:8080/v1",
         "apiKey": "${ANTIGRAVITY_BRIDGE_TOKEN}"
+      },
+      "models": {
+        "gemini-3.8-flash": {
+          "name": "Gemini 3.8 Flash"
+        }
+      }
+    },
+    "antigravity-work": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Google Antigravity (Work)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8081/v1",
+        "apiKey": "${ANTIGRAVITY_WORK_TOKEN}"
+      },
+      "models": {
+        "gemini-3.8-flash": {
+          "name": "Gemini 3.8 Flash"
+        }
       }
     }
   }

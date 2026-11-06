@@ -305,6 +305,7 @@ export type SessionPageProps = {
   mainContentHeaderActionsRef?: React.Ref<HTMLDivElement>;
   extensionsActive?: boolean;
   onOpenProviderAuth?: (providerId?: string) => void;
+  onRefreshProviders?: () => Promise<void> | void;
   /** Chat-first: create a default workspace and start a task from the empty-state composer. */
   onChatFirstTask?: (prompt: string, attachments?: ComposerAttachment[], handoff?: NewTaskComposerHandoff) => Promise<void>;
   chatFirstBusy?: boolean;
@@ -1569,7 +1570,7 @@ export function SessionPage(props: SessionPageProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} /> : null}
+              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} onOpenInstances={() => setInstancesOpen(true)} /> : null}
               {props.primaryHeader && !hasMainContentTakeover ? props.primaryHeader : null}
               {!props.primaryHeader && parentSessionLink && !props.primarySlot && !hasMainContentTakeover ? (
                 <Tooltip>
@@ -2183,6 +2184,7 @@ export function SessionPage(props: SessionPageProps) {
           setInstancesOpen(false);
           props.onOpenProviderAuth?.(providerId);
         }}
+        onRefreshProviders={props.onRefreshProviders}
       />
 
       {props.onRenameSession ? (
