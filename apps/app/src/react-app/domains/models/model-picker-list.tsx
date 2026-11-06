@@ -213,11 +213,7 @@ function ConnectedAccountGroup({
               <span className="min-w-0 flex-1 truncate leading-5" title={item.displayName}>
                 {item.displayName}
               </span>
-              {item.isPlusOnly ? (
-                <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
-                  Plus
-                </span>
-              ) : null}
+
               <AccountQuotaPill item={item} />
               <span className="flex size-4 shrink-0 items-center justify-center">
                 {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}

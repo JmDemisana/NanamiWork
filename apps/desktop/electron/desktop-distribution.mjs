@@ -1,6 +1,6 @@
 export const PUBLIC_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "public",
-  appName: "Nanami",
+  appName: "NanamiWork",
   appIdentifier: "ai.nanami.workbench",
   protocolScheme: "openwork",
   requireSignin: false,
