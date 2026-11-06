@@ -79,7 +79,7 @@ const shortBuildSha = buildSha ? buildSha.slice(0, 7) : "";
 // Electron packaged builds load index.html via `file://`, so asset URLs
 // must be relative. Tauri serves via its own protocol so absolute paths
 // work there. Gate on an env var the electron build script sets.
-const isElectronPackagedBuild = process.env.OPENWORK_ELECTRON_BUILD === "1";
+const isElectronPackagedBuild = process.env.OPENWORK_ELECTRON_BUILD !== "0";
 
 // Headless-web dev (scripts/dev-headless-web.ts): serve /api/den same-origin
 // from the dev server, proxied to the Den control plane, so the browser never
