@@ -53,6 +53,7 @@ import {
   workspaceForget,
   workspaceSetRuntimeActive,
   workspaceSetSelected,
+  openDesktopUrl,
   type OpenworkServerInfo,
   type WorkspaceInfo,
   type WorkspaceList,
@@ -167,7 +168,8 @@ import {
   useModelCollectionsStore,
   useModelPickerCatalogStore,
 } from "@/react-app/domains/session/models/model-collections-store";
-import { openModelPickerEvent, openProviderAuthEvent } from "@/react-app/shell/new-providers-listener";
+import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
+import { openModelPickerEvent, openProviderAuthEvent, openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh } from "@/react-app/shell/new-providers-listener";
 import {
   markComposerAutoSend,
 } from "@/react-app/domains/session/surface/composer-auto-send";
@@ -1054,6 +1056,22 @@ export function SessionRoute() {
     setProviderConnectedIds,
     setDisabledProviderIds,
   });
+
+  // Always-mounted Antigravity OAuth & Confirm/Refresh listeners
+  useEffect(() => {
+    const handleAddAntigravity = () => {
+      void runAntigravityOAuthFlow(sessionProviderAuthStore);
+    };
+    const handleConfirmAntigravity = () => {
+      void runAntigravityConfirmAndRefresh(sessionProviderAuthStore);
+    };
+    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+    window.addEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+    return () => {
+      window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+      window.removeEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+    };
+  }, [sessionProviderAuthStore]);
   const organizationAssignedModelOptions = useMemo(
     () => withImportedModelMetadata(assignedModelOptions(sessionProviderAuthSnapshot.cloudOrgProviders), sessionProviderAuthSnapshot.importedCloudProviders),
     [sessionProviderAuthSnapshot.cloudOrgProviders, sessionProviderAuthSnapshot.importedCloudProviders],
@@ -1230,7 +1248,7 @@ export function SessionRoute() {
   // policy): disable the provider in the engine on the screen everyone uses,
   // not only while Settings is open, and move a Zen default to a model the
   // person can actually use. Never re-enable Zen here; that races Disconnect.
-  const opencodeZenBlocked = checkDesktopRestriction({ restriction: "allowZenModel" });
+  const opencodeZenBlocked = false;
   useEffect(() => {
     if (!opencodeZenBlocked || !providerAuthClient || !selectedWorkspaceId) return;
     void sessionProviderAuthStore.ensureProjectProviderDisabledState("opencode", true).catch((error: unknown) => {
@@ -1409,7 +1427,11 @@ export function SessionRoute() {
     },
   });
   const organizationRemovalConfirmed = modelRemovalConfirmation.confirmed;
+  const hasAntigravityAccounts = useAntigravityAccountsStore((s) => s.accounts.length > 0);
   const resolveModelAvailability = useCallback((model: ModelRef | null): ModelAvailability => {
+    if (model && model.providerID === "google" && model.modelID.startsWith("antigravity-") && (hasAntigravityAccounts || useAntigravityAccountsStore.getState().accounts.length > 0)) {
+      return { status: "available" };
+    }
     const verdict = resolveCatalogModelAvailability(model);
     if (verdict.status !== "unavailable" || verdict.reason === "provider_blocked") return verdict;
     // Catalog absence alone cannot revoke an organization model. Without two
@@ -1418,7 +1440,7 @@ export function SessionRoute() {
       && !(organizationRemovalConfirmed && activeComposerModel?.providerID === model.providerID
         && activeComposerModel.modelID === model.modelID)) return { status: "pending" };
     return verdict;
-  }, [resolveCatalogModelAvailability, organizationRemovalConfirmed, activeComposerModel]);
+  }, [resolveCatalogModelAvailability, organizationRemovalConfirmed, activeComposerModel, hasAntigravityAccounts]);
   const organizationModelsEmpty = catalogOrganizationModelsEmpty
     && (!activeComposerModel || !isCloudManagedProviderKey(activeComposerModel.providerID) || organizationRemovalConfirmed);
   const selectedModelUnavailable =

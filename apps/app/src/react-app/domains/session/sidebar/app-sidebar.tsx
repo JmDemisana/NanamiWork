@@ -107,6 +107,7 @@ import {
 
 import { SidebarContext, useSidebarContext } from "./app-sidebar-provider";
 import { RemoteTaskSidebarRows } from "./remote-task-sidebar-rows";
+import { AntigravitySidebarLimits } from "./antigravity-sidebar-limits";
 import type { AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -851,8 +852,7 @@ export function AppSidebar(props: AppSidebarProps) {
             />
           </div>
         ) : (
-          <div data-sidebar-brand className="flex h-11 min-w-0 flex-1 items-center gap-1.5 pl-4 pr-1">
-            <img src={resolveExtensionIconSrc("/openwork-sidebar-mark.svg")} alt="" className="nanami-breathe size-5 shrink-0 object-contain dark:invert" />
+          <div data-sidebar-brand className="flex h-11 min-w-0 flex-1 items-center pl-4 pr-1">
             <span className="truncate text-[15px] font-medium tracking-[-0.4px]" title={brandAppName}>{brandAppName}</span>
           </div>
         )}
@@ -957,17 +957,11 @@ export function AppSidebar(props: AppSidebarProps) {
           {feed ? <FeedShelfDock feed={feed} archived={archivedSessions} groups={props.workspaceSessionGroups} /> : null}
         </SidebarReorderScope>
 
+        <AntigravitySidebarLimits />
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
-          <div className="flex min-w-0 select-none cursor-default items-center justify-between gap-2 px-2.5 py-1.5 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
+          <div className="flex min-w-0 select-none cursor-default items-center gap-2 px-2.5 py-1.5 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
             <span className="truncate select-none cursor-default">A fork of OpenWork.</span>
-            <button
-              type="button"
-              className="cursor-pointer text-[11px] font-medium text-dls-accent transition-colors hover:underline focus-visible:outline-none"
-              onClick={() => window.dispatchEvent(new Event(openWorkbenchInstancesEvent))}
-            >
-              Add Antigravity Account
-            </button>
-          </div>
+                      </div>
         </SidebarFooter>
       </Sidebar>
     </SidebarContext.Provider>

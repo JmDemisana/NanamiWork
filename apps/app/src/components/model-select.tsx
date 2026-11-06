@@ -6,16 +6,18 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { getModelBehaviorControls, getModelBehaviorSelection } from "@/app/lib/model-behavior";
 import { FAST_DEFAULT_VARIANT } from "@openwork/types/cloud-model-fast";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ModelPickerPanel } from "@/react-app/domains/models/model-picker-panel";
 import { useModelCatalog, useModelChoice } from "@/react-app/domains/models/use-model-catalog";
 import { useWorkspace } from "@/react-app/shell/workspace-provider";
 import { useSetWorkspaceDefaultModel } from "@/react-app/kernel/use-workspace-model-default";
 import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-config-provider";
 import { openAutoProviderSettings } from "@/react-app/domains/cloud/auto-access-ui";
-import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
+import { confirmAntigravityAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
+import { newProvidersEvent } from "@/app/lib/provider-events";
 import { openComposerModelPickerEvent } from "@/app/lib/inference-access";
 import { fixedModelTitle, managesOwnBehavior, modelTitle, nonDefaultModelSummary, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
+import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, resolveAntigravityModelForTier, useAntigravityAccountsStore, type ThinkingTier } from "@/react-app/domains/models/antigravity-accounts-store";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
 
@@ -56,6 +58,34 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     enabled: true, refreshWhen: open, fallbackOptions, pendingOptions: choice.pendingOptions, disabledProviders: choice.disabledProviders,
     current: value, savedSelection, sessionScoped: Boolean(sessionId), openWorkModelsSyncing });
   const { options, catalogState, retainedSelection, restrictToCloud, autoVisible } = catalog;
+  const antigravityAccounts = useAntigravityAccountsStore((s) => s.accounts);
+  const thinkingTier = useAntigravityAccountsStore((s) => s.thinkingTier);
+  const activeAntigravityAccount = antigravityAccounts.find((a) => a.isActive) ?? antigravityAccounts[0];
+
+  React.useEffect(() => {
+    useAntigravityAccountsStore.getState().setSelectedModel(value);
+  }, [value]);
+
+  React.useEffect(() => {
+    if (workspace.client) {
+      void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
+    }
+  }, [workspace.client, open]);
+
+  React.useEffect(() => {
+    const reload = () => {
+      if (workspace.client) {
+        void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
+      }
+    };
+    window.addEventListener(newProvidersEvent, reload);
+    window.addEventListener(confirmAntigravityAuthEvent, reload);
+    return () => {
+      window.removeEventListener(newProvidersEvent, reload);
+      window.removeEventListener(confirmAntigravityAuthEvent, reload);
+    };
+  }, [workspace.client]);
+
   React.useEffect(() => {
     const recover = (event: Event) => {
       // The New Task composer has no session; its requests carry none either.
@@ -82,28 +112,122 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const summary = fastOn
     ? (behaviorValue === FAST_DEFAULT_VARIANT ? null : controls.options.find((option) => option.value === behaviorValue)?.label ?? null)
     : nonDefaultModelSummary(value, behaviorValue, selectedBehavior.label);
-  const select = (option: ModelOption, behavior?: { variant: string | null }) => choice.choose(option, () => {
-    onChange({ providerID: option.providerID, modelID: option.modelID }, behavior?.variant);
-    // Setting the model keeps the variant when the model is unchanged, so apply it directly too.
-    if (behavior && !managesOwnBehavior(option)) onBehaviorChange?.(behavior.variant);
-    onOpenChange(false);
-  });
+  const select = (option: ModelOption, behavior?: { variant: string | null }) => {
+    const nextVariant = behavior?.variant;
+    const sameModel = option.providerID === value.providerID && option.modelID === value.modelID;
+
+    const commit = () => {
+      onChange({ providerID: option.providerID, modelID: option.modelID }, nextVariant);
+      if (sameModel && behavior && !managesOwnBehavior(option)) {
+        onBehaviorChange?.(behavior.variant);
+      }
+      onOpenChange(false);
+    };
+
+    if (option.providerID === "google") {
+      commit();
+      return;
+    }
+
+    choice.choose(option, commit);
+  };
   const openProvider = () => { onOpenChange(false); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); };
   const openSettings = () => { onOpenChange(false); openAutoProviderSettings(); };
-  return <Popover open={open} onOpenChange={(next) => {
-    // A provider sign-in opened from this picker owns focus until it finishes or is cancelled.
-    if (!next && choice.loginOpen) return;
-    setFocusAlternative(false); onOpenChange(next);
-  }}>
-    <PopoverTrigger type="button" disabled={disabled} aria-label="Change model"
-      className="inline-flex h-9 min-w-0 items-center gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
-      <span className="max-w-56 truncate">{hideValue ? "Select model" : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model")}{!hideValue && summary ? ` · ${summary}` : ""}{!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}</span><ChevronDown className="size-3" />
-    </PopoverTrigger>
-    <PopoverContent ref={popupRef} tabIndex={-1} align="start" initialFocus={() => isMobile || focusAlternative ? popupRef.current : searchInputRef.current} data-testid="composer-model-picker" className="flex max-h-[min(var(--available-height),36rem)] w-90 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl p-0">
-      <ModelPickerPanel searchInputRef={searchInputRef} options={options} current={value} behaviorValue={behaviorValue} fallbackBehaviorOptions={behaviorOptions}
-        onSelect={select} onBehaviorChange={onBehaviorChange} focusAlternative={focusAlternative} catalogState={catalogState} retainedSelection={retainedSelection}
-        onConnectProvider={!restrictToCloud ? openProvider : undefined} onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? openSettings : undefined}
-        onSetWorkspaceDefault={onSetWorkspaceDefault ?? setWorkspaceDefault} openWorkModelsSyncing={openWorkModelsSyncing} autoVisible={autoVisible} onReloadWorkspace={onReloadWorkspace} />
-    </PopoverContent>
-  </Popover>;
+
+  const activeAntigravityItem = value.providerID === "google"
+    ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, value.modelID)
+    : undefined;
+  const supportsThinking = activeAntigravityItem?.supportsThinkingTier;
+
+  const cycleThinkingTier = () => {
+    const nextTier: ThinkingTier =
+      thinkingTier === "low" ? "medium" : thinkingTier === "medium" ? "high" : "low";
+    void useAntigravityAccountsStore.getState().setThinkingTier(nextTier);
+    if (activeAntigravityItem) {
+      const nextModelId = resolveAntigravityModelForTier(activeAntigravityItem, nextTier);
+      onChange({ providerID: "google", modelID: nextModelId }, nextTier);
+      onBehaviorChange?.(nextTier);
+    }
+  };
+
+  const antigravityModelLabel = value.providerID === "google"
+    ? (activeAntigravityItem?.displayName
+      ?? (value.modelID === "antigravity-gemini-4-argon" ? "Gemini 4 Argon" : value.modelID === "antigravity-gemini-4-argon-high" ? "Gemini 4 Argon (High)" : undefined))
+    : undefined;
+  const triggerLabel = hideValue
+    ? "Select model"
+    : antigravityModelLabel
+      ? (activeAntigravityAccount ? `${antigravityModelLabel} · ${activeAntigravityAccount.email}` : antigravityModelLabel)
+      : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
+
+  return (
+    <>
+      <div className="inline-flex items-center gap-1">
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label="Change model"
+          onClick={() => onOpenChange(!open)}
+          className="inline-flex h-9 min-w-0 items-center gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        >
+          <span className="max-w-72 truncate">
+            {triggerLabel}
+            {!hideValue && !antigravityModelLabel && summary ? ` · ${summary}` : ""}
+            {!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
+          </span>
+          <ChevronDown className="size-3 shrink-0" />
+        </button>
+        {supportsThinking ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={cycleThinkingTier}
+            title={`Thinking Capacity: ${thinkingTier.charAt(0).toUpperCase() + thinkingTier.slice(1)} (Click to switch)`}
+            aria-label={`Thinking Capacity: ${thinkingTier}`}
+            className="inline-flex h-7 items-center rounded-md border border-border/70 bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span>Thinking: {thinkingTier.charAt(0).toUpperCase() + thinkingTier.slice(1)}</span>
+          </button>
+        ) : null}
+      </div>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next && choice.loginOpen) return;
+          setFocusAlternative(false);
+          onOpenChange(next);
+        }}
+      >
+        <DialogContent
+          ref={popupRef}
+          showCloseButton={false}
+          initialFocus={() => (isMobile || focusAlternative ? popupRef.current : searchInputRef.current)}
+          aria-describedby={undefined}
+          data-testid="composer-model-picker"
+          className="flex max-h-[min(calc(100dvh-2.5rem),40rem)] min-h-0 w-[33rem] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[33rem]"
+        >
+          <DialogTitle className="sr-only">Select Model</DialogTitle>
+          <ModelPickerPanel
+            searchInputRef={searchInputRef}
+            options={options}
+            current={value}
+            behaviorValue={behaviorValue}
+            fallbackBehaviorOptions={behaviorOptions}
+            onSelect={select}
+            onBehaviorChange={onBehaviorChange}
+            focusAlternative={focusAlternative}
+            catalogState={catalogState}
+            retainedSelection={retainedSelection}
+            onConnectProvider={!restrictToCloud ? openProvider : undefined}
+            onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? openSettings : undefined}
+            onSetWorkspaceDefault={onSetWorkspaceDefault ?? setWorkspaceDefault}
+            openWorkModelsSyncing={openWorkModelsSyncing}
+            autoVisible={autoVisible}
+            onReloadWorkspace={onReloadWorkspace}
+            onClose={() => onOpenChange(false)}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

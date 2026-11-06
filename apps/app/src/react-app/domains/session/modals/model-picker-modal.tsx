@@ -10,7 +10,7 @@ import { useModelChoice } from "@/react-app/domains/models/use-model-catalog";
 import { gatewayConnectCopy, gatewayConnectProviderKey, type GatewayConnectProvider } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { useCheckDesktopRestriction } from "../../cloud/desktop-config-provider";
 import { useDenAuth } from "../../cloud/den-auth-provider";
-import type { ModelOption, ModelRef } from "@/app/types";
+import type { ModelRef } from "@/app/types";
 import { openAutoProviderSettings } from "../../cloud/auto-access-ui";
 import { isAutoModel, managesOwnBehavior, type ModelCatalogOption, type ModelPickerCatalogState, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
 import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
@@ -87,8 +87,8 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
   const pendingProviders = props.gatewayConnectProviders?.filter((provider) => !provider.models?.length) ?? [];
   // The same panel as the composer's picker, in a dialog for surfaces without a composer.
   return <Dialog open={props.open} onOpenChange={(open) => { if (!open && !choice.loginOpen) props.onClose(); }}>
-    <DialogContent ref={popupRef} showCloseButton={false} initialFocus={() => isMobile ? popupRef.current : searchInputRef.current} aria-describedby={undefined}
-      className="flex max-h-[min(calc(100dvh-2rem),36rem)] min-h-0 w-90 max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-90 lg:w-90 lg:max-w-90 lg:rounded-2xl" data-testid="all-models-picker">
+    <DialogContent ref={popupRef} showCloseButton={true} initialFocus={() => isMobile ? popupRef.current : searchInputRef.current} aria-describedby={undefined}
+      className="flex max-h-[min(calc(100dvh-2.5rem),40rem)] min-h-0 w-[33rem] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[33rem] lg:w-[33rem] lg:max-w-[33rem] lg:rounded-2xl" data-testid="all-models-picker">
       <DialogTitle className="sr-only">Models</DialogTitle>
       <ModelPickerPanel searchInputRef={searchInputRef} options={options} current={props.current} behaviorValue={behaviorValue}
         onSelect={(option, behavior) => choice.choose(option, () => {

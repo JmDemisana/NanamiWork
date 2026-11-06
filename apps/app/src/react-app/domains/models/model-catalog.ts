@@ -256,7 +256,8 @@ export function modelGroups(options: readonly ModelOption[], personal: readonly 
     .sort((a, b) => modelTitle(a).localeCompare(modelTitle(b)) || a.modelID.localeCompare(b.modelID)));
   add("Pinned", orderedModelPins(available, personal));
   add("Recent", recent.flatMap((model) => available.filter((option) => modelRefKey(option) === modelRefKey(model))), false);
-  add("OpenWork Models", available.filter((option) => option.providerID === "openwork" || option.providerID === AUTO_PROVIDER_ID));
+  add("OpenWork Free Models", available.filter((option) => option.providerID === "openwork" || option.providerID === "openwork-free" || option.providerID === AUTO_PROVIDER_ID));
+  add("OpenCode Zen Free Models", available.filter((option) => option.providerID === "opencode"));
   const providers = [...new Set(available.map((option) => option.providerID))].sort((a, b) => {
     const name = (id: string) => available.find((option) => option.providerID === id)?.description || id;
     return name(a).localeCompare(name(b));

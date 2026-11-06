@@ -1,4 +1,4 @@
-﻿/** @jsxImportSource react */
+/** @jsxImportSource react */
 import { focusPaneComposerSoon } from "./workbench-pane-focus";
 import { isOpencodeConfigErrorMessage } from "@openwork/types/opencode-config-error";
 import { childOrigin, prepareChildReturn } from "@/lib/child-navigation";
@@ -75,7 +75,7 @@ import type { SessionCloudMcpMaintenanceState } from "../../connections/use-sess
 import { OwDotTicker } from "../../../shell/dot-ticker";
 import { useReactRenderWatchdog } from "../../../shell/react-render-watchdog";
 import { useShellConfig } from "../../../shell/shell-config";
-import { openWorkbenchInstancesEvent, ensureAntigravityPluginInstalled, startAntigravityOAuth } from "../../../shell/new-providers-listener";
+import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listener";
 import { type SidePanelItem, useUiStateStore } from "../../../shell/ui-state-store";
 import type { SessionNumberShortcutsState } from "../../../shell/session-number-shortcuts";
 import { useBootOverlayVisible } from "../../../shell/boot-state";
@@ -473,14 +473,15 @@ function controlStringArg(args: unknown, key: string) {
 }
 
 export function SessionPage(props: SessionPageProps) {
+  // "Add Antigravity Account" buttons inside the session surface dispatch
+  // openWorkbenchInstancesEvent, which settings-route.tsx handles with
+  // the full OAuth + paste-URL flow (startProviderAuth → browser open →
+  // window.prompt for callback URL → completeProviderAuthOAuth).
+  // The prop below is passed through to model-picker-list as onOpenProviderAuth
+  // so the button still fires the event; settings-route catches it.
   const handleAddAntigravity = useCallback(() => {
-    void ensureAntigravityPluginInstalled().then(() => startAntigravityOAuth());
+    props.onOpenProviderAuth?.();
   }, [props.onOpenProviderAuth]);
-
-  useEffect(() => {
-    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-    return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-  }, [handleAddAntigravity]);
   const archivedInWorkspace = (workspaceId: string, sessionId: string | null) => {
     const session = props.sidebar.workspaceSessionGroups.find(group => group.workspace.id === workspaceId)
       ?.sessions.find(session => session.id === sessionId);
@@ -1571,7 +1572,7 @@ export function SessionPage(props: SessionPageProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-3">
-              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} onOpenInstances={() => { void ensureAntigravityPluginInstalled().then(() => startAntigravityOAuth()); }} /> : null}
+              {shellConfig.sidebar ? <MainSidebarControls onOpenSessionSearch={props.sidebar.onOpenSessionSearch} onOpenSettings={props.onOpenSettings} onOpenInstances={() => { window.dispatchEvent(new CustomEvent(openWorkbenchInstancesEvent)); }} /> : null}
               {props.primaryHeader && !hasMainContentTakeover ? props.primaryHeader : null}
               {!props.primaryHeader && parentSessionLink && !props.primarySlot && !hasMainContentTakeover ? (
                 <Tooltip>

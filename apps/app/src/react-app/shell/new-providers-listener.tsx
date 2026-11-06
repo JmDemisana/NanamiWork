@@ -1,4 +1,4 @@
-﻿/** @jsxImportSource react */
+/** @jsxImportSource react */
 import { useCallback, useEffect, useState } from "react";
 import { resolveProviderDisplayName } from "@/app/utils";
 import {
@@ -14,6 +14,10 @@ import { notifyEvent } from "./notifications";
 import { orgOnboardingVisibilityEvent } from "./reload-coordinator";
 
 import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile, openDesktopUrl } from "@/app/lib/desktop";
+import { toast } from "@/components/ui/sonner";
+import { refreshProviderListQueries } from "@/react-app/infra/provider-list-query";
+import { getReactQueryClient } from "@/react-app/infra/query-client";
+import { syncDiskAccountsViaTerminal, useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 import { applyEdits, modify, parse } from "jsonc-parser";
 
 const SEEN_KEY = "openwork.seenProviderIds";
@@ -23,8 +27,62 @@ const NEW_PROVIDERS_DEDUPE_KEY = "new-providers";
 export const openModelPickerEvent = "openwork-open-model-picker";
 /** Custom event to request the provider auth (connect API keys) modal to open. */
 export const openProviderAuthEvent = "openwork-open-provider-auth";
-/** Custom event to request Nanami Workbench's Antigravity account sign-in. */
+/** Custom event to request NanamiWork's Antigravity account sign-in. */
 export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
+/** Custom event to confirm Antigravity OAuth sign-in and refresh NanamiWork. */
+export const confirmAntigravityAuthEvent = "nanami-confirm-antigravity-auth";
+
+const DEFAULT_ANTIGRAVITY_MODALITIES = {
+  input: ["text", "image", "pdf"],
+  output: ["text"],
+};
+
+const ANTIGRAVITY_GOOGLE_MODELS: Record<string, unknown> = {
+  "antigravity-gemini-3.8-flash-high": {
+    name: "Gemini 3.8 Flash (High)",
+    limit: { context: 1048576, output: 65536 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-gemini-3.8-flash-medium": {
+    name: "Gemini 3.8 Flash (Medium)",
+    limit: { context: 1048576, output: 65536 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-gemini-3.8-flash-low": {
+    name: "Gemini 3.8 Flash (Low)",
+    limit: { context: 1048576, output: 65536 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-claude-sonnet-4-6": {
+    name: "Claude Sonnet 4.6 (Thinking)",
+    limit: { context: 200000, output: 64000 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-claude-opus-4-6-thinking": {
+    name: "Claude Opus 4.6 (Thinking)",
+    limit: { context: 200000, output: 64000 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+    variants: {
+      low: { thinkingConfig: { thinkingBudget: 8192 } },
+      max: { thinkingConfig: { thinkingBudget: 32768 } },
+    },
+  },
+  "antigravity-gpt-oss-120b-medium": {
+    name: "GPT-OSS 120B (Medium)",
+    limit: { context: 131072, output: 32768 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-gemini-4-argon": {
+    name: "Gemini 4 Argon",
+    limit: { context: 1048576, output: 65536 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+  "antigravity-gemini-4-argon-high": {
+    name: "Gemini 4 Argon (High)",
+    limit: { context: 1048576, output: 65536 },
+    modalities: DEFAULT_ANTIGRAVITY_MODALITIES,
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Antigravity OAuth constants (mirrored from opencode-antigravity-auth plugin)
@@ -60,8 +118,31 @@ async function derivePKCEChallenge(verifier: string): Promise<string> {
     .replace(/=/g, "");
 }
 
-/** Build the Google OAuth URL and open it in the system browser. */
-export async function startAntigravityOAuth(): Promise<void> {
+/**
+ * Start Antigravity OAuth.
+ *
+ * When `serverStartAuth` is provided (plugin loaded in the OpenCode engine),
+ * delegates to it so the server starts the :51121 callback listener before
+ * the browser is opened — the correct two-step server-driven flow.
+ *
+ * Falls back to building the PKCE URL client-side when the plugin is not yet
+ * loaded (browser opens but callback may fail; callers should show a
+ * "restart Nanami" notice in this case).
+ */
+export async function startAntigravityOAuth(
+  serverStartAuth?: (providerId: string) => Promise<unknown>,
+): Promise<"server" | "client" | "error"> {
+  // --- Stage 1: server-side auth when plugin is loaded ---
+  if (serverStartAuth) {
+    try {
+      await serverStartAuth("google");
+      return "server";
+    } catch (err) {
+      console.warn("Server-side Antigravity auth failed, falling back to client PKCE:", err);
+    }
+  }
+
+  // --- Stage 2: DIY PKCE URL (plugin not yet loaded in engine) ---
   try {
     const verifier = await generatePKCEVerifier();
     const challenge = await derivePKCEChallenge(verifier);
@@ -82,29 +163,186 @@ export async function startAntigravityOAuth(): Promise<void> {
     url.searchParams.set("prompt", "consent");
 
     await openDesktopUrl(url.toString());
+    return "client";
   } catch (err) {
     console.warn("Could not start Antigravity OAuth:", err);
+    return "error";
   }
 }
 
-export async function ensureAntigravityPluginInstalled(): Promise<void> {
+async function getNanamiworkConfigDir(): Promise<string> {
+  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
+  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+}
+
+export async function ensureAntigravityPluginInstalled(): Promise<boolean> {
   try {
-    const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
-    const raw = configRes?.content?.trim()
+    const configDir = await getNanamiworkConfigDir();
+    const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    let raw = configRes?.content?.trim()
       ? configRes.content
       : "{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n";
-    const parsed = (parse(raw) ?? {}) as { plugin?: unknown };
+    const parsed = (parse(raw) ?? {}) as {
+      plugin?: unknown;
+      provider?: { google?: { name?: string; models?: Record<string, unknown> } };
+    };
     const plugins = Array.isArray(parsed.plugin) ? (parsed.plugin as string[]) : [];
     const installed = plugins.some((entry) => String(entry).startsWith("opencode-antigravity-auth"));
+    let changed = false;
     if (!installed) {
       const edits = modify(raw, ["plugin"], [...plugins, "opencode-antigravity-auth@latest"], {
         formattingOptions: { insertSpaces: true, tabSize: 2 },
       });
-      await writeOpencodeConfig("global", "", applyEdits(raw, edits));
+      raw = applyEdits(raw, edits);
+      changed = true;
     }
+    const existingGoogleModels = parsed.provider?.google?.models ?? {};
+    if (!existingGoogleModels["antigravity-gemini-3.8-flash-high"] || existingGoogleModels["antigravity-gemini-3.1-pro"]) {
+      const googleConfig = {
+        ...(parsed.provider?.google ?? {}),
+        name: "Google Antigravity",
+        models: {
+          ...ANTIGRAVITY_GOOGLE_MODELS,
+        },
+      };
+      const edits = modify(raw, ["provider", "google"], googleConfig, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      });
+      raw = applyEdits(raw, edits);
+      changed = true;
+    }
+    if (changed) {
+      await writeOpencodeConfig("project", configDir, raw);
+    }
+    return changed;
   } catch (err) {
     console.warn("Could not ensure opencode-antigravity-auth plugin:", err);
+    return false;
   }
+}
+
+export type AntigravityAuthStoreHandle = {
+  startProviderAuth: (
+    providerId?: string,
+    methodIndex?: number,
+  ) => Promise<{ methodIndex: number; authorization: { url: string; method: "oauth" | "code" | "auto"; instructions?: string } }>;
+  completeProviderAuthOAuth: (
+    providerId: string,
+    methodIndex: number,
+    code?: string,
+  ) => Promise<{ connected: boolean; pending?: boolean; message?: string }>;
+  refreshProviders: (options?: {
+    dispose?: boolean;
+    force?: boolean;
+    configChanged?: boolean;
+  }) => Promise<unknown>;
+};
+
+let pendingOAuthMethodIndex = 0;
+let pendingOAuthPromise: Promise<{ connected: boolean; pending?: boolean; message?: string } | null> | null = null;
+
+export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle): Promise<void> {
+  const configChanged = await ensureAntigravityPluginInstalled();
+  if (configChanged) {
+    await store.refreshProviders({ dispose: true, force: true, configChanged: true }).catch(() => undefined);
+  }
+  try {
+    let authResult: { methodIndex: number; authorization: { url: string; method: string; instructions?: string } };
+    try {
+      authResult = await store.startProviderAuth("google");
+    } catch {
+      await store.refreshProviders({ dispose: true, force: true, configChanged: true }).catch(() => undefined);
+      authResult = await store.startProviderAuth("google");
+    }
+    const methodIndex = typeof authResult?.methodIndex === "number" ? authResult.methodIndex : 0;
+    pendingOAuthMethodIndex = methodIndex;
+    const authUrl = authResult?.authorization?.url;
+    // The opencode-antigravity-auth server plugin already calls openBrowser() when method === "auto".
+    // Only open from the frontend if the server fell back to manual/code mode.
+    if (authUrl && authResult?.authorization?.method !== "auto") {
+      await openDesktopUrl(authUrl);
+    }
+    // Immediately invoke completeProviderAuthOAuth in the background so the server's
+    // callback() awaits the :51121 redirect, exchanges tokens, and saves antigravity-accounts.json!
+    const completion = store
+      .completeProviderAuthOAuth("google", methodIndex)
+      .then(async (res) => {
+        clearCachedProviderLists();
+        await syncDiskAccountsViaTerminal().catch(() => undefined);
+        await store.refreshProviders({ dispose: true, force: true }).catch(() => undefined);
+        clearCachedProviderLists();
+        await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
+        await useAntigravityAccountsStore.getState().loadAccounts().catch(() => undefined);
+        window.dispatchEvent(new CustomEvent(newProvidersEvent, { detail: { providers: [{ id: "google", name: "Google Antigravity" }], newProviderCount: 1, newModelCount: 6 } }));
+        if (res?.connected) {
+          toast.success("Account connected!", {
+            id: "antigravity-oauth-toast",
+            description: "Your account models are ready. Click Confirm & Refresh to reload.",
+            duration: 60000,
+            action: {
+              label: "Confirm & Refresh",
+              onClick: () => window.location.reload(),
+            },
+          });
+        }
+        return res;
+      })
+      .catch((err) => {
+        console.warn("Antigravity OAuth background completion warning:", err);
+        return null;
+      });
+    pendingOAuthPromise = completion;
+  } catch (err) {
+    console.warn("Server-side Antigravity startProviderAuth failed, falling back to client PKCE:", err);
+    await startAntigravityOAuth();
+  }
+
+  toast.info("Sign in with Google in your browser", {
+    id: "antigravity-oauth-toast",
+    description: "Once the browser says All set!, click Confirm & Refresh.",
+    duration: 120000,
+    action: {
+      label: "Confirm & Refresh",
+      onClick: () => window.location.reload(),
+    },
+  });
+}
+
+function clearCachedProviderLists(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith("openwork.providerList.")) keys.push(k);
+    }
+    for (const k of keys) window.localStorage.removeItem(k);
+  } catch {}
+}
+
+export async function runAntigravityConfirmAndRefresh(store: AntigravityAuthStoreHandle): Promise<void> {
+  toast.loading("Refreshing accounts & models...", {
+    id: "antigravity-oauth-toast",
+  });
+  try {
+    clearCachedProviderLists();
+    if (pendingOAuthPromise) {
+      await Promise.race([
+        pendingOAuthPromise,
+        new Promise((resolve) => setTimeout(resolve, 800)),
+      ]);
+    }
+    await syncDiskAccountsViaTerminal().catch(() => undefined);
+    await Promise.race([
+      store.refreshProviders({ dispose: true, force: true }).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 1200)),
+    ]);
+    clearCachedProviderLists();
+    await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
+    await useAntigravityAccountsStore.getState().loadAccounts().catch(() => undefined);
+  } catch (err) {
+    console.warn("Confirm & Refresh warning:", err);
+  }
+  window.location.reload();
 }
 
 function readSeenProviderIds(): Set<string> {

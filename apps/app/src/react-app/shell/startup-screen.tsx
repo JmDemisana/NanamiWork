@@ -4,7 +4,7 @@ import { isOpenworkGatewayRuntime } from "@/app/lib/gateway-runtime";
 import { WebStartupScreen } from "./workspace-startup-status";
 
 // Startup gates cannot depend on the providers they are still waiting to mount.
-export function StartupScreen({ message = "Starting OpenWork" }: { message?: string }) {
+export function StartupScreen({ message = "Starting NanamiWork" }: { message?: string }) {
   if (isOpenworkGatewayRuntime()) return <WebStartupScreen message={message} />;
   return (
     <div className="flex min-h-dvh items-center justify-center bg-dls-surface p-6 text-dls-primary">

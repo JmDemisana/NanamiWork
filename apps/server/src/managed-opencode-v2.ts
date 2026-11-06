@@ -484,7 +484,7 @@ async function createManagedOpencodeV2ServerInner(
       ...(options.providerSession ? { OPENWORK_PROVIDER_SESSION_FD: "3", OPENWORK_PROVIDER_SESSION_BROKER: providerCredentialBrokerPath } : {}),
       OPENCODE_PASSWORD: password,
       OPENCODE_DB: join(options.rootDir, "opencode.db"),
-      OPENCODE_CONFIG_DIR: configDir,
+      OPENCODE_CONFIG_DIR: join(homedir(), ".config", "nanamiwork"),
       ...(opencodeModelsUrl === undefined ? {} : { OPENCODE_MODELS_URL: opencodeModelsUrl }),
     },
     stdio: ["ignore", "pipe", "pipe", options.providerSession ? "pipe" : "ignore"],

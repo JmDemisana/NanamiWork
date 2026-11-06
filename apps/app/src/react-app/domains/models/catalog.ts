@@ -23,21 +23,72 @@ function costsNothing(model: { cost?: { input?: number; output?: number } }) {
 
 /** The one place a connected provider's models become picker options. */
 export function runtimeModelOptions(data: ProviderList, isNewProvider: (providerId: string) => boolean = () => false): ModelOption[] {
-  return getConnectedProviderItems(data).flatMap((provider) => Object.entries(provider.models).map(([id, model]): ModelOption => {
-    const summary = getModelBehaviorSummary(provider.id, model, null, provider.name);
-    const ref = { providerID: provider.id, modelID: id };
-    return {
-      ...ref, title: model.name || id, description: provider.name,
-      behaviorTitle: summary.title, behaviorLabel: summary.label, behaviorDescription: summary.description,
-      behaviorValue: summary.value, behaviorOptions: summary.options,
-      isFree: isAutoModel(ref) || costsNothing(model),
-      // Zen with the person's own key or subscription (OpenWork, `opencode auth login`, env or config) is a real
-      // provider and stays listed in full; only the credential-less built-in Zen is a fallback.
-      ...(provider.id === "opencode" && provider.source === "custom" && costsNothing(model) ? { zenFallback: true } : {}),
-      ...(isNewProvider(provider.id) ? { isRecommended: true } : {}),
-      ...(isCloudManagedProviderKey(provider.id) ? { source: "cloud" as const } : {}),
-    };
-  }));
+  const options = getConnectedProviderItems(data)
+    .filter((provider) =>
+      provider.id === "nanami" ||
+      provider.id === "google" ||
+      provider.id === "opencode" ||
+      provider.id === "openwork-free" ||
+      provider.id === "openwork",
+    )
+    .flatMap((provider) => {
+    const providerDescription =
+      provider.id === "nanami"
+        ? "Nanami Router Models"
+        : provider.id === "opencode"
+          ? "OpenCode Zen Free Models"
+          : provider.id === "openwork-free" || provider.id === "openwork"
+            ? "OpenWork Free Models"
+            : provider.name;
+    const entries = Object.entries(provider.models);
+    const hasAntigravity = provider.id === "google" && entries.some(([id]) => id.startsWith("antigravity-"));
+    const visibleEntries = hasAntigravity
+      ? entries.filter(([id]) => id.startsWith("antigravity-"))
+      : entries;
+    return visibleEntries.map(([id, model]): ModelOption => {
+      const summary = getModelBehaviorSummary(provider.id, model, null, providerDescription);
+      const ref = { providerID: provider.id, modelID: id };
+      return {
+        ...ref,
+        title: model.name || id,
+        description: providerDescription,
+        behaviorTitle: summary.title,
+        behaviorLabel: summary.label,
+        behaviorDescription: summary.description,
+        behaviorValue: summary.value,
+        behaviorOptions: summary.options,
+        isFree: true,
+        ...(isNewProvider(provider.id) ? { isRecommended: true } : {}),
+        ...(isCloudManagedProviderKey(provider.id) ? { source: "cloud" as const } : {}),
+      };
+    });
+  });
+
+  const hasOpenworkFree = options.some(
+    (o) => o.providerID === "openwork-free" || o.providerID === "openwork",
+  );
+  if (!hasOpenworkFree) {
+    options.push({
+      providerID: "openwork-free",
+      modelID: "openai/gpt-6-luna",
+      title: "OpenWork Free (GPT-6 Luna)",
+      description: "OpenWork Free Models",
+      isFree: true,
+    });
+  }
+
+  const hasOpencodeZen = options.some((o) => o.providerID === "opencode");
+  if (!hasOpencodeZen) {
+    options.push({
+      providerID: "opencode",
+      modelID: "big-pickle",
+      title: "Big Pickle (Zen Free)",
+      description: "OpenCode Zen Free Models",
+      isFree: true,
+    });
+  }
+
+  return options;
 }
 
 export type ModelCatalogInput = {
@@ -81,8 +132,8 @@ export function buildModelCatalog(input: ModelCatalogInput): ModelCatalog {
   // Members whose organization has OpenWork Models choose its models directly, so free Auto is not listed for them.
   const freeAutoCovered = freeAutoCoveredByOpenWorkModels(entitled);
   const offered = entitled.filter((option) => autoHidden ? !isAutoModel(option) : !(freeAutoCovered && isFreeAutoModel(option)));
-  // Under "only managed providers" the list stays exactly as the desktop policy allows it, Zen included.
-  const listed = input.restrictToCloud ? offered : hideBuiltInZenFallback(offered);
+  // Always list offered models including Zen free options without hiding them
+  const listed = offered;
   return { known, options: withAutoDefaultPin(listed, input.autoStatus) };
 }
 
@@ -110,6 +161,7 @@ export type RetainedSelectionInput = {
 export function resolveRetainedSelection(input: RetainedSelectionInput): RetainedModelSelection | undefined {
   const { current } = input;
   if (!current.providerID || !current.modelID) return undefined;
+  if (current.providerID === "google" && current.modelID.startsWith("antigravity-")) return undefined;
   const key = modelRefKey(current);
   const saved = input.saved && modelRefKey(input.saved.model) === key ? input.saved : undefined;
   const blockedBySaved = saved && (saved.reason === "policy" || saved.reason === "disabled");

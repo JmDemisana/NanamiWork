@@ -61,6 +61,7 @@ export type ModelPickerPanelProps = {
   openWorkModelsSyncing?: boolean;
   autoVisible: boolean;
   onReloadWorkspace?: () => void | Promise<unknown>;
+  onClose?: () => void;
   /** Rows under the footer that only one surface offers. */
   footerExtra?: React.ReactNode;
 };
@@ -109,7 +110,7 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
   return <ModelPickerList searchInputRef={props.searchInputRef} autoFocusSearch={false} options={options} current={current} query={query} onQueryChange={setQuery} onSelect={props.onSelect}
     focusAlternative={props.focusAlternative} catalogState={props.catalogState} retainedSelection={props.retainedSelection} onConnectProvider={props.onConnectProvider}
     onOpenProviderSettings={props.onOpenProviderSettings} onSetWorkspaceDefault={props.onSetWorkspaceDefault} currentBehaviorValue={behaviorValue}
-    openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} footer={<>
+    openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} onClose={props.onClose} footer={<>
       {props.footerExtra}
       <AutoAccessFooter available={props.autoVisible} syncing={props.autoVisible && Boolean(props.openWorkModelsSyncing)} />
     </>} />;

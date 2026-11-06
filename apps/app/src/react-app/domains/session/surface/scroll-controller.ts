@@ -368,11 +368,6 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         return;
       }
       if (pendingSubmittedMessageId) {
-        const top = anchorTop({ messageId: pendingSubmittedMessageId, offset: 0 });
-        if (top === null) return;
-        // Sending is explicit navigation, even while history loads. Align an
-        // oversized prompt's start; desktop short prompts clamp to the bottom.
-        // Mobile has reserved answer space, so both begin at the same anchor.
         pendingSubmittedMessageId = null;
         restoredPageAnchorId = undefined;
         pendingRestore = false;
@@ -381,13 +376,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         if (smoothJump) container.scrollTo({ top: container.scrollTop, behavior: "instant" });
         smoothJump = false;
         lastGestureAt = -Infinity;
-        container.scrollTop = top;
-        lastKnownScrollTop = container.scrollTop;
-        const clipped = latestMessageTopClippedId(container);
-        if (mobile && mobileTurnPinned && mobileTurnId) store.setManualScroll(scrollKey, container.scrollTop, clipped, { messageId: mobileTurnId, offset: 0 });
-        else if (isExactlyAtBottom(container)) store.setStickyBottom(scrollKey, clipped);
-        else store.setManualScroll(scrollKey, container.scrollTop, clipped, readingAnchor(container));
-        refreshTopClippedMessage();
+        scrollToBottom("instant");
         return;
       }
       if (!historyReady) return;

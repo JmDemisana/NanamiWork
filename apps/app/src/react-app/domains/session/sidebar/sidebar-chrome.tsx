@@ -1,6 +1,5 @@
 /** @jsxImportSource react */
-import { ArrowLeft, ArrowRight, Layers, Search, Settings } from "lucide-react";
-import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
+import { ArrowLeft, ArrowRight, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,13 +55,10 @@ export function SidebarTitlebar({ history }: { history?: ConversationHistoryCont
   );
 }
 
-/** One search/bell pair, in the brand row or the main titlebar when hidden. */
-export function SidebarActions({ onOpenSessionSearch, onOpenSettings, onOpenInstances }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void; onOpenInstances?: () => void }) {
+/** One search/settings pair, in the brand row or the main titlebar when hidden. */
+export function SidebarActions({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void; onOpenInstances?: () => void }) {
   const triggerSettings = onOpenSettings ?? (() => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: ",", ctrlKey: true, bubbles: true }));
-  });
-  const triggerInstances = onOpenInstances ?? (() => {
-    window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
   });
   return (
     <div data-sidebar-actions className="flex shrink-0 items-center gap-0.5 titlebar-no-drag">
@@ -79,17 +75,6 @@ export function SidebarActions({ onOpenSessionSearch, onOpenSettings, onOpenInst
           <TooltipContent>{t("workspace_list.search_sessions")} ({isMacPlatform() ? "⌘⇧F" : "Ctrl+Shift+F"})</TooltipContent>
         </Tooltip>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger render={
-          <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-            aria-label="Add Antigravity Account"
-            data-sidebar-instances
-            onClick={triggerInstances}>
-            <Layers strokeWidth={1.5} className="size-4" />
-          </Button>
-        } />
-        <TooltipContent>Add Antigravity Account</TooltipContent>
-      </Tooltip>
       <Tooltip>
         <TooltipTrigger render={
           <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"

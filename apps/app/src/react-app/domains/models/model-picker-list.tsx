@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Plus, Sparkles } from "lucide-react";
+import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { confirmAntigravityAuthEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,8 +9,9 @@ import { OpenWorkMark, ProviderIcon } from "@/react-app/design-system/provider-i
 import { AutoPickerRecovery, useObservedAutoAccessSnapshot } from "@/react-app/domains/cloud/auto-access-ui";
 import { autoNotOffered, autoPickerCopy, autoQuietlyUnavailable, freeAutoSwitchedOff, type AutoPickerState } from "@/app/lib/inference-access";
 import type { MenuAction } from "@/components/ui/action-menu-model";
-import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandHeader, CommandInput, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
+import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
+import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -24,7 +26,6 @@ export function ModelSourceIcon({ model }: { model: ModelRef & { source?: ModelO
 }
 
 function ProviderMark({ model, description, retained = false, plainFreeModel = false }: { model: ModelRef & { title?: string }; description?: string; retained?: boolean; plainFreeModel?: boolean }) {
-  // The maker's logo when the name says who made it; the provider is named in text beside it.
   const maker = retained ? null : modelMakerId(model);
   return <div data-slot="model-provider-mark" className="flex size-4 shrink-0 items-center justify-center">
     {isAutoModel(model) && !plainFreeModel ? <OpenWorkMark className="size-4 text-dls-accent dark:text-foreground" />
@@ -33,15 +34,11 @@ function ProviderMark({ model, description, retained = false, plainFreeModel = f
   </div>;
 }
 
-/** Search results, ranked in one unlabeled list. */
 const SEARCH_GROUP = "Search results";
-/** Groups shown without a label: search results, and Smart Routers, which name themselves. */
 const UNLABELED_GROUPS = new Set([SEARCH_GROUP, AUTO_ROUTER_GROUP]);
-/** Groups that list several providers' models together; rows there name their provider. */
 const MIXED_GROUPS = new Set(["Pinned", "Recent", "OpenWork Models", SEARCH_GROUP]);
 
 function ModelLoadingRows({ rows = 3, label = "Loading models", still = false }: { rows?: number; label?: string; still?: boolean }) {
-  // `still`: the rest of the list did not load; placeholders hold its place without suggesting it is loading.
   return <div role="status" aria-label={label} data-testid={still ? "model-catalog-unloaded" : "model-catalog-loading"} className={still ? "px-2 pb-2 [&_[data-slot=skeleton]]:animate-none [&_[data-slot=skeleton]]:bg-gray-4" : "px-2 pb-2"}>
     {Array.from({ length: rows }, (_, index) => index).map((index) => <div key={index} className="flex h-9 items-center gap-2.5 px-2"><Skeleton className="size-4 rounded" /><Skeleton className={`h-2.5 rounded ${index % 2 ? "w-28" : "w-36"}`} /></div>)}
   </div>;
@@ -52,11 +49,9 @@ export type ModelPickerListProps = {
   current: ModelRef;
   query: string;
   onQueryChange: (value: string) => void;
-  /** `behavior.variant` is set when the search named options such as "fast" or "high" that this model offers. */
   onSelect: (option: ModelOption, behavior?: { variant: string | null }) => void;
   focusAlternative?: boolean;
   footer?: ReactNode;
-  /** Shown before the search field, e.g. the command palette's back button. */
   leading?: ReactNode;
   searchInputRef?: Ref<HTMLInputElement>;
   autoFocusSearch?: boolean;
@@ -65,11 +60,11 @@ export type ModelPickerListProps = {
   onConnectProvider?: () => void;
   onOpenProviderSettings?: () => void;
   onSetWorkspaceDefault?: (model: ModelRef, variant?: string | null) => void | boolean | Promise<void | boolean>;
-  /** Effort currently applied to `current`; kept when that model becomes the workspace default. */
   currentBehaviorValue?: string | null;
   openWorkModelsSyncing?: boolean;
   onReloadWorkspace?: () => void | Promise<unknown>;
   onRetryAuto?: () => void | Promise<unknown>;
+  onClose?: () => void;
 };
 
 type AutoRowState = { model: ModelRef; state: AutoPickerState; code?: string | null; resetsAt?: string | null };
@@ -87,52 +82,221 @@ function AutoStatusModelPickerList(props: ModelPickerListProps) {
   const state: AutoPickerState = props.openWorkModelsSyncing ? "sync" : snapshot?.status === "error" ? "unavailable" : matches ? (autoQuietlyUnavailable(status) ? "ready" : autoNotOffered(status) ? "not_offered" : status.state) : "ready";
   const switchedOff = freeAutoSwitchedOff(status);
   const blockedByPolicy = props.retainedSelection !== undefined && props.retainedSelection.reason !== "unavailable" && isAutoModel(props.current);
-  // `plainFreeModel`: the free model is a row like any other. Its limit is not checked here; a send that hits it
-  // is refused and the chat says so (autoWallCopy), the same way any provider's error is shown.
   const plainFreeModel = useDesktopFeature("plainFreeModel");
-  return <ModelPickerRows {...props} plainFreeModel={plainFreeModel} retainedSelection={switchedOff && isAutoModel(props.current) ? undefined : props.retainedSelection} options={withAutoDefaultPin(switchedOff ? props.options.filter((option) => !isAutoModel(option)) : props.options, status)} openWorkModelsSyncing={!switchedOff && !blockedByPolicy && props.openWorkModelsSyncing} autoRow={!plainFreeModel && !switchedOff && !blockedByPolicy && auto ? { model: auto, state, code: status?.code, resetsAt: status?.allowance?.resetsAt } : undefined} />;
+  return <ModelPickerRows {...props} plainFreeModel={plainFreeModel} retainedSelection={switchedOff && isAutoModel(props.current) ? undefined : props.retainedSelection} options={withAutoDefaultPin(switchedOff ? props.options.filter((option) => !isAutoModel(option)) : props.options, status)} openWorkModelsSyncing={!switchedOff && !blockedByPolicy && props.openWorkModelsSyncing} autoRow={!plainFreeModel && !switchedOff && !blockedByPolicy && auto ? { model: auto, state, code: status?.code, resetsAt: status?.allowance?.resetsAt } : undefined} onClose={props.onClose} />;
 }
 
-/** Context-menu rows show the chord that triggers the same command (DESIGN S6). */
 function menuChord(label: string, chord: string) {
   return <><span className="min-w-0 flex-1">{label}</span><kbd className="ml-4 font-sans text-xs text-muted-foreground">{chord}</kbd></>;
 }
 
-function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, leading, searchInputRef, autoFocusSearch = true,
-  catalogState, retainedSelection, onConnectProvider, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, autoRow, plainFreeModel = false,
+function AccountQuotaPill({ item }: { item: AntigravityModelItem }) {
+  if (item.remainingFraction === null || item.remainingFraction === undefined) {
+    return null;
+  }
+  const pct = item.remainingFraction < 0.01 ? 0 : Math.round(item.remainingFraction * 100);
+  const resetShort = formatQuotaResetShort(item.resetTime);
+  const isZero = pct <= 0;
+  const isLow = pct > 0 && pct <= 20;
+  const toneClass = isZero
+    ? "border-rose-500/30 bg-rose-500/10 text-rose-400"
+    : isLow
+      ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+      : "border-emerald-500/25 bg-emerald-500/10 text-emerald-400";
+
+  return (
+    <span
+      className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium tabular-nums leading-none ${toneClass}`}
+      title={item.resetTime ? `Resets at ${new Date(item.resetTime).toLocaleString()}` : `${pct}% remaining`}
+    >
+      {resetShort ? `${pct}% · ${resetShort}` : `${pct}%`}
+    </span>
+  );
+}
+
+function ConnectedAccountGroup({
+  account,
+  current,
+  query,
+  onSelectModel,
+}: {
+  account: AntigravityAccountInfo;
+  current: ModelRef;
+  query: string;
+  onSelectModel: (account: AntigravityAccountInfo, item: AntigravityModelItem) => void;
+}) {
+  const search = query.trim().toLowerCase();
+  const visibleModels = useMemo(() => {
+    if (!search) return account.models;
+    return account.models.filter((m) =>
+      `${m.displayName} ${m.rawId} ${account.email} antigravity`.toLowerCase().includes(search),
+    );
+  }, [account.models, account.email, search]);
+
+  if (visibleModels.length === 0) return null;
+
+  return (
+    <div className="px-2 pt-1 pb-1" data-testid={`antigravity-account-group-${account.email}`}>
+      <div className="flex min-h-7 items-center justify-between gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={`${account.email} (Antigravity)`}>
+            {account.email} (Antigravity)
+          </span>
+          {account.isPlus ? (
+            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+              Plus
+            </span>
+          ) : null}
+          {account.isActive ? (
+            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              Active
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:text-foreground"
+            title="Refresh account limits"
+            aria-label={`Refresh limits for ${account.email}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void useAntigravityAccountsStore.getState().refreshQuotas();
+            }}
+          >
+            <RefreshCw className={`size-3 ${account.quotaLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            title={`Remove ${account.email}`}
+            aria-label={`Remove ${account.email}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void useAntigravityAccountsStore.getState().deleteAccount(account.email);
+            }}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {visibleModels.map((item) => {
+          const isSelected =
+            account.isActive &&
+            current.providerID === "google" &&
+            Boolean(findAntigravityModelItem([item], current.modelID));
+          const maker = modelMakerId({
+            providerID: "google",
+            modelID: item.modelID,
+            title: item.displayName,
+          });
+          return (
+            <button
+              key={`${account.email}:${item.modelID}`}
+              type="button"
+              data-testid={`antigravity-model-${account.email}-${item.modelID}`}
+              onClick={() => onSelectModel(account, item)}
+              className={`group/model flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                isSelected ? "bg-accent/60 font-medium" : ""
+              }`}
+            >
+              <div className="flex size-4 shrink-0 items-center justify-center">
+                <ProviderIcon providerId={maker ?? "google"} size={16} />
+              </div>
+              <span className="min-w-0 flex-1 truncate leading-5" title={item.displayName}>
+                {item.displayName}
+              </span>
+              {item.isPlusOnly ? (
+                <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                  Plus
+                </span>
+              ) : null}
+              <AccountQuotaPill item={item} />
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, searchInputRef,
+  catalogState, retainedSelection, onConnectProvider, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
   const display = { plainFreeModel };
   const favorites = useModelCollectionsStore((state) => state.favorites);
   const recent = useModelCollectionsStore((state) => state.recent);
-  // A model bound to a saved shortcut in Settings shows its key on the row.
+  const antigravityAccounts = useAntigravityAccountsStore((state) => state.accounts);
+  const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
+
+  // Filter out generic "google" provider models from standard groups since connected Antigravity accounts render as peer groups.
+  const nonGoogleOptions = useMemo(
+    () => options.filter((option) => option.providerID !== "google"),
+    [options],
+  );
+  const nonGoogleFavorites = useMemo(
+    () => favorites.filter((fav) => fav.providerID !== "google"),
+    [favorites],
+  );
+  const nonGoogleRecent = useMemo(
+    () => recent.filter((rec) => rec.providerID !== "google"),
+    [recent],
+  );
+
   const modelShortcuts = useModelShortcutsStore((state) => state.shortcuts);
   const shortcutLabels = useMemo(() => {
     const os = resolveShortcutOs(undefined, typeof navigator === "undefined" ? "" : navigator.platform);
     return new Map(modelShortcuts.map((shortcut) => [modelRefKey({ providerID: shortcut.action.providerID, modelID: shortcut.action.modelID }), formatChord(shortcut.keys, os)]));
   }, [modelShortcuts]);
-  // Searching ranks every model in one list (best first); browsing keeps the groups.
   const searching = query.trim().length > 0;
-  const search = useMemo(() => searching ? searchModels(options, query) : null, [searching, options, query]);
-  const groups: ModelGroup[] = search
-    ? search.matches.length ? [{ value: SEARCH_GROUP, items: search.matches.map((match) => match.option) }] : []
-    : modelGroups(options, favorites, recent, query);
+  const search = useMemo(() => searching ? searchModels(nonGoogleOptions, query) : null, [searching, nonGoogleOptions, query]);
+  const groups: ModelGroup[] = useMemo(() => {
+    if (search) {
+      return search.matches.length ? [{ value: SEARCH_GROUP, items: search.matches.map((match) => match.option) }] : [];
+    }
+    return modelGroups(nonGoogleOptions, nonGoogleFavorites, nonGoogleRecent, query).filter(
+      (g) => g.value !== "Recent",
+    );
+  }, [search, nonGoogleOptions, nonGoogleFavorites, nonGoogleRecent, query]);
   const providerMiss = search?.provider && !search.provider.found ? search.provider : undefined;
-  const pins = orderedModelPins(options, favorites);
+  const pins = orderedModelPins(nonGoogleOptions, nonGoogleFavorites);
   const pinned = new Set(pins.map(modelRefKey));
   const root = useRef<HTMLDivElement>(null);
   const [highlighted, setHighlighted] = useState<ModelOption | null>(null);
   const [retryBusy, setRetryBusy] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
   const blockedAuto = (option: ModelRef) => autoRow?.state !== undefined && autoRow.state !== "ready" && modelRefKey(option) === modelRefKey(autoRow.model);
-  const canSelect = (option: ModelOption) => !option.disabled && !blockedAuto(option) && options.some((item) => modelRefKey(item) === modelRefKey(option) && !item.disabled);
-  // Options typed in the search ("fast", "high") come along; a model that lacks one is still chosen.
+  const canSelect = (option: ModelOption) => !option.disabled && !blockedAuto(option) && nonGoogleOptions.some((item) => modelRefKey(item) === modelRefKey(option) && !item.disabled);
   const select = (option: ModelOption) => {
     if (!canSelect(option)) return;
     const variant = search ? resolveSearchIntent(option, search.intent).variant : undefined;
     onSelect(option, variant === undefined ? undefined : { variant });
   };
+  const selectAntigravityModel = (account: AntigravityAccountInfo, item: AntigravityModelItem) => {
+    const resolvedModelID = resolveAntigravityModelForTier(item, thinkingTier);
+    void useAntigravityAccountsStore.getState().selectAccount(account.email);
+    onSelect(
+      {
+        providerID: "google",
+        modelID: resolvedModelID,
+        title: item.displayName,
+        description: `${account.email} (Antigravity)`,
+      },
+      item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
+    );
+  };
   const alternative = pins.find((option) => !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current))
-    ?? options.find((option) => !option.disabled && !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current));
+    ?? nonGoogleOptions.find((option) => !option.disabled && !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current));
   const alternativeKey = alternative ? modelRefKey(alternative) : undefined;
   useEffect(() => {
     if (!focusAlternative) return;
@@ -155,34 +319,76 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const toggle = (option: ModelOption) => {
     if (!immutableModelPin(option) && canSelect(option)) useModelCollectionsStore.getState().toggleFavorite(option);
   };
-  const hasOptions = options.some((option) => !option.disabled);
+  const hasOptions = nonGoogleOptions.some((option) => !option.disabled) || antigravityAccounts.length > 0;
   const loading = catalogState?.state === "loading";
   const failed = catalogState?.state === "error" || retryFailed;
   const empty = !loading && !hasOptions && !query.trim() && !failed;
-  const retained = retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
+  const isSelectedAntigravityAvailable = current.providerID === "google" && antigravityAccounts.length > 0;
+  const retained = !isSelectedAntigravityAvailable && retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
     && !options.some((option) => modelRefKey(option) === modelRefKey(current) && !option.disabled) ? retainedSelection : undefined;
   const retainedCopy = retained ? retainedModelCopy(retained.reason) : null;
   const retainedName = retained ? (fixedModelTitle(retained.model, display) ?? (retained.title ? modelTitle({ ...retained.model, title: retained.title, description: retained.description }, display) : "Saved model")) : "";
   const retainedVisible = retained && (!query.trim() || `${retainedName} ${retained.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const retainedState = retained && isAutoModel(retained.model) && autoRow && autoRow.state !== "ready" ? autoPickerCopy(autoRow.state, false, undefined, autoRow.code, autoRow.resetsAt).subtitle : retainedCopy?.subtitle;
   const retainedSubtitle = [retained && !isAutoModel(retained.model) ? retained.description?.trim() : null, retainedState].filter(Boolean).join(" · ");
-  // A saved model that was pinned stays where the person pinned it, at the top of Pinned.
   const retainedPinned = Boolean(retained && favorites.some((favorite) => modelRefKey(favorite) === modelRefKey(retained.model)));
   const retainedLabel = retainedPinned ? "Pinned" : "Saved selection";
   const mergedLabel = retainedVisible && retainedPinned && groups[0]?.value === "Pinned" ? "Pinned" : null;
   const verifiedDate = catalogState?.lastVerifiedAt ? new Date(catalogState.lastVerifiedAt) : null;
   const verified = verifiedDate && Number.isFinite(verifiedDate.valueOf()) ? verifiedDate : null;
+
   return <div ref={root} className="flex min-h-0 flex-1 flex-col" onKeyDownCapture={(event) => {
     if (!isPinModelShortcut(event) || event.repeat) return;
     const focusedRow = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-model-key]") : null;
     const row = focusedRow ?? root.current?.querySelector<HTMLElement>("[data-model-key][data-highlighted]");
-    const option = options.find((item) => modelRefKey(item) === row?.dataset.modelKey) ?? highlighted;
+    const option = nonGoogleOptions.find((item) => modelRefKey(item) === row?.dataset.modelKey) ?? highlighted;
     if (!option) return;
     event.preventDefault(); event.stopPropagation(); toggle(option);
   }}>
+    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="min-w-0 pr-2">
+        <h3 className="text-sm font-semibold text-foreground">Select Model</h3>
+        <p className="text-xs text-muted-foreground">Choose a model from your connected accounts</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex items-center">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Filter models..."
+            aria-label="Search all models"
+            className="h-8 w-44 rounded-lg border border-border bg-muted/30 pl-2.5 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="absolute right-2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear filter"
+              title="Clear filter"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+        {onClose ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            className="size-8 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Close dialog"
+            title="Close"
+          >
+            <X className="size-4" />
+          </Button>
+        ) : null}
+      </div>
+    </div>
     <Command items={groups} filter={null} value={query} onValueChange={onQueryChange}>
-      {/* Search models header removed */}
-      {/* The list sizes to its rows so placeholders after it stay in view; this panel does the scrolling. */}
       <CommandPanel className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&>[data-slot=scroll-area]]:h-auto">
         {retainedVisible ? <div data-testid="retained-selected-model" aria-disabled="true" aria-label={`${retainedName}, current model, ${retainedSubtitle}`} className="px-2 pt-2">
           <p className="flex h-7 items-center px-2 text-xs text-muted-foreground">{retainedLabel}</p>
@@ -197,12 +403,12 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
           {[providerMiss ? (search.modelWords.length ? `No “${search.modelWords.join(" ")}” on ${providerMiss.label}. Showing other providers.` : `${providerMiss.label} has no models here.`) : null,
             searchIntentSummary(search.intent)].filter(Boolean).join(" ")}
         </p> : null}
-        {!loading && groups.length === 0 && query.trim() ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm">
+        {!loading && groups.length === 0 && antigravityAccounts.length === 0 && query.trim() ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm">
           <p>No models match “{query.trim()}”</p><p className="text-muted-foreground">{providerMiss ? `${providerMiss.label} isn't connected in this workspace.` : "Try a shorter name, or search by provider."}</p>
           <Button size="sm" variant="outline" className="mt-2" onClick={clearSearch}>Clear search</Button>
         </div> : null}
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
-          <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an instance, or turn OpenWork Free back on in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
+          <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
         <CommandList>
           {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items}>
@@ -215,12 +421,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               const autoState = autoRow && modelRefKey(autoRow.model) === key ? autoRow.state : undefined;
               const blocked = !canSelect(option);
               const subtitle = autoState ? autoPickerCopy(autoState, false, undefined, autoRow?.code, autoRow?.resetsAt).subtitle : active && failed ? `${modelSubtitle(option, false, display)}${modelSubtitle(option, false, display) ? " · " : ""}availability not verified` : modelSubtitle(option, false, display);
-              // The name always wins the row. One quiet line under it carries where the model
-              // comes from (only where a group mixes providers) and what is true about it now.
               const meta = autoState || (isAutoModel(option) && !plainFreeModel) || isAutoRouterModel(option) ? subtitle
                 : [MIXED_GROUPS.has(group.value) ? option.description?.trim() : null, modelStateLabel(option),
                   active && failed ? "Availability not verified" : null].filter(Boolean).join(" · ");
-              // Options typed in the search show only where they apply; the line above the list says the rest.
               const applies = search ? searchIntentTag(option, search.intent) : null;
               const pinLabel = pinned.has(key) ? "Unpin" : "Pin to top";
               const actions: MenuAction[] = [
@@ -244,7 +447,6 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                 </span>
                 {applies ? <span data-testid="model-search-applies" className="shrink-0 text-xs text-muted-foreground">{applies}</span> : null}
                 {shortcutLabels.get(key) ? <kbd data-testid="model-shortcut-key" className="shrink-0 rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">{shortcutLabels.get(key)}</kbd> : null}
-                {/* Fixed trailing slots keep checks aligned; pin shows on pointer or focus (keyboard: ⇧P). */}
                 <span className="flex size-6 shrink-0 items-center justify-center">{!fixed && !blocked ? <Button type="button" variant="ghost" size="icon-sm" aria-label={`${pinLabel}: ${name}`} title={pinLabel}
                   className="size-6 text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus:opacity-100 group-hover/model:opacity-100 group-focus-within/model:opacity-100"
                   onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onKeyDown={(event) => event.stopPropagation()}
@@ -256,6 +458,19 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
             }}</CommandCollection>
           </CommandGroup>}
         </CommandList>
+        {antigravityAccounts.length > 0 ? (
+          <div className="pb-1">
+            {antigravityAccounts.map((acc) => (
+              <ConnectedAccountGroup
+                key={acc.email}
+                account={acc}
+                current={current}
+                query={query}
+                onSelectModel={selectAntigravityModel}
+              />
+            ))}
+          </div>
+        ) : null}
         {loading && hasOptions ? <ModelLoadingRows /> : null}
         {failed && !verified && hasOptions && !query.trim() ? <ModelLoadingRows rows={2} label="Other models not loaded" still /> : null}
       </CommandPanel>
@@ -268,19 +483,28 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       </>}>{retainedCopy.detail}</PickerNotice> : null}
       {autoRow && autoRow.state !== "ready" ? <AutoPickerRecovery state={autoRow.state} code={autoRow.code} resetsAt={autoRow.resetsAt} onRetry={onRetryAuto} onReload={onReloadWorkspace} hasAlternatives={Boolean(alternativeKey)} />
         : openWorkModelsSyncing ? <AutoPickerRecovery state="sync" onReload={onReloadWorkspace} /> : null}
-      {empty ? <PickerNotice action={onConnectProvider ? <Button size="sm" onClick={onConnectProvider}>Add Antigravity Account</Button> : null}>Nothing is connected in this workspace.</PickerNotice> : null}
-      {focusAlternative && !alternativeKey && hasOptions && onConnectProvider ? <PickerNotice action={<Button size="sm" variant="outline" onClick={onConnectProvider}>Add Antigravity Account</Button>}>Nothing else is connected in this workspace.</PickerNotice> : null}
-      {onConnectProvider && hasOptions && !empty ? (
-        <div className="border-t border-border p-1.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-full justify-start gap-2 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
-            onClick={onConnectProvider}
-          >
-            <Plus className="size-3.5" />
-            <span>Add Antigravity Account</span>
-          </Button>
+      {onConnectProvider ? (
+        <div className="border-t border-border bg-muted/20 p-2 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 flex-1 justify-center gap-1.5 text-xs"
+              onClick={() => onConnectProvider()}
+            >
+              <Plus className="size-3.5" />
+              <span>Add Antigravity Account</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="size-3.5" />
+              <span>Confirm & Refresh</span>
+            </Button>
+          </div>
         </div>
       ) : null}
       {footer}

@@ -1,4 +1,4 @@
-﻿/** @jsxImportSource react */
+/** @jsxImportSource react */
 import { useChatEngineClient } from "@/react-app/domains/models/use-chat-engine-client";
 import { useAutoAccess } from "@/react-app/domains/cloud/auto-access-ui";
 import { freeAutoSwitchedOff } from "@/app/lib/inference-access";
@@ -85,7 +85,7 @@ import {
 } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { createProviderAuthStore, useProviderAuthStoreSnapshot } from "@/react-app/domains/connections/provider-auth/store";
 import ProviderAuthModal, { PROVIDER_LABELS } from "@/react-app/domains/connections/provider-auth/provider-auth-modal";
-import { openWorkbenchInstancesEvent, ensureAntigravityPluginInstalled, startAntigravityOAuth } from "./new-providers-listener";
+import { openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh } from "./new-providers-listener";
 import { keylessProviderIds } from "@/react-app/domains/connections/provider-auth/provider-policy";
 import ConnectionsModals from "@/react-app/domains/connections/modals";
 import { AiSettingsView } from "@/react-app/domains/settings/pages/ai-view";
@@ -149,6 +149,7 @@ import {
   type WorkspaceInfo,
   type WorkspaceList,
   revealDesktopItemInDir,
+  openDesktopUrl,
 } from "@/app/lib/desktop";
 import {
   SETTINGS_TAB_WITHOUT_CONTROL,
@@ -807,22 +808,6 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const openworkServerSnapshot = useOpenworkServerStoreSnapshot(openworkServerStore);
   const connectionsSnapshot = useConnectionsStoreSnapshot(connectionsStore);
   const providerAuthSnapshot = useProviderAuthStoreSnapshot(providerAuthStore);
-  useEffect(() => {
-    const handleAddAntigravity = async () => {
-      await ensureAntigravityPluginInstalled();
-      void startAntigravityOAuth();
-    };
-    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-    return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-  }, [providerAuthStore]);
-  useEffect(() => {
-    const handleAddAntigravity = async () => {
-      await ensureAntigravityPluginInstalled();
-      void startAntigravityOAuth();
-    };
-    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-    return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
-  }, [providerAuthStore]);
   const cloudSession = useCloudSession();
   // With live provider sync the engine delivers Gateway providers and the
   // server sync stops reporting them, so Settings lists them from Den instead.
@@ -1087,17 +1072,25 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     ...providerAuthSnapshot.cloudOrgProviders.map((provider) => provider.providerId),
   ]), [settingsImportedCloudProviders, providerAuthSnapshot.cloudOrgProviders]);
 
-  const handleOpenProviderAuth = useCallback((preferredProviderId?: string) => {
-    if (providerAuthStore.isProviderAddRestricted()) {
-      restrictionNotice.show({
-        title: t("restrictions.add_custom_providers_disabled_title"),
-        message: t("restrictions.add_custom_providers_disabled_message"),
-      });
-      return;
-    }
+  const handleOpenProviderAuth = useCallback((_preferredProviderId?: string) => {
+    window.dispatchEvent(new CustomEvent(openWorkbenchInstancesEvent));
+  }, []);
 
-    void providerAuthStore.openProviderAuthModal(preferredProviderId ? { preferredProviderId } : undefined);
-  }, [providerAuthStore, restrictionNotice]);
+  useEffect(() => {
+    if (props.embedded) return;
+    const handleAddAntigravity = () => {
+      void runAntigravityOAuthFlow(providerAuthStore);
+    };
+    const handleConfirmAntigravity = () => {
+      void runAntigravityConfirmAndRefresh(providerAuthStore);
+    };
+    window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+    window.addEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+    return () => {
+      window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
+      window.removeEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+    };
+  }, [props.embedded, providerAuthStore]);
 
   useEffect(() => {
     if (!activeClient || !selectedWorkspaceId) return;

@@ -1632,7 +1632,8 @@ export function createRuntimeManager({
     });
     // mergeEnv keeps one entry per Windows name, so a child never sees both a
     // saved `PATH` and the inherited `Path` and picks one by spelling.
-    const baseEnv = mergeEnv([userEnv, process.env, { BUN_CONFIG_DNS_RESULT_ORDER: "verbatim" }]);
+    const nanamiworkConfigDir = path.join(app.getPath("home"), ".config", "nanamiwork");
+    const baseEnv = mergeEnv([userEnv, process.env, { BUN_CONFIG_DNS_RESULT_ORDER: "verbatim", OPENCODE_CONFIG_DIR: nanamiworkConfigDir }]);
     const caEnv = envKey(baseEnv, "NODE_EXTRA_CA_CERTS") === undefined ? (await systemCa()).childEnv : {};
     // Bun honors Node's NODE_EXTRA_CA_CERTS, so bundled Bun sidecars inherit
     // the exported OS trust store through the same child env variable.

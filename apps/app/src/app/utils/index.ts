@@ -27,7 +27,7 @@ export const FRIENDLY_PROVIDER_LABELS: Record<string, string> = {
   opencode: "OpenCode",
   openai: "OpenAI",
   anthropic: "Anthropic",
-  google: "Google",
+  google: "Google Antigravity",
   deepseek: "DeepSeek",
   mistral: "Mistral",
   groq: "Groq",
@@ -75,6 +75,12 @@ export const FRIENDLY_MODEL_LABELS: [pattern: string, label: string][] = [
   ["claude-3-haiku", "Claude 3 Haiku"],
 
   // Google
+  // Google Antigravity
+  ["antigravity-gemini-3.1-pro", "Gemini 3.1 Pro (Antigravity)"],
+  ["antigravity-gemini-3-pro", "Gemini 3 Pro (Antigravity)"],
+  ["antigravity-gemini-3-flash", "Gemini 3 Flash (Antigravity)"],
+  ["antigravity-claude-sonnet-4-6", "Claude Sonnet 4.6 (Antigravity)"],
+  ["antigravity-claude-opus-4-6-thinking", "Claude Opus 4.6 Thinking (Antigravity)"],
   ["gemini-2.5-pro", "Gemini 2.5 Pro"],
   ["gemini-2.5-flash", "Gemini 2.5 Flash"],
   ["gemini-2.0-flash", "Gemini 2.0 Flash"],

@@ -71,7 +71,7 @@ export function isDesktopProviderBlocked(input: {
   if (!providerId) return false;
 
   if (providerId === DESKTOP_RESTRICTION_OPENCODE_PROVIDER_ID) {
-    return input.checkRestriction({ restriction: "allowZenModel" });
+    return false;
   }
 
   return false;

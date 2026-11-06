@@ -49,6 +49,58 @@ import { CONNECT_MCP_SERVER_NAME_PREFIX } from "./connect-mcp-server-catalog.js"
 import { appendOrganizationPrompts, OPENWORK_AGENT_PROMPT } from "./openwork-agent-prompt.js";
 import { NANAMI_PROVIDER_ID, nanamiLegacyProviderConfig, nanamiOnlyEnabled } from "./nanami-gateway.js";
 
+const ANTIGRAVITY_MODALITIES = { input: ["text", "image", "pdf"], output: ["text"] };
+const ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG: Record<string, unknown> = {
+  name: "Google Antigravity",
+  models: {
+    "antigravity-gemini-3.8-flash-high": {
+      name: "Gemini 3.8 Flash (High)",
+      limit: { context: 1048576, output: 65536 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-gemini-3.8-flash-medium": {
+      name: "Gemini 3.8 Flash (Medium)",
+      limit: { context: 1048576, output: 65536 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-gemini-3.8-flash-low": {
+      name: "Gemini 3.8 Flash (Low)",
+      limit: { context: 1048576, output: 65536 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-sonnet-4-6": {
+      name: "Claude Sonnet 4.6 (Thinking)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-opus-4-6-thinking": {
+      name: "Claude Opus 4.6 (Thinking)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+      variants: {
+        low: { thinkingConfig: { thinkingBudget: 8192 } },
+        max: { thinkingConfig: { thinkingBudget: 32768 } },
+      },
+    },
+    "antigravity-gpt-oss-120b-medium": {
+      name: "GPT-OSS 120B (Medium)",
+      limit: { context: 131072, output: 32768 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-gemini-4-argon": {
+      name: "Gemini 4 Argon",
+      limit: { context: 1048576, output: 65536 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-gemini-4-argon-high": {
+      name: "Gemini 4 Argon (High)",
+      limit: { context: 1048576, output: 65536 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+  },
+};
+
+
 export async function buildOpenworkRuntimeConfigObject(
   config?: ServerConfig,
 ): Promise<Record<string, unknown>> {
@@ -125,12 +177,13 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
       openworkAnthropicToolSchemaPluginPath(),
       openworkTitleRecoveryPluginPath(),
       openworkGatewayQuotaPluginPath(),
-      ...runtimePluginList(runtimeConfig).filter((plugin) => !isManagedPolicyPlugin(plugin) && !isLegacyBrowserPlugin(plugin)),
+      "opencode-antigravity-auth@latest",
+      ...runtimePluginList(runtimeConfig).filter((plugin) => !isManagedPolicyPlugin(plugin) && !isLegacyBrowserPlugin(plugin) && !String(plugin).startsWith("opencode-antigravity-auth")),
     ],
     ...(disabledProviders.length ? { disabled_providers: disabledProviders } : {}),
     mcp: Object.fromEntries(Object.entries(runtimeMcpMap(runtimeConfig))
       .filter(([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))),
-    provider: { ...provider, [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() },
+    provider: { google: ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG, ...provider, [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() },
   };
 }
 
