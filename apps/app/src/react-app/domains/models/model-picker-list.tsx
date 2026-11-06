@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
-import { confirmAntigravityAuthEvent } from "@/react-app/shell/new-providers-listener";
+import { confirmAntigravityAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -503,7 +503,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               variant="outline"
               size="sm"
               className="h-8 flex-1 justify-center gap-1.5 text-xs"
-              onClick={() => onConnectProvider()}
+              onClick={() => { if (onConnectProvider) { onConnectProvider(); } else { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } }}
             >
               <Plus className="size-3.5" />
               <span>Add Antigravity Account</span>

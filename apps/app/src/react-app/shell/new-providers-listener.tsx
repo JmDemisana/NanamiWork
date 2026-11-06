@@ -259,8 +259,8 @@ export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle)
     const authUrl = authResult?.authorization?.url;
     // The opencode-antigravity-auth server plugin already calls openBrowser() when method === "auto".
     // Only open from the frontend if the server fell back to manual/code mode.
-    if (authUrl && authResult?.authorization?.method !== "auto") {
-      await openDesktopUrl(authUrl);
+    if (authUrl) {
+      await openDesktopUrl(authUrl).catch(() => undefined);
     }
     // Immediately invoke completeProviderAuthOAuth in the background so the server's
     // callback() awaits the :51121 redirect, exchanges tokens, and saves antigravity-accounts.json!

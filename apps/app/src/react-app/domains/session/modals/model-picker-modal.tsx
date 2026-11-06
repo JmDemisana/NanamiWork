@@ -98,7 +98,7 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
         })}
         onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
         catalogState={catalogState} retainedSelection={retained}
-        onConnectProvider={!restrictToCloud ? () => { props.onClose(); void startAntigravityOAuth(); } : undefined}
+        onConnectProvider={!restrictToCloud ? () => { props.onClose(); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
         onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? openSettings : undefined}
         onSetWorkspaceDefault={props.onSetWorkspaceDefault ?? setWorkspaceDefault}
         openWorkModelsSyncing={props.openWorkModelsSyncing} autoVisible={autoVisible} onReloadWorkspace={props.onReloadWorkspace}

@@ -131,7 +131,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
 
     choice.choose(option, commit);
   };
-  const openProvider = () => { onOpenChange(false); void startAntigravityOAuth(); };
+  const openProvider = () => { onOpenChange(false); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); };
   const openSettings = () => { onOpenChange(false); openAutoProviderSettings(); };
 
   const activeAntigravityItem = value.providerID === "google"
