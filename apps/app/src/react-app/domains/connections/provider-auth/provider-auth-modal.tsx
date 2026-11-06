@@ -263,8 +263,12 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     return oauthInstructions;
   }, [oauthInstructions]);
 
-  const methodLabel = (method: ProviderAuthMethod) =>
-    method.label || (method.type === "oauth" ? "OAuth" : "API key");
+  const methodLabel = (method: ProviderAuthMethod, provider?: ProviderAuthEntry) => {
+    if (provider && method.type === "oauth" && isOpenAiProvider(provider.id, provider.name)) {
+      return "ChatGPT (Free or paid)";
+    }
+    return method.label || (method.type === "oauth" ? "OAuth" : "API key");
+  };
 
   const actionDisabled = props.loading || props.submitting;
 
@@ -666,7 +670,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
   };
 
   const methodDescription = (entry: ProviderAuthEntry, method: ProviderAuthMethod) => {
-    const label = methodLabel(method).toLowerCase();
+    const label = methodLabel(method, entry).toLowerCase();
     if (isOpenAiProvider(entry.id, entry.name) && (label.includes("headless") || label.includes("device"))) {
       return "Use OpenAI's device flow when the local browser callback is unreliable.";
     }
@@ -847,7 +851,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                         onClick={() => void handleMethodSelect(method)}
                         disabled={actionDisabled}
                       >
-                        <div className="text-sm font-medium text-gray-12">{methodLabel(method)}</div>
+                        <div className="text-sm font-medium text-gray-12">{methodLabel(method, selectedEntry)}</div>
                         <div className="mt-1 text-xs text-gray-10">{methodDescription(selectedEntry, method)}</div>
                       </button>
                     ))}

@@ -169,7 +169,7 @@ import {
   useModelPickerCatalogStore,
 } from "@/react-app/domains/session/models/model-collections-store";
 import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
-import { openModelPickerEvent, openProviderAuthEvent, openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh } from "@/react-app/shell/new-providers-listener";
+import { openCodexAuthEvent, openModelPickerEvent, openProviderAuthEvent, openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh } from "@/react-app/shell/new-providers-listener";
 import {
   markComposerAutoSend,
 } from "@/react-app/domains/session/surface/composer-auto-send";
@@ -3346,7 +3346,12 @@ export function SessionRoute() {
   useEffect(() => {
     const handler = () => handleOpenProviderAuth();
     window.addEventListener(openProviderAuthEvent, handler);
-    return () => window.removeEventListener(openProviderAuthEvent, handler);
+    const codexHandler = () => handleOpenProviderAuth("openai");
+    window.addEventListener(openCodexAuthEvent, codexHandler);
+    return () => {
+      window.removeEventListener(openProviderAuthEvent, handler);
+      window.removeEventListener(openCodexAuthEvent, codexHandler);
+    };
   }, [handleOpenProviderAuth]);
 
   const paletteSessionOptions = useMemo(

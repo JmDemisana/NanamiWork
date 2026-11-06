@@ -27,6 +27,8 @@ const NEW_PROVIDERS_DEDUPE_KEY = "new-providers";
 export const openModelPickerEvent = "openwork-open-model-picker";
 /** Custom event to request the provider auth (connect API keys) modal to open. */
 export const openProviderAuthEvent = "openwork-open-provider-auth";
+/** Custom event to request the provider auth modal focused on ChatGPT/Codex. */
+export const openCodexAuthEvent = "openwork-open-codex-auth";
 /** Custom event to request NanamiWork's Antigravity account sign-in. */
 export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
 /** Custom event to confirm Antigravity OAuth sign-in and refresh NanamiWork. */
@@ -242,6 +244,7 @@ let pendingOAuthMethodIndex = 0;
 let pendingOAuthPromise: Promise<{ connected: boolean; pending?: boolean; message?: string } | null> | null = null;
 
 export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle): Promise<void> {
+  useAntigravityAccountsStore.setState({ modalOpen: true, isConnecting: true, error: null });
   const configChanged = await ensureAntigravityPluginInstalled();
   if (configChanged) {
     await store.refreshProviders({ dispose: true, force: true, configChanged: true }).catch(() => undefined);
@@ -257,6 +260,7 @@ export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle)
     const methodIndex = typeof authResult?.methodIndex === "number" ? authResult.methodIndex : 0;
     pendingOAuthMethodIndex = methodIndex;
     const authUrl = authResult?.authorization?.url;
+    useAntigravityAccountsStore.setState({ authUrl: authUrl || null, isConnecting: true });
     // The opencode-antigravity-auth server plugin already calls openBrowser() when method === "auto".
     // Only open from the frontend if the server fell back to manual/code mode.
     if (authUrl) {
@@ -273,6 +277,7 @@ export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle)
         clearCachedProviderLists();
         await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
         await useAntigravityAccountsStore.getState().loadAccounts().catch(() => undefined);
+        useAntigravityAccountsStore.setState({ modalOpen: false, isConnecting: false });
         window.dispatchEvent(new CustomEvent(newProvidersEvent, { detail: { providers: [{ id: "google", name: "Google Antigravity" }], newProviderCount: 1, newModelCount: 6 } }));
         if (res?.connected) {
           toast.success("Account connected!", {

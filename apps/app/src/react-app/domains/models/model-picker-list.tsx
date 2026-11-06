@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
-import { confirmAntigravityAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
+import { Building, Check, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X, Bot } from "lucide-react";
+import { confirmAntigravityAuthEvent, openCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,8 +12,11 @@ import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
+import { AntigravityAuthModal } from "./antigravity-auth-modal";
 import { useCopilotAccountsStore } from "./copilot-accounts-store";
 import { CopilotAuthModal } from "./copilot-auth-modal";
+import { useChatGptAccountsStore } from "./chatgpt-accounts-store";
+import { ChatGptAuthModal } from "./chatgpt-auth-modal";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -61,6 +64,7 @@ export type ModelPickerListProps = {
   catalogState?: ModelPickerCatalogState;
   retainedSelection?: RetainedModelSelection;
   onConnectProvider?: () => void;
+  onConnectCodex?: () => void;
   onOpenProviderSettings?: () => void;
   onSetWorkspaceDefault?: (model: ModelRef, variant?: string | null) => void | boolean | Promise<void | boolean>;
   currentBehaviorValue?: string | null;
@@ -243,7 +247,7 @@ function ConnectedAccountGroup({
 }
 
 function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, searchInputRef,
-  catalogState, retainedSelection, onConnectProvider, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
+  catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
   const display = { plainFreeModel };
   const favorites = useModelCollectionsStore((state) => state.favorites);
@@ -619,20 +623,39 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
             <Button
               variant="outline"
               size="sm"
-              className="h-8 flex-1 justify-center gap-1.5 text-xs truncate"
-              onClick={() => { if (onConnectProvider) { onConnectProvider(); } else { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } }}
+              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+              onClick={() => {
+                useAntigravityAccountsStore.getState().setModalOpen(true);
+                window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
+              }}
+              title="Add Antigravity Account"
             >
-              <Plus className="size-3.5" />
+              <Sparkles className="size-3.5 text-amber-500" />
               <span>+ Antigravity</span>
             </Button>
             <Button
               variant="outline"
               size="sm"
               className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
-              onClick={() => { useCopilotAccountsStore.getState().setModalOpen(true); }}
+              onClick={() => {
+                useCopilotAccountsStore.getState().setModalOpen(true);
+              }}
+              title="Add GitHub Copilot Account"
             >
               <Sparkles className="size-3.5 text-emerald-500" />
               <span>+ Copilot</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+              onClick={() => {
+                useChatGptAccountsStore.getState().setModalOpen(true);
+              }}
+              title="Add ChatGPT / OpenAI Account"
+            >
+              <Bot className="size-3.5 text-sky-500" />
+              <span>+ ChatGPT</span>
             </Button>
             <Button
               variant="ghost"
@@ -644,7 +667,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               <RefreshCw className="size-3.5" />
             </Button>
           </div>
+          <AntigravityAuthModal />
           <CopilotAuthModal />
+          <ChatGptAuthModal />
           <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
             For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
           </p>

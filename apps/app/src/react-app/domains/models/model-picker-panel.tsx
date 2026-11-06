@@ -56,6 +56,7 @@ export type ModelPickerPanelProps = {
   focusAlternative?: boolean;
   searchInputRef?: React.Ref<HTMLInputElement>;
   onConnectProvider?: () => void;
+  onConnectCodex?: () => void;
   onOpenProviderSettings?: () => void;
   onSetWorkspaceDefault?: (model: ModelRef, variant?: string | null) => void | boolean | Promise<void | boolean>;
   openWorkModelsSyncing?: boolean;
@@ -108,7 +109,7 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
   }
 
   return <ModelPickerList searchInputRef={props.searchInputRef} autoFocusSearch={false} options={options} current={current} query={query} onQueryChange={setQuery} onSelect={props.onSelect}
-    focusAlternative={props.focusAlternative} catalogState={props.catalogState} retainedSelection={props.retainedSelection} onConnectProvider={props.onConnectProvider}
+    focusAlternative={props.focusAlternative} catalogState={props.catalogState} retainedSelection={props.retainedSelection} onConnectProvider={props.onConnectProvider} onConnectCodex={props.onConnectCodex}
     onOpenProviderSettings={props.onOpenProviderSettings} onSetWorkspaceDefault={props.onSetWorkspaceDefault} currentBehaviorValue={behaviorValue}
     openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} onClose={props.onClose} footer={<>
       {props.footerExtra}

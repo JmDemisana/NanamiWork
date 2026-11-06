@@ -249,8 +249,8 @@ const action = ${JSON.stringify(action ?? null)};
 if (fs.existsSync(rcFile)) {
   try {
     const rc = parseJ(fs.readFileSync(rcFile, 'utf8'));
-    rc.enabled_providers = ['nanami', 'google', 'openwork-free', 'openwork', 'opencode', 'github-copilot'];
-    rc.disabled_providers = ['openai', 'azure', 'anthropic'];
+    rc.enabled_providers = ['nanami', 'google', 'openwork-free', 'openwork', 'opencode', 'github-copilot', 'openai'];
+    rc.disabled_providers = ['azure', 'anthropic'];
     fs.writeFileSync(rcFile, JSON.stringify(rc) + '\\n', 'utf8');
   } catch {}
 }
@@ -744,6 +744,14 @@ type AntigravityAccountsState = {
   refreshQuotas: () => Promise<void>;
   selectAccount: (email: string, client?: Client | null) => Promise<void>;
   deleteAccount: (email: string, client?: Client | null) => Promise<void>;
+  modalOpen: boolean;
+  authUrl: string | null;
+  isConnecting: boolean;
+  error: string | null;
+  setModalOpen: (open: boolean) => void;
+  setAuthUrl: (url: string | null) => void;
+  setIsConnecting: (connecting: boolean) => void;
+  setError: (error: string | null) => void;
 };
 
 let latestClient: Client | null = null;
@@ -754,6 +762,15 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
   thinkingTier: "high",
   loading: false,
   lastLoadedAt: null,
+  modalOpen: false,
+  authUrl: null,
+  isConnecting: false,
+  error: null,
+
+  setModalOpen: (open) => set({ modalOpen: open }),
+  setAuthUrl: (url) => set({ authUrl: url }),
+  setIsConnecting: (connecting) => set({ isConnecting: connecting }),
+  setError: (error) => set({ error }),
 
   setSelectedModel: (model) => set({ selectedModel: model }),
 
