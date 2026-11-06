@@ -139,6 +139,42 @@ export function WorkbenchInstancesModal(props: {
     }
   }, [props.open]);
 
+  // Antigravity sign-in comes from the community `opencode-antigravity-auth`
+  // plugin (browser Google login, multi-account pool). We register the plugin in
+  // the global config, then hand off to the normal provider sign-in flow.
+  const handleAddAntigravity = async () => {
+    try {
+      setBusy(true);
+      setError(null);
+      setSuccess(null);
+      const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+      const raw = configRes?.content?.trim()
+        ? configRes.content
+        : "{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n";
+      const parsed = (parse(raw) ?? {}) as { plugin?: unknown };
+      const plugins = Array.isArray(parsed.plugin) ? (parsed.plugin as string[]) : [];
+      const installed = plugins.some((entry) => String(entry).startsWith("opencode-antigravity-auth"));
+      if (!installed) {
+        const edits = modify(raw, ["plugin"], [...plugins, "opencode-antigravity-auth@latest"], {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        });
+        const writeResult = (await writeOpencodeConfig("global", "", applyEdits(raw, edits))) as {
+          ok?: boolean;
+          stderr?: string;
+        };
+        if (writeResult && writeResult.ok === false) {
+          throw new Error(writeResult.stderr || "Failed to register the Antigravity plugin");
+        }
+        props.onRefreshProviders?.();
+      }
+      props.onOpenProviderAuth("google");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to start Antigravity sign-in");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openAddForm = (preset?: "antigravity" | "custom") => {
     setError(null);
     setSuccess(null);
@@ -338,9 +374,10 @@ export function WorkbenchInstancesModal(props: {
                   size="sm"
                   variant="outline"
                   className="h-8 gap-1.5 text-xs"
-                  onClick={() => openAddForm("antigravity")}
+                  disabled={busy}
+                  onClick={() => void handleAddAntigravity()}
                 >
-                  <Plus size={14} /> Add Antigravity
+                  <Plus size={14} /> Sign in with Antigravity
                 </Button>
                 <Button
                   size="sm"
@@ -368,6 +405,15 @@ export function WorkbenchInstancesModal(props: {
               <CheckCircle2 size={16} className="shrink-0" />
               <span>{success}</span>
             </div>
+          ) : null}
+
+          {mode === "list" ? (
+            <p className="rounded-lg border border-dls-border bg-dls-hover/30 p-3 text-[11px] leading-5 text-dls-secondary">
+              Antigravity sign-in uses the community <span className="font-mono">opencode-antigravity-auth</span> plugin.
+              It is unofficial and may break Google's Terms of Service, so use an account you can afford to lose.
+              Restart Nanami once after the plugin is added, then choose Google (Antigravity) and sign in. Add more
+              accounts by signing in again.
+            </p>
           ) : null}
 
           {mode === "form" ? (
