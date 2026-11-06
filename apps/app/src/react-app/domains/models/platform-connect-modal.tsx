@@ -34,14 +34,12 @@ export function PlatformConnectModal() {
   const setAntigravityOpen = useAntigravityAccountsStore((s) => s.setModalOpen);
   const antigravityAuthUrl = useAntigravityAccountsStore((s) => s.authUrl);
   const antigravityConnecting = useAntigravityAccountsStore((s) => s.isConnecting);
-  const antigravityAccounts = useAntigravityAccountsStore((s) => s.accounts);
 
   // Copilot Store
   const copilotOpen = useCopilotAccountsStore((s) => s.modalOpen);
   const setCopilotOpen = useCopilotAccountsStore((s) => s.setModalOpen);
   const copilotFlow = useCopilotAccountsStore((s) => s.deviceFlow);
   const copilotConnecting = useCopilotAccountsStore((s) => s.isConnecting);
-  const copilotAccount = useCopilotAccountsStore((s) => s.account);
   const startCopilotFlow = useCopilotAccountsStore((s) => s.startDeviceFlow);
   const pollCopilotFlow = useCopilotAccountsStore((s) => s.pollDeviceFlow);
   const cancelCopilotFlow = useCopilotAccountsStore((s) => s.cancelDeviceFlow);
@@ -59,14 +57,14 @@ export function PlatformConnectModal() {
 
   const isOpen = antigravityOpen || copilotOpen || chatGptOpen;
 
-  // Sync tab when opened from a specific button
+  // Sync active platform strictly based on which button was clicked
   React.useEffect(() => {
     if (copilotOpen) setActivePlatform("copilot");
     else if (chatGptOpen) setActivePlatform("chatgpt");
     else if (antigravityOpen) setActivePlatform("antigravity");
   }, [copilotOpen, chatGptOpen, antigravityOpen]);
 
-  // When switching to Copilot, initiate device flow if needed
+  // When opening Copilot, initiate device flow automatically
   React.useEffect(() => {
     if (isOpen && activePlatform === "copilot" && !copilotFlow && !copilotConnecting) {
       void (async () => {
@@ -124,72 +122,33 @@ export function PlatformConnectModal() {
         <DialogHeader className="border-b border-border px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
             {activePlatform === "antigravity" ? (
-              <Sparkles className="size-4 text-amber-500" />
+              <>
+                <Sparkles className="size-4 text-amber-500" />
+                <span>Connect Google Antigravity</span>
+              </>
             ) : activePlatform === "copilot" ? (
-              <Sparkles className="size-4 text-emerald-500" />
+              <>
+                <Sparkles className="size-4 text-emerald-500" />
+                <span>Connect GitHub Copilot</span>
+              </>
             ) : (
-              <Bot className="size-4 text-sky-500" />
+              <>
+                <Bot className="size-4 text-sky-500" />
+                <span>Connect OpenAI / ChatGPT</span>
+              </>
             )}
-            <span>Connect a Platform</span>
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-            Link developer accounts for intelligent routing, multi-account load balancing, and quota limits.
+            {activePlatform === "antigravity"
+              ? "Sign in with Google to enable multi-account load balancing and live quota limits."
+              : activePlatform === "copilot"
+              ? "Link your GitHub account using device authorization for Copilot models."
+              : "Connect your ChatGPT consumer account session or paste an API key."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-5 space-y-4">
-          {/* Platform Selector Tabs */}
-          <div className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setActivePlatform("antigravity")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
-                activePlatform === "antigravity"
-                  ? "bg-background text-foreground shadow-xs border border-border/60"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Sparkles className="size-3.5 text-amber-500" />
-              <span className="truncate">Antigravity</span>
-              {antigravityAccounts.length > 0 && (
-                <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActivePlatform("copilot")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
-                activePlatform === "copilot"
-                  ? "bg-background text-foreground shadow-xs border border-border/60"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Sparkles className="size-3.5 text-emerald-500" />
-              <span className="truncate">Copilot</span>
-              {copilotAccount && (
-                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActivePlatform("chatgpt")}
-              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
-                activePlatform === "chatgpt"
-                  ? "bg-background text-foreground shadow-xs border border-border/60"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Bot className="size-3.5 text-sky-500" />
-              <span className="truncate">ChatGPT</span>
-              {chatGptAccount && (
-                <span className="size-1.5 rounded-full bg-sky-500 shrink-0" />
-              )}
-            </button>
-          </div>
-
-          {/* Tab 1: Antigravity */}
+        <div className="p-5">
+          {/* Antigravity */}
           {activePlatform === "antigravity" && (
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
               <div className="flex items-center gap-3">
@@ -231,7 +190,7 @@ export function PlatformConnectModal() {
             </div>
           )}
 
-          {/* Tab 2: Copilot */}
+          {/* Copilot */}
           {activePlatform === "copilot" && (
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
               <div className="flex items-center gap-3">
@@ -300,7 +259,7 @@ export function PlatformConnectModal() {
             </div>
           )}
 
-          {/* Tab 3: ChatGPT */}
+          {/* ChatGPT */}
           {activePlatform === "chatgpt" && (
             <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
               <div className="flex items-center gap-3">
