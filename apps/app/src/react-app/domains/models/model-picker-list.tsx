@@ -518,6 +518,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               <span>Confirm & Refresh</span>
             </Button>
           </div>
+          <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
+            For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
+          </p>
         </div>
       ) : null}
       {footer}
