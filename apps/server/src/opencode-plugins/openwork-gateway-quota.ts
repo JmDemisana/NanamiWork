@@ -56,7 +56,10 @@ export const OpenWorkGatewayQuota = async () => ({
         const jsoncData = parseJsoncSafe(fs.readFileSync(jsoncFile, "utf8")) as {
           x_nanami_antigravity?: {
             activeEmail?: string;
+            activeIndex?: number;
             deletedAtByEmail?: Record<string, number>;
+            accounts?: Array<Record<string, unknown>>;
+            [key: string]: unknown;
           };
           [key: string]: unknown;
         };

@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { appendEngineOutputTail, createEngineStartupLineReader } from "./engine-output.js";
 import { acquireEngineHistoryLease } from "./opencode-v2-history-lock.js";
 import { providerCredentialBrokerSource } from "./opencode-v2-provider-channel.js";
