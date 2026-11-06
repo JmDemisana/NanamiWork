@@ -8,6 +8,7 @@
     "name": "Nanami",
     "email": "support@nanami-ai.pages.dev"
   },
+  "homepage": "https://nanami-ai.pages.dev",
   "main": "electron/main.mjs",
   "type": "module",
   "scripts": {
