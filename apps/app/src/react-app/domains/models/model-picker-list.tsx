@@ -629,7 +629,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               title="Add Antigravity Account"
             >
               <Sparkles className="size-3.5 text-amber-500" />
-              <span>+ Antigravity</span>
+              <span>Antigravity</span>
             </Button>
             <Button
               variant="outline"
@@ -641,7 +641,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               title="Add GitHub Copilot Account"
             >
               <Sparkles className="size-3.5 text-emerald-500" />
-              <span>+ Copilot</span>
+              <span>Copilot</span>
             </Button>
             <Button
               variant="outline"
@@ -653,7 +653,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               title="Add ChatGPT / OpenAI Account"
             >
               <Bot className="size-3.5 text-sky-500" />
-              <span>+ ChatGPT</span>
+              <span>ChatGPT</span>
             </Button>
             <Button
               variant="ghost"
