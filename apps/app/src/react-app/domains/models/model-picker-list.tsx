@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, Cloud, Laptop, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
+import { Building, Check, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X } from "lucide-react";
 import { confirmAntigravityAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
@@ -284,12 +284,54 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const [highlighted, setHighlighted] = useState<ModelOption | null>(null);
   const [retryBusy, setRetryBusy] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
+  const [pinTarget, setPinTarget] = useState<{ option: ModelOption; variant?: { variant: string | null } } | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinChecking, setPinChecking] = useState(false);
+
+  const handleUnlockPin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!pinTarget || pinChecking) return;
+    const pin = pinInput.trim();
+    if (!pin) {
+      setPinError("Please enter the Gate PIN.");
+      return;
+    }
+    setPinChecking(true);
+    setPinError(null);
+    try {
+      const res = await fetch("https://nanami-ai.pages.dev/api/shared-chats", {
+        method: "GET",
+        headers: { "x-nanami-gate-pin": pin },
+      });
+      if (res.ok) {
+        const target = pinTarget;
+        setPinTarget(null);
+        setPinInput("");
+        setPinError(null);
+        onSelect(target.option, target.variant);
+      } else {
+        setPinError("Incorrect Gate PIN. Please try again.");
+      }
+    } catch {
+      setPinError("Could not reach Nanami gate server. Please check your connection.");
+    } finally {
+      setPinChecking(false);
+    }
+  };
   const blockedAuto = (option: ModelRef) => autoRow?.state !== undefined && autoRow.state !== "ready" && modelRefKey(option) === modelRefKey(autoRow.model);
   const canSelect = (option: ModelOption) => !option.disabled && !blockedAuto(option) && nonGoogleOptions.some((item) => modelRefKey(item) === modelRefKey(option) && !item.disabled);
   const select = (option: ModelOption) => {
     if (!canSelect(option)) return;
     const variant = search ? resolveSearchIntent(option, search.intent).variant : undefined;
-    onSelect(option, variant === undefined ? undefined : { variant });
+    const variantObj = variant === undefined ? undefined : { variant };
+    if (option.providerID === "nanami") {
+      setPinTarget({ option, variant: variantObj });
+      setPinInput("");
+      setPinError(null);
+      return;
+    }
+    onSelect(option, variantObj);
   };
   const selectAntigravityModel = (account: AntigravityAccountInfo, item: AntigravityModelItem) => {
     const resolvedModelID = resolveAntigravityModelForTier(item, thinkingTier);
@@ -350,7 +392,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const verifiedDate = catalogState?.lastVerifiedAt ? new Date(catalogState.lastVerifiedAt) : null;
   const verified = verifiedDate && Number.isFinite(verifiedDate.valueOf()) ? verifiedDate : null;
 
-  return <div ref={root} className="flex min-h-0 flex-1 flex-col" onKeyDownCapture={(event) => {
+  return <div ref={root} className="flex min-h-0 flex-1 flex-col relative" onKeyDownCapture={(event) => {
     if (!isPinModelShortcut(event) || event.repeat) return;
     const focusedRow = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-model-key]") : null;
     const row = focusedRow ?? root.current?.querySelector<HTMLElement>("[data-model-key][data-highlighted]");
@@ -358,6 +400,73 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
     if (!option) return;
     event.preventDefault(); event.stopPropagation(); toggle(option);
   }}>
+    {pinTarget ? (
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-xs p-6 text-center select-none animate-in fade-in-0 duration-150">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 mb-3 shadow-xs">
+          <Lock className="size-6" />
+        </div>
+        <h3 className="text-base font-semibold tracking-tight text-foreground">
+          Nanami Gate PIN Required
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground max-w-xs leading-relaxed">
+          Enter the Gate PIN from the Nanami AI portal to switch to{" "}
+          <span className="font-medium text-foreground">{pinTarget.option.title}</span>.
+        </p>
+        <form
+          onSubmit={handleUnlockPin}
+          className="mt-4 flex w-full max-w-xs flex-col gap-2.5"
+        >
+          <input
+            type="password"
+            autoFocus
+            disabled={pinChecking}
+            placeholder="Enter Gate PIN..."
+            value={pinInput}
+            onChange={(e) => {
+              setPinInput(e.target.value);
+              setPinError(null);
+            }}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 py-1 text-center font-mono text-sm tracking-widest text-foreground outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60"
+          />
+          {pinError ? (
+            <span className="text-[11px] font-medium text-rose-400 animate-in fade-in-0">
+              {pinError}
+            </span>
+          ) : null}
+          <div className="flex gap-2 mt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pinChecking}
+              className="flex-1 text-xs h-9 cursor-pointer"
+              onClick={() => {
+                setPinTarget(null);
+                setPinInput("");
+                setPinError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={pinChecking}
+              className="flex-1 text-xs h-9 bg-amber-500 hover:bg-amber-600 text-white font-medium cursor-pointer disabled:opacity-50"
+            >
+              {pinChecking ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <span>Verifying...</span>
+                </div>
+              ) : (
+                "Unlock & Switch"
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    ) : null}
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <div className="min-w-0 pr-2">
         <h3 className="text-sm font-semibold text-foreground">Select Model</h3>
@@ -455,7 +564,12 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               />}>
                 <ProviderMark model={option} description={option.description} plainFreeModel={plainFreeModel} />
                 <span data-slot="model-label" className="min-w-0 flex-1 leading-5">
-                  <span className={`block truncate${active ? " font-medium" : ""}`} title={name}>{name}</span>
+                  <span className={`flex items-center gap-1 truncate${active ? " font-medium" : ""}`} title={name}>
+                  <span className="truncate">{name}</span>
+                  {option.providerID === "nanami" ? (
+                    <Lock className="size-3 shrink-0 text-amber-400 inline" />
+                  ) : null}
+                </span>
                   {meta ? <span className="block truncate text-xs text-muted-foreground" title={meta}>{meta}</span> : null}
                 </span>
                 {applies ? <span data-testid="model-search-applies" className="shrink-0 text-xs text-muted-foreground">{applies}</span> : null}

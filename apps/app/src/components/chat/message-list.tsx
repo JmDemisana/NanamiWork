@@ -1002,13 +1002,13 @@ const UserMessage = React.memo(
     )
     const hasContent = inlineParts.length > 0
     // Same actions, in the same order, as the buttons below the bubble.
+    const [confirmUndo, setConfirmUndo] = React.useState(false);
     const menuActions: MenuAction[] = []
     if (messageText) menuActions.push(
       { type: "item", id: "copy", label: "Copy", icon: <Copy className="size-4" />, onSelect: () => navigator.clipboard.writeText(messageText) },
-      { type: "item", id: "edit", label: "Edit message", icon: <Pencil className="size-4" />, disabled: readOnly || Boolean(wall), onSelect: () => onEditUserMessage(message.id, messageText) },
     )
     if (!wall) menuActions.push(
-      { type: "item", id: "revert", label: "Revert", icon: <Undo2 className="size-4" />, disabled: readOnly, onSelect: () => onRevertToUserMessage(message.id) },
+      { type: "item", id: "undo", label: "Undo up to this point", icon: <Undo2 className="size-4" />, disabled: readOnly, onSelect: () => setConfirmUndo(true) },
     )
 
     return (
@@ -1075,26 +1075,13 @@ const UserMessage = React.memo(
                   >
                     <MessageTimestamp message={message} className="mr-1.5" />
                     <CopyMessageButton messages={[message]} />
-                    {messageText ? (
-                      <MessageAction tooltip="Edit message">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Edit message"
-                          disabled={readOnly}
-                          onClick={() => onEditUserMessage(message.id, messageText)}
-                        >
-                          <Pencil />
-                        </Button>
-                      </MessageAction>
-                    ) : null}
-                    <MessageAction tooltip="Revert">
+                    <MessageAction tooltip="Undo up to this point">
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label="Revert"
+                        aria-label="Undo up to this point"
                         disabled={readOnly}
-                        onClick={() => onRevertToUserMessage(message.id)}
+                        onClick={() => setConfirmUndo(true)}
                       >
                         <Undo2 />
                       </Button>
@@ -1105,6 +1092,45 @@ const UserMessage = React.memo(
             }
           />
           {wall ? <div className="w-full"><AutoAccessNotice wall={wall} sessionId={sessionId} workspaceId={workspaceId} recovery={rejectedRecoveryFromMessage(message)} /></div> : null}
+          {confirmUndo && (
+            <div
+              onClick={() => setConfirmUndo(false)}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs select-none animate-in fade-in-0 duration-150"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-none border border-amber-500/50 bg-zinc-950/95 p-5 shadow-2xl backdrop-blur-2xl space-y-3.5 text-left"
+              >
+                <div className="flex items-center gap-2 text-amber-400">
+                  <Undo2 className="h-4 w-4" />
+                  <h3 className="text-sm font-bold text-zinc-100">Undo Up to This Point?</h3>
+                </div>
+                <p className="text-xs leading-relaxed text-zinc-300">
+                  This will remove this message and all responses that follow it from the chat. Your original message text will be pasted back into the input box so you can adjust and resend it.
+                </p>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmUndo(false)}
+                    className="h-8 rounded-none border border-zinc-800 px-3 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setConfirmUndo(false);
+                      onRevertToUserMessage(message.id, messageText);
+                    }}
+                    className="h-8 rounded-none bg-amber-600 px-3.5 text-xs font-semibold text-white hover:bg-amber-500 shadow-md cursor-pointer"
+                  >
+                    Confirm Undo
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
       </Message>
     )
   }

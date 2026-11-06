@@ -3669,14 +3669,19 @@ export function SessionSurface(props: SessionSurfaceProps) {
     void handleResumeInterrupted(COMPUTER_CONTINUE_PROMPT);
   }, [computerContinued, handleResumeInterrupted]);
 
-  const handleRevertToUserMessage = useCallback((messageId: string) => {
+  const handleRevertToUserMessage = useCallback((messageId: string, text?: string) => {
     if (archived || !archiveStateKnown || sessionWorkHeld(props.opencodeBaseUrl, props.sessionId)) return;
+    if (text) {
+      replaceComposerDraft(props.sessionId, text);
+      props.onDraftChange(buildDraft(text, []));
+      window.dispatchEvent(new Event("openwork:focusPrompt"));
+    }
     void openingHistory.runWithFullSnapshot((full) => {
       queryClient.setQueryData(snapshotQueryKey, full);
       return props.onRevertToMessage?.(messageId, props.sessionId);
     }, { fresh: true })
       .catch((error) => setError(parseSessionError(error)));
-  }, [archived, archiveStateKnown, openingHistory.runWithFullSnapshot, props.onRevertToMessage, props.opencodeBaseUrl, props.sessionId, queryClient, snapshotQueryKey, setError]);
+  }, [archived, archiveStateKnown, buildDraft, openingHistory.runWithFullSnapshot, props.onDraftChange, props.onRevertToMessage, props.opencodeBaseUrl, props.sessionId, queryClient, snapshotQueryKey, setError, replaceComposerDraft]);
 
   const branchAction = useSessionBranchAction(sessionOwner);
   const forkingMessageId = branchAction?.status === "pending" ? branchAction.messageId : undefined;

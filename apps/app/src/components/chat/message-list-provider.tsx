@@ -46,7 +46,7 @@ interface MessageListContextValue {
   syncDegraded: boolean
   dispatchAction: (action: DispatchAction) => void
   setPrompt: (prompt: string) => void
-  onRevertToUserMessage: (messageId: string) => void
+  onRevertToUserMessage: (messageId: string, text?: string) => void
   /** Absent where a reply cannot be branched into a new chat (a task on another computer). */
   onForkAtMessage?: (messageId: string) => void | Promise<void>
   forkingMessageId?: string
@@ -89,7 +89,7 @@ interface MessageListProviderProps {
   showThinking: boolean
   highlightQuery?: string
   developerMode: boolean
-  onRevertToUserMessage: (messageId: string) => void
+  onRevertToUserMessage: (messageId: string, text?: string) => void
   onForkAtMessage?: (messageId: string) => void | Promise<void>
   forkingMessageId?: string
   onEditUserMessage: (messageId: string, text: string) => void
@@ -198,7 +198,7 @@ export function MessageListProvider({
   const stableHandlers = React.useMemo(() => ({
     dispatchAction: (action: DispatchAction) => handlersRef.current.dispatchAction(action),
     setPrompt: (prompt: string) => handlersRef.current.setPrompt(prompt),
-    onRevertToUserMessage: (messageId: string) => handlersRef.current.onRevertToUserMessage(messageId),
+    onRevertToUserMessage: (messageId: string, text?: string) => handlersRef.current.onRevertToUserMessage(messageId, text),
     onForkAtMessage: (messageId: string) => handlersRef.current.onForkAtMessage?.(messageId),
     onEditUserMessage: (messageId: string, text: string) => handlersRef.current.onEditUserMessage(messageId, text),
     onOpenSubagentSession: (sessionId: string) => handlersRef.current.onOpenSubagentSession?.(sessionId),

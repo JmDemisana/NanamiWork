@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { getModelBehaviorControls, getModelBehaviorSelection } from "@/app/lib/model-behavior";
@@ -170,8 +170,9 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
           onClick={() => onOpenChange(!open)}
           className="inline-flex h-9 min-w-0 items-center gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
-          <span className="max-w-72 truncate">
-            {triggerLabel}
+          <span className="max-w-72 truncate inline-flex items-center gap-1.5">
+            {value.providerID === "nanami" ? <Lock className="size-3 shrink-0 text-amber-400 inline" /> : null}
+            <span className="truncate">{triggerLabel}</span>
             {!hideValue && !antigravityModelLabel && summary ? ` · ${summary}` : ""}
             {!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
           </span>
