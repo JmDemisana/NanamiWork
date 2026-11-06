@@ -10,6 +10,10 @@
   </p>
 </p>
 
+<p align="center">
+  <img src="./docs/images/nanamiwork-preview.png" alt="NanamiWork Preview" width="850" />
+</p>
+
 ---
 
 ## 🌟 Overview

@@ -249,8 +249,8 @@ const action = ${JSON.stringify(action ?? null)};
 if (fs.existsSync(rcFile)) {
   try {
     const rc = parseJ(fs.readFileSync(rcFile, 'utf8'));
-    rc.enabled_providers = ['nanami', 'google', 'openwork-free', 'openwork', 'opencode'];
-    rc.disabled_providers = ['openai', 'github-copilot', 'azure', 'anthropic'];
+    rc.enabled_providers = ['nanami', 'google', 'openwork-free', 'openwork', 'opencode', 'github-copilot'];
+    rc.disabled_providers = ['openai', 'azure', 'anthropic'];
     fs.writeFileSync(rcFile, JSON.stringify(rc) + '\\n', 'utf8');
   } catch {}
 }

@@ -12,12 +12,15 @@ import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
+import { useCopilotAccountsStore } from "./copilot-accounts-store";
+import { CopilotAuthModal } from "./copilot-auth-modal";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
 import { useModelShortcutsStore } from "@/react-app/domains/shortcuts/model-shortcuts-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
 import { formatChord, resolveShortcutOs } from "@/react-app/domains/shortcuts/shortcut-keys";
+import { openDesktopUrl } from "@/app/lib/desktop";
 
 export function ModelSourceIcon({ model }: { model: ModelRef & { source?: ModelOption["source"] } }) {
   const source = modelSource(model);
@@ -346,7 +349,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         modelID: resolvedModelID,
         title: item.displayName,
         description: `${account.email} (Antigravity)`,
-      },
+      } as unknown as ModelOption,
       item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
     );
   };
@@ -612,26 +615,36 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         : openWorkModelsSyncing ? <AutoPickerRecovery state="sync" onReload={onReloadWorkspace} /> : null}
       {onConnectProvider ? (
         <div className="border-t border-border bg-muted/20 p-2 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-1.5">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 flex-1 justify-center gap-1.5 text-xs"
+              className="h-8 flex-1 justify-center gap-1.5 text-xs truncate"
               onClick={() => { if (onConnectProvider) { onConnectProvider(); } else { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } }}
             >
               <Plus className="size-3.5" />
-              <span>Add Antigravity Account</span>
+              <span>+ Antigravity</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+              onClick={() => { useCopilotAccountsStore.getState().setModalOpen(true); }}
+            >
+              <Sparkles className="size-3.5 text-emerald-500" />
+              <span>+ Copilot</span>
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="h-8 px-2 justify-center text-xs text-muted-foreground hover:text-foreground shrink-0"
               onClick={() => window.location.reload()}
+              title="Confirm & Refresh"
             >
               <RefreshCw className="size-3.5" />
-              <span>Confirm & Refresh</span>
             </Button>
           </div>
+          <CopilotAuthModal />
           <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
             For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
           </p>
