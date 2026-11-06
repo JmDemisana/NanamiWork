@@ -591,22 +591,22 @@ async function fetchAccountModelsAndQuota(
       {
         family: "gemini-flash-weekly",
         label: "Gemini 3.8 Flash (Weekly)",
-        remainingFraction: argonQuota.remainingFraction,
-        resetTime: argonQuota.resetTime,
+        remainingFraction: flashQuota.remainingFraction,
+        resetTime: argonQuota.resetTime ?? flashQuota.resetTime,
         period: "weekly",
       },
       {
         family: "claude-5h",
         label: "Claude & GPT-OSS (5h)",
-        remainingFraction: claudeQuota.remainingFraction,
-        resetTime: claudeQuota.resetTime,
+        remainingFraction: 1.0,
+        resetTime: null,
         period: "5h",
       },
       {
         family: "claude-weekly",
         label: "Claude & GPT-OSS (Weekly)",
         remainingFraction: claudeQuota.remainingFraction,
-        resetTime: argonQuota.resetTime,
+        resetTime: claudeQuota.resetTime,
         period: "weekly",
       },
     );
@@ -679,12 +679,8 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     set({ loading: true });
 
     try {
+      await syncDiskAccountsViaTerminal();
       let { meta } = await readNanamiMetaAndConfigDir();
-      if (!Array.isArray(meta.accounts) || meta.accounts.length === 0) {
-        await syncDiskAccountsViaTerminal();
-        const refreshed = await readNanamiMetaAndConfigDir();
-        meta = refreshed.meta;
-      }
 
       const savedTier: ThinkingTier =
         meta.thinkingTier === "low" || meta.thinkingTier === "medium" || meta.thinkingTier === "high"
@@ -818,13 +814,17 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     const wasAlreadyActive = target.isActive;
 
     set({
+      selectedModel: {
+        providerID: "google",
+        modelID: target.models[0]?.modelID || "antigravity-gemini-3.8-flash-high",
+      },
       accounts: currentAccounts.map((a) => {
         const isThis = a.email.toLowerCase() === lower;
         return {
           ...a,
           isActive: isThis,
-          quotas: isThis ? [] : a.quotas,
-          quotaLoading: isThis ? true : a.quotaLoading,
+          quotas: isThis && a.quotas.length > 0 ? a.quotas : a.quotas,
+          quotaLoading: isThis && a.quotas.length === 0,
         };
       }),
     });

@@ -284,6 +284,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   };
   const selectAntigravityModel = (account: AntigravityAccountInfo, item: AntigravityModelItem) => {
     const resolvedModelID = resolveAntigravityModelForTier(item, thinkingTier);
+    useAntigravityAccountsStore.getState().setSelectedModel({
+      providerID: "google",
+      modelID: resolvedModelID,
+    });
     void useAntigravityAccountsStore.getState().selectAccount(account.email);
     onSelect(
       {

@@ -1452,6 +1452,10 @@ export function SessionRoute() {
   }, [orgNewTaskModel, orgNewTaskModelUnavailable]);
   // The composer the user is looking at: the selected conversation's
   // remembered model when it has one, otherwise the global default.
+  useEffect(() => {
+    useAntigravityAccountsStore.getState().setSelectedModel(activeComposerModel);
+  }, [activeComposerModel]);
+
   const activeComposerAvailability = resolveModelAvailability(activeComposerModel);
   const activeComposerTargetsSession = Boolean(selectedSessionModelSelection && selectedSessionId);
   const selectedModelUnavailableKey = activeComposerAvailability.status === "unavailable" && activeComposerModel
@@ -2923,6 +2927,14 @@ export function SessionRoute() {
           if (activeSessionId) useSessionModelStore.getState().setModel(activeSessionId, next, variant);
           else changeNewTaskModel(next, variant);
           useModelCollectionsStore.getState().recordRecent(next);
+    useAntigravityAccountsStore.getState().setSelectedModel(next);
+    if (next.providerID === "google") {
+      const desc = (next as { description?: string }).description || "";
+      const match = desc.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (match?.[1]) {
+        void useAntigravityAccountsStore.getState().selectAccount(match[1]);
+      }
+    }
         }, () => isFavoriteModelTargetCurrent(target, useWorkbenchStore.getState(), favoriteModelScope.current)
           && (!activeSessionId || getSessionModelSelection(activeSessionId) === selection));
       },

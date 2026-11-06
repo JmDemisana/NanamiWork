@@ -24,13 +24,7 @@ function costsNothing(model: { cost?: { input?: number; output?: number } }) {
 /** The one place a connected provider's models become picker options. */
 export function runtimeModelOptions(data: ProviderList, isNewProvider: (providerId: string) => boolean = () => false): ModelOption[] {
   const options = getConnectedProviderItems(data)
-    .filter((provider) =>
-      provider.id === "nanami" ||
-      provider.id === "google" ||
-      provider.id === "opencode" ||
-      provider.id === "openwork-free" ||
-      provider.id === "openwork",
-    )
+    .filter((provider) => provider.id === "nanami" || provider.id === "google")
     .flatMap((provider) => {
     const providerDescription =
       provider.id === "nanami"
