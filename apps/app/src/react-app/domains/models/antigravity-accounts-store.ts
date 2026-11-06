@@ -524,7 +524,8 @@ async function fetchAccountModelsAndQuota(
   } catch {}
 
   const findBucket = (bucketId: string) => {
-    for (const group of quotaSummary?.groups ?? []) {
+    const summary = quotaSummary as QuotaSummaryResponse | null;
+    for (const group of summary?.groups ?? []) {
       for (const bucket of group.buckets ?? []) {
         if (bucket.bucketId === bucketId) {
           const frac =

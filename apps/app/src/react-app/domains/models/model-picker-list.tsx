@@ -14,7 +14,6 @@ import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isA
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
 import { useCopilotAccountsStore } from "./copilot-accounts-store";
 import { useChatGptAccountsStore } from "./chatgpt-accounts-store";
-import { PlatformConnectModal } from "./platform-connect-modal";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -623,6 +622,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               size="sm"
               className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
               onClick={() => {
+                onClose?.();
                 useAntigravityAccountsStore.getState().setModalOpen(true);
                 window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
               }}
@@ -636,6 +636,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               size="sm"
               className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
               onClick={() => {
+                onClose?.();
                 useCopilotAccountsStore.getState().setModalOpen(true);
               }}
               title="Add GitHub Copilot Account"
@@ -648,6 +649,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               size="sm"
               className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
               onClick={() => {
+                onClose?.();
                 useChatGptAccountsStore.getState().setModalOpen(true);
               }}
               title="Add ChatGPT / OpenAI Account"
@@ -665,7 +667,6 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               <RefreshCw className="size-3.5" />
             </Button>
           </div>
-          <PlatformConnectModal />
           <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
             For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
           </p>

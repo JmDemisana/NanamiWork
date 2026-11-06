@@ -118,304 +118,291 @@ export function PlatformConnectModal() {
     void openDesktopUrl("https://platform.openai.com/api-keys");
   };
 
-  const handleConfirmAndRefresh = () => {
-    window.location.reload();
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="size-4 text-emerald-500" />
-            Connect a Platform
+      <DialogContent className="w-[32rem] sm:max-w-[32rem] p-0 overflow-hidden rounded-2xl border-border bg-card shadow-2xl">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold text-foreground">
+            {activePlatform === "antigravity" ? (
+              <Sparkles className="size-4 text-amber-500" />
+            ) : activePlatform === "copilot" ? (
+              <Sparkles className="size-4 text-emerald-500" />
+            ) : (
+              <Bot className="size-4 text-sky-500" />
+            )}
+            <span>Connect a Platform</span>
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            Link your developer accounts to enable multi-account load balancing, intelligent routing, and live limits.
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+            Link developer accounts for intelligent routing, multi-account load balancing, and quota limits.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Platform Selector Tabs */}
-        <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => setActivePlatform("antigravity")}
-            className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-medium transition-all ${
-              activePlatform === "antigravity"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Sparkles className="size-3.5 text-amber-500" />
-            <span className="truncate">Antigravity</span>
-            {antigravityAccounts.length > 0 && (
-              <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActivePlatform("copilot")}
-            className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-medium transition-all ${
-              activePlatform === "copilot"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Sparkles className="size-3.5 text-emerald-500" />
-            <span className="truncate">Copilot</span>
-            {copilotAccount && (
-              <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActivePlatform("chatgpt")}
-            className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 font-medium transition-all ${
-              activePlatform === "chatgpt"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Bot className="size-3.5 text-sky-500" />
-            <span className="truncate">ChatGPT</span>
-            {chatGptAccount && (
-              <span className="size-1.5 rounded-full bg-sky-500 shrink-0" />
-            )}
-          </button>
-        </div>
-
-        {/* Tab 1: Antigravity */}
-        {activePlatform === "antigravity" && (
-          <div className="flex flex-col gap-3 py-1">
-            <span className="text-xs text-muted-foreground">
-              1. Sign in with your Google account in your browser:
-            </span>
-
-            <Button
+        <div className="p-5 space-y-4">
+          {/* Platform Selector Tabs */}
+          <div className="grid grid-cols-3 gap-1 rounded-xl border border-border/60 bg-muted/30 p-1 text-xs">
+            <button
               type="button"
-              className="w-full gap-2 text-xs"
-              onClick={handleOpenGoogle}
+              onClick={() => setActivePlatform("antigravity")}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
+                activePlatform === "antigravity"
+                  ? "bg-background text-foreground shadow-xs border border-border/60"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <span>Open Google Sign-In</span>
-              <ExternalLink className="size-3.5" />
-            </Button>
+              <Sparkles className="size-3.5 text-amber-500" />
+              <span className="truncate">Antigravity</span>
+              {antigravityAccounts.length > 0 && (
+                <span className="size-1.5 rounded-full bg-amber-500 shrink-0" />
+              )}
+            </button>
 
-            <span className="text-xs text-muted-foreground">
-              2. Complete authorization and return to NanamiWork:
-            </span>
+            <button
+              type="button"
+              onClick={() => setActivePlatform("copilot")}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
+                activePlatform === "copilot"
+                  ? "bg-background text-foreground shadow-xs border border-border/60"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sparkles className="size-3.5 text-emerald-500" />
+              <span className="truncate">Copilot</span>
+              {copilotAccount && (
+                <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+              )}
+            </button>
 
-            <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/20 p-2.5 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin text-amber-500" />
-              <span>
-                {antigravityConnecting
-                  ? "Waiting for browser authorization on localhost:51121..."
-                  : "Ready to authenticate..."}
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActivePlatform("chatgpt")}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-all cursor-pointer ${
+                activePlatform === "chatgpt"
+                  ? "bg-background text-foreground shadow-xs border border-border/60"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Bot className="size-3.5 text-sky-500" />
+              <span className="truncate">ChatGPT</span>
+              {chatGptAccount && (
+                <span className="size-1.5 rounded-full bg-sky-500 shrink-0" />
+              )}
+            </button>
+          </div>
 
-            <div className="rounded-lg border bg-muted/30 p-2 text-center text-[11px] text-muted-foreground leading-snug">
-              💡 For accounts using Antigravity for the first time, authenticate once with the official app if verification is required.
-            </div>
+          {/* Tab 1: Antigravity */}
+          {activePlatform === "antigravity" && (
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background shadow-xs">
+                  <Sparkles className="size-4 text-amber-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">Google Antigravity</div>
+                  <div className="text-[11px] text-muted-foreground">Local OAuth 2.0 Loopback (:51121)</div>
+                </div>
+              </div>
 
-            {/* Common Confirm & Refresh Step */}
-            <div className="mt-2 flex flex-col gap-1.5 pt-2 border-t border-border/50">
-              <span className="text-[11px] text-muted-foreground text-center">
-                3. Finished logging in? Refresh to load your models:
-              </span>
+              <div className="text-xs text-muted-foreground">
+                Sign in with your Google account in your default browser. Nanami will capture the session automatically.
+              </div>
+
               <Button
                 type="button"
-                className="w-full gap-2 bg-amber-500 hover:bg-amber-600 text-white font-medium"
-                size="sm"
-                onClick={handleConfirmAndRefresh}
+                variant="outline"
+                className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                onClick={handleOpenGoogle}
               >
-                <RefreshCw className="size-3.5" />
-                <span>Click to Confirm & Refresh</span>
+                <span>Open Sign-In in Browser</span>
+                <ExternalLink className="size-3.5 text-muted-foreground" />
               </Button>
-            </div>
-          </div>
-        )}
 
-        {/* Tab 2: Copilot */}
-        {activePlatform === "copilot" && (
-          <div className="flex flex-col gap-3 py-1">
-            {copilotFlow ? (
-              <>
-                <span className="text-xs text-muted-foreground">
-                  1. Copy your one-time GitHub device activation code:
+              <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin text-amber-500 shrink-0" />
+                <span>
+                  {antigravityConnecting
+                    ? "Waiting for authorization on localhost:51121..."
+                    : "Checking connection status automatically…"}
                 </span>
+              </div>
 
-                <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-4 py-2">
-                  <span className="font-mono text-xl font-bold tracking-wider text-foreground">
-                    {copilotFlow.userCode}
-                  </span>
+              <p className="text-[11px] text-muted-foreground/80 leading-snug">
+                For accounts using Antigravity for the first time, authenticate once with the official app if verification is required.
+              </p>
+            </div>
+          )}
+
+          {/* Tab 2: Copilot */}
+          {activePlatform === "copilot" && (
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background shadow-xs">
+                  <Sparkles className="size-4 text-emerald-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">GitHub Copilot</div>
+                  <div className="text-[11px] text-muted-foreground">Student & Individual Device Authorization</div>
+                </div>
+              </div>
+
+              {copilotFlow ? (
+                <>
+                  <div className="text-xs text-muted-foreground">
+                    Copy your one-time activation code, then enter it on the GitHub device activation page:
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 px-3.5 py-2.5">
+                    <div>
+                      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Activation Code</div>
+                      <div className="text-base font-mono font-bold tracking-widest text-foreground">{copilotFlow.userCode}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={handleCopyCopilotCode}
+                    >
+                      {copiedCode ? (
+                        <>
+                          <Check className="size-3.5 text-emerald-500" />
+                          <span className="text-emerald-500">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={handleCopyCopilotCode}
-                    title="Copy code"
+                    variant="outline"
+                    className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                    onClick={handleOpenCopilot}
                   >
-                    {copiedCode ? (
-                      <Check className="size-4 text-emerald-500" />
+                    <span>Open GitHub Activation Page</span>
+                    <ExternalLink className="size-3.5 text-muted-foreground" />
+                  </Button>
+
+                  <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin text-emerald-500 shrink-0" />
+                    <span>Waiting for device authorization on GitHub…</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
+                  <Loader2 className="size-5 animate-spin text-emerald-500" />
+                  <span>Requesting device code from GitHub...</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 3: ChatGPT */}
+          {activePlatform === "chatgpt" && (
+            <div className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background shadow-xs">
+                  <Bot className="size-4 text-sky-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">OpenAI / ChatGPT</div>
+                  <div className="text-[11px] text-muted-foreground">Consumer Session & Direct API Key</div>
+                </div>
+              </div>
+
+              {chatGptError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {chatGptError}
+                </div>
+              )}
+
+              {chatGptAccount?.accessToken ? (
+                <div className="flex items-center justify-between rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs">
+                  <span className="font-medium text-sky-400">Connected ChatGPT Session</span>
+                  <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-300">
+                    {chatGptAccount.planType || "Active"}
+                  </span>
+                </div>
+              ) : null}
+
+              <div className="text-xs text-muted-foreground">
+                Sign in to ChatGPT in your browser, or paste an OpenAI API key below:
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                onClick={handleOpenChatGpt}
+              >
+                <span>Open ChatGPT in Browser</span>
+                <ExternalLink className="size-3.5 text-muted-foreground" />
+              </Button>
+
+              <div className="space-y-1.5 pt-1">
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <Key className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="password"
+                      placeholder="sk-..."
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      disabled={chatGptConnecting}
+                      className="w-full rounded-md border border-border/70 bg-muted/40 py-1.5 pl-8 pr-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 text-xs border-border/80 hover:bg-muted/50"
+                    disabled={chatGptConnecting || !apiKeyInput.trim()}
+                    onClick={() => void connectChatGptKey(apiKeyInput)}
+                  >
+                    {chatGptConnecting ? (
+                      <Loader2 className="size-3 animate-spin" />
                     ) : (
-                      <Copy className="size-4" />
+                      "Save Key"
                     )}
                   </Button>
                 </div>
 
-                <span className="text-xs text-muted-foreground">
-                  2. Enter the code in the GitHub authorization page:
-                </span>
-
-                <Button
+                <button
                   type="button"
-                  className="w-full gap-2 text-xs"
-                  onClick={handleOpenCopilot}
+                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                  onClick={handleOpenOpenAiKeys}
                 >
-                  <span>Open GitHub Activation Page</span>
-                  <ExternalLink className="size-3.5" />
-                </Button>
-
-                <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/20 p-2.5 text-xs text-muted-foreground">
-                  <Loader2 className="size-3.5 animate-spin text-emerald-500" />
-                  <span>Waiting for your authorization on GitHub...</span>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                <span>Requesting device code from GitHub...</span>
+                  Get an OpenAI API Key →
+                </button>
               </div>
-            )}
-
-            {/* Common Confirm & Refresh Step */}
-            <div className="mt-2 flex flex-col gap-1.5 pt-2 border-t border-border/50">
-              <span className="text-[11px] text-muted-foreground text-center">
-                3. Finished authorizing? Refresh to load Copilot models:
-              </span>
-              <Button
-                type="button"
-                className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                size="sm"
-                onClick={handleConfirmAndRefresh}
-              >
-                <RefreshCw className="size-3.5" />
-                <span>Click to Confirm & Refresh</span>
-              </Button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Tab 3: ChatGPT */}
-        {activePlatform === "chatgpt" && (
-          <div className="flex flex-col gap-3 py-1">
-            {chatGptError && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {chatGptError}
-              </div>
-            )}
-
-            {chatGptAccount?.accessToken ? (
-              <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-foreground">
-                    Connected ChatGPT Account
-                  </span>
-                  <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-400">
-                    {chatGptAccount.planType || "Active"}
-                  </span>
-                </div>
-                <span className="font-mono text-muted-foreground">
-                  {chatGptAccount.email || "Active OAuth Session"}
-                </span>
-              </div>
-            ) : null}
-
-            <span className="text-xs text-muted-foreground">
-              1. Sign in to your ChatGPT consumer account in your browser:
-            </span>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full gap-2 text-xs"
-              onClick={handleOpenChatGpt}
-            >
-              <span>Open ChatGPT in Browser</span>
-              <ExternalLink className="size-3.5" />
+        {/* Standard Modal Footer */}
+        <div className="border-t border-border px-5 py-3 flex items-center justify-between bg-muted/10">
+          <span className="text-[11px] text-muted-foreground">
+            This window will close once connected.
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleClose}>
+              Close
             </Button>
-
-            <span className="text-xs text-muted-foreground">
-              Or connect directly via OpenAI API Key:
-            </span>
-
-            <div className="flex gap-1.5">
-              <div className="relative flex-1">
-                <Key className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="password"
-                  placeholder="sk-..."
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  disabled={chatGptConnecting}
-                  className="w-full rounded-md border bg-muted/40 py-1.5 pl-8 pr-2 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 shrink-0 text-xs"
-                disabled={chatGptConnecting || !apiKeyInput.trim()}
-                onClick={() => void connectChatGptKey(apiKeyInput)}
-              >
-                {chatGptConnecting ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : (
-                  "Save Key"
-                )}
-              </Button>
-            </div>
-
             <Button
-              type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              className="h-6 justify-start text-[11px] text-muted-foreground hover:text-foreground p-0"
-              onClick={handleOpenOpenAiKeys}
+              className="gap-1.5 text-xs"
+              onClick={() => window.location.reload()}
+              title="Reload NanamiWork"
             >
-              Get an OpenAI API Key →
+              <RefreshCw className="size-3" />
+              <span>Refresh</span>
             </Button>
-
-            {/* Common Confirm & Refresh Step */}
-            <div className="mt-2 flex flex-col gap-1.5 pt-2 border-t border-border/50">
-              <span className="text-[11px] text-muted-foreground text-center">
-                2. Finished logging in or adding key? Refresh to load models:
-              </span>
-              <Button
-                type="button"
-                className="w-full gap-2 bg-sky-500 hover:bg-sky-600 text-white font-medium"
-                size="sm"
-                onClick={handleConfirmAndRefresh}
-              >
-                <RefreshCw className="size-3.5" />
-                <span>Click to Confirm & Refresh</span>
-              </Button>
-            </div>
           </div>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleClose}
-          >
-            Close
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

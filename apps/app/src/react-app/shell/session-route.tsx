@@ -220,6 +220,7 @@ import {
   shouldShowOpenWorkModelsSyncing,
 } from "@/react-app/domains/cloud/openwork-models-promo";
 import { ModelPickerModal, MODEL_PICKER_UNAVAILABLE_SUBTITLE } from "@/react-app/domains/session/modals/model-picker-modal";
+import { PlatformConnectModal } from "@/react-app/domains/models/platform-connect-modal";
 import { CommandPalette, type PaletteItem, type SessionGroupOption } from "./command-palette";
 import { buildCommandPaletteSessions } from "./command-palette-sessions";
 import { commandPaletteModelOptions, commandPaletteModelTarget, createCommandPaletteModelControls } from "./command-palette-models";
@@ -4483,6 +4484,7 @@ export function SessionRoute() {
       catalogState={modelPicker.catalogState}
       restrictToCloud={restrictToCloudProviders}
     />
+    <PlatformConnectModal />
     </GatewayModelAccessProvider>
     </WorkspaceProvider>
   );

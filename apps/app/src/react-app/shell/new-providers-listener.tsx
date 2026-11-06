@@ -13,8 +13,7 @@ import { requestMemberActivityRefresh } from "@/react-app/kernel/activity-types"
 import { notifyEvent } from "./notifications";
 import { orgOnboardingVisibilityEvent } from "./reload-coordinator";
 
-import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile, openDesktopUrl } from "@/app/lib/desktop";
-import { toast } from "@/components/ui/sonner";
+import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile, openDesktopUrl, getCachedDesktopHomeDir } from "@/app/lib/desktop";
 import { refreshProviderListQueries } from "@/react-app/infra/provider-list-query";
 import { getReactQueryClient } from "@/react-app/infra/query-client";
 import { syncDiskAccountsViaTerminal, useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
@@ -279,17 +278,6 @@ export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle)
         await useAntigravityAccountsStore.getState().loadAccounts().catch(() => undefined);
         useAntigravityAccountsStore.setState({ modalOpen: false, isConnecting: false });
         window.dispatchEvent(new CustomEvent(newProvidersEvent, { detail: { providers: [{ id: "google", name: "Google Antigravity" }], newProviderCount: 1, newModelCount: 6 } }));
-        if (res?.connected) {
-          toast.success("Account connected!", {
-            id: "antigravity-oauth-toast",
-            description: "Your account models are ready. Click Confirm & Refresh to reload.",
-            duration: 60000,
-            action: {
-              label: "Confirm & Refresh",
-              onClick: () => window.location.reload(),
-            },
-          });
-        }
         return res;
       })
       .catch((err) => {
@@ -301,16 +289,6 @@ export async function runAntigravityOAuthFlow(store: AntigravityAuthStoreHandle)
     console.warn("Server-side Antigravity startProviderAuth failed, falling back to client PKCE:", err);
     await startAntigravityOAuth();
   }
-
-  toast.info("Sign in with Google in your browser", {
-    id: "antigravity-oauth-toast",
-    description: "Once the browser says All set!, click Confirm & Refresh.",
-    duration: 120000,
-    action: {
-      label: "Confirm & Refresh",
-      onClick: () => window.location.reload(),
-    },
-  });
 }
 
 function clearCachedProviderLists(): void {
@@ -325,9 +303,6 @@ function clearCachedProviderLists(): void {
 }
 
 export async function runAntigravityConfirmAndRefresh(store: AntigravityAuthStoreHandle): Promise<void> {
-  toast.loading("Refreshing accounts & models...", {
-    id: "antigravity-oauth-toast",
-  });
   try {
     clearCachedProviderLists();
     if (pendingOAuthPromise) {
