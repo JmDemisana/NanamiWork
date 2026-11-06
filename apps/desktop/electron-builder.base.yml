@@ -43,7 +43,7 @@ afterSign: scripts/electron-after-sign.cjs
 publish:
   - provider: github
     owner: JmDemisana
-    repo: nami-openwork
+    repo: NanamiWork
     releaseType: release
 mac:
   icon: resources/icons/icon.icns

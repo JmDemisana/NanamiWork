@@ -4,8 +4,8 @@
     <strong>An AI pair-programming and desktop agent workspace powered by Google Antigravity, Nanami Gateway, and OpenCode.</strong>
   </p>
   <p align="center">
-    <a href="https://github.com/JmDemisana/nami-openwork/releases"><img src="https://img.shields.io/github/v/release/JmDemisana/nami-openwork?color=emerald&label=Release" alt="Latest Release" /></a>
-    <a href="https://github.com/JmDemisana/nami-openwork/blob/dev/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
+    <a href="https://github.com/JmDemisana/NanamiWork/releases"><img src="https://img.shields.io/github/v/release/JmDemisana/NanamiWork?color=emerald&label=Release" alt="Latest Release" /></a>
+    <a href="https://github.com/JmDemisana/NanamiWork/blob/dev/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
     <a href="https://nanami-ai.pages.dev"><img src="https://img.shields.io/badge/Powered%20By-Nanami%20AI-pink.svg" alt="Nanami AI" /></a>
   </p>
 </p>
@@ -53,7 +53,7 @@
 
 ## 📥 Downloads & Installation
 
-Prebuilt standalone binaries are provided for every major platform on the [**Releases Page**](https://github.com/JmDemisana/nami-openwork/releases):
+Prebuilt standalone binaries are provided for every major platform on the [**Releases Page**](https://github.com/JmDemisana/NanamiWork/releases):
 
 | Platform | Format | Description |
 | :--- | :--- | :--- |
@@ -81,8 +81,8 @@ Prebuilt standalone binaries are provided for every major platform on the [**Rel
 
 ```bash
 # Clone the repository
-git clone https://github.com/JmDemisana/nami-openwork.git
-cd nami-openwork
+git clone https://github.com/JmDemisana/NanamiWork.git
+cd NanamiWork
 
 # Install dependencies (Node 24+, pnpm 11+)
 pnpm install
