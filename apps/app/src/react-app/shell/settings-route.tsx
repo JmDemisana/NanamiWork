@@ -2486,16 +2486,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           />
         );
       case "import":
-        return (
-          <SettingsStack>
-            <ClaudeImportView
-              key={runtimeWorkspaceId ?? selectedWorkspaceId}
-              client={openworkClient}
-              workspaceId={runtimeWorkspaceId ?? selectedWorkspaceId}
-              onOpenSession={(sessionId) => navigate(workspaceSessionRoute(selectedWorkspaceId, sessionId))}
-            />
-          </SettingsStack>
-        );
+        return null;
       case "advanced":
         return (
           <SettingsStack>

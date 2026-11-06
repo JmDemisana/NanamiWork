@@ -205,7 +205,7 @@ export function getSettingsTabDescription(tab: SettingsTab) {
 }
 
 export function getWorkspaceSettingsTabs(): SettingsTab[] {
-  return ["preferences", "permissions", "import"];
+  return ["preferences", "permissions"];
 }
 
 export function getGlobalSettingsTabs(

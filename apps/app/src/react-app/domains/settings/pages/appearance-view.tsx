@@ -21,14 +21,6 @@ export function AppearanceView(props: AppearanceViewProps) {
   return (
     <LayoutStack>
       <ThemeSection {...props} />
-      <Separator />
-      <LanguageSection {...props} />
-      {isDesktopRuntime() ? (
-        <>
-          <Separator />
-          <WindowSection {...props} />
-        </>
-      ) : null}
     </LayoutStack>
   );
 }

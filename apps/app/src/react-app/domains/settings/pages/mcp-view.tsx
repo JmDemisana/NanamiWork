@@ -2462,7 +2462,7 @@ export function LibraryInventory(props: {
     .map((section) => ({ section, rows: visible.filter((row) => row.section === section) }))
     .filter((entry) => entry.rows.length > 0);
   const containerClassName = "flex flex-col [&>div]:border-b [&>div]:border-dls-border/60";
-  const showLocked = props.signedOut === true && category === "all" && !needle && !props.onlyNeedsSignIn;
+  const showLocked = false;
 
   return (
     <div className="space-y-6">

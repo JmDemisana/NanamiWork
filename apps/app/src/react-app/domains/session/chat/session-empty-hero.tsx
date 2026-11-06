@@ -118,21 +118,22 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
   };
 
   return (
-    <div data-chat-empty-hero className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-1 flex-col justify-between px-4 pb-4 lg:px-8">
-      <div data-empty-greeting hidden={hideIntroduction} className="nanami-rise my-auto text-center pt-8">
+    <div data-chat-empty-hero className="flex h-full min-h-0 w-full flex-1 flex-col justify-between">
+      <div data-empty-greeting hidden={hideIntroduction} className="nanami-rise my-auto text-center pt-8 px-4 lg:px-8 max-w-[800px] mx-auto w-full">
         <h2 className="text-lg font-medium tracking-tight text-foreground">
           What do you need done?
         </h2>
       </div>
 
-      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise max-md:sticky max-md:bottom-0 max-md:order-last max-md:mt-auto max-md:shrink-0 max-md:bg-dls-surface">
-      <NewTaskComposer
-        draft={prompt}
-        onDraftChange={setPrompt}
-        onRunTask={submit}
-        busy={props.busy ?? false}
-        context={props.composer ?? null}
-      />
+      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise shrink-0 px-0 pb-2 pt-2 max-lg:pb-0">
+        <NewTaskComposer
+          flush={false}
+          draft={prompt}
+          onDraftChange={setPrompt}
+          onRunTask={submit}
+          busy={props.busy ?? false}
+          context={props.composer ?? null}
+        />
       </div>
     </div>
   );

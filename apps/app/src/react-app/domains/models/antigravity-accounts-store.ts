@@ -295,7 +295,7 @@ if (fs.existsSync(accFile)) {
       if (idx >= 0) {
         data.activeIndex = idx;
         data.activeIndexByFamily = { claude: idx, gemini: idx };
-        data.accounts.forEach((a, i) => { a.enabled = (i === idx); });
+        data.accounts.forEach((a) => { a.enabled = true; });
       }
     }
     const activeIdx = Math.min(Math.max(0, data.activeIndex ?? 0), Math.max(0, data.accounts.length - 1));
@@ -682,27 +682,14 @@ async function fetchAccountModelsAndQuota(
       },
     );
   } else {
+    // Free accounts: only weekly limits (no 5h replenish windows)
     quotas.push(
-      {
-        family: "gemini-flash-5h",
-        label: "Gemini 3.8 Flash (5h)",
-        remainingFraction: effectiveFlash5hFraction,
-        resetTime: effectiveFlash5hReset,
-        period: "5h",
-      },
       {
         family: "gemini-flash-weekly",
         label: "Gemini 3.8 Flash (Weekly)",
         remainingFraction: effectiveFlashWeeklyFraction,
         resetTime: effectiveFlashWeeklyReset,
         period: "weekly",
-      },
-      {
-        family: "claude-5h",
-        label: "Claude & GPT-OSS (5h)",
-        remainingFraction: effectiveClaude5hFraction,
-        resetTime: effectiveClaude5hReset,
-        period: "5h",
       },
       {
         family: "claude-weekly",
@@ -949,7 +936,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       activeIndex,
       accounts: (prev.accounts ?? []).map((a, i) => ({
         ...a,
-        enabled: i === activeIndex,
+        enabled: true,
       })),
     }));
 
