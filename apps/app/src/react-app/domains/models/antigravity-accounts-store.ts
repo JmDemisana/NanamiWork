@@ -52,6 +52,9 @@ export type AntigravityAccountInfo = {
   quotas: AntigravityFamilyQuota[];
   quotaLoading: boolean;
   quotaError: string | null;
+  verificationRequired?: boolean;
+  verificationUrl?: string;
+  verificationReason?: string;
 };
 
 type RawStoredAccount = {
@@ -62,6 +65,9 @@ type RawStoredAccount = {
   addedAt?: number;
   lastUsed?: number;
   enabled?: boolean;
+  verificationRequired?: boolean;
+  verificationUrl?: string;
+  verificationReason?: string;
 };
 
 type NanamiAntigravityMeta = {
@@ -302,6 +308,9 @@ if (fs.existsSync(accFile)) {
     data.activeIndex = activeIdx;
     fs.writeFileSync(accFile, JSON.stringify(data, null, 2) + '\\n', 'utf8');
     const activeEmail = data.accounts[activeIdx]?.email || '';
+    data.accounts.forEach(a => {
+      a.enabled = !a.verificationRequired;
+    });
     const sanitized = data.accounts.map(a => ({
       email: a.email,
       refreshToken: a.refreshToken,
@@ -309,7 +318,10 @@ if (fs.existsSync(accFile)) {
       managedProjectId: a.managedProjectId || '',
       addedAt: a.addedAt || Date.now(),
       lastUsed: a.lastUsed || 0,
-      enabled: a.enabled !== false,
+      enabled: !a.verificationRequired,
+      verificationRequired: Boolean(a.verificationRequired),
+      verificationUrl: a.verificationUrl || '',
+      verificationReason: a.verificationReason || '',
     }));
     for (const f of [jsoncFile, jsonFile]) {
       const cfg = fs.existsSync(f) ? parseJ(fs.readFileSync(f, 'utf8')) : { $schema: 'https://opencode.ai/config.json' };
@@ -343,7 +355,7 @@ if (fs.existsSync(accFile)) {
           done();
         }
       });
-      void terminal.write(
+      void terminal.write?.(
         terminalId,
         `node -e "eval(Buffer.from('${b64}','base64').toString('utf8'));process.exit(0)"\r\nexit\r\n`,
       );
@@ -360,6 +372,9 @@ async function fetchAccountModelsAndQuota(
   isPlus: boolean;
   models: AntigravityModelItem[];
   quotas: AntigravityFamilyQuota[];
+  verificationRequired?: boolean;
+  verificationUrl?: string;
+  verificationReason?: string;
 }> {
   const tokenBody = new URLSearchParams({
     client_id: ANTIGRAVITY_CLIENT_ID,
@@ -400,6 +415,18 @@ async function fetchAccountModelsAndQuota(
     12_000,
   );
   if (!modelsRes.ok) {
+    if (modelsRes.status === 403) {
+      const errText = await modelsRes.text().catch(() => "");
+      const match = errText.match(/https:\/\/accounts\.google\.com\/[^\s"'<>]+/i);
+      return {
+        isPlus: false,
+        models: [],
+        quotas: [],
+        verificationRequired: true,
+        verificationUrl: match?.[0] || undefined,
+        verificationReason: "Google requires account verification before this account can be used with Antigravity.",
+      };
+    }
     throw new Error(`fetchAvailableModels failed (${modelsRes.status})`);
   }
   const payload = (await modelsRes.json()) as {
@@ -438,7 +465,7 @@ async function fetchAccountModelsAndQuota(
 
   // Fetch official user quota summary from Google's internal quota service
   // to reflect authentic 5h and weekly limit buckets.
-  let quotaSummary: {
+  type QuotaSummaryResponse = {
     groups?: Array<{
       displayName?: string;
       buckets?: Array<{
@@ -448,7 +475,8 @@ async function fetchAccountModelsAndQuota(
         resetTime?: string;
       }>;
     }>;
-  } | null = null;
+  };
+  let quotaSummary: QuotaSummaryResponse | null = null;
 
   try {
     const summaryRes = await desktopFetchViaMain(
@@ -701,7 +729,7 @@ async function fetchAccountModelsAndQuota(
     );
   }
 
-  return { isPlus, models: resolvedModels, quotas };
+  return { isPlus, models: resolvedModels, quotas, verificationRequired: false };
 }
 
 type AntigravityAccountsState = {
@@ -831,6 +859,9 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
           quotas: existing?.quotas ?? [],
           quotaLoading: existing ? existing.quotaLoading : true,
           quotaError: null,
+          verificationRequired: Boolean(raw.verificationRequired ?? existing?.verificationRequired),
+          verificationUrl: raw.verificationUrl || existing?.verificationUrl,
+          verificationReason: raw.verificationReason || existing?.verificationReason,
         };
       });
 

@@ -1,6 +1,7 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2, ExternalLink } from "lucide-react";
+import { openDesktopUrl } from "@/app/lib/desktop";
 import {
   formatQuotaResetShort,
   useAntigravityAccountsStore,
@@ -81,7 +82,11 @@ export function AntigravitySidebarLimits() {
                 <span className="shrink-0 text-[10px] text-muted-foreground">
                   (Antigravity)
                 </span>
-                {acc.isPlus ? (
+                {acc.verificationRequired ? (
+                  <span className="shrink-0 rounded bg-rose-500/15 px-1 py-px text-[9px] font-semibold text-rose-400">
+                    Verify
+                  </span>
+                ) : acc.isPlus ? (
                   <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-semibold uppercase text-amber-400">
                     Plus
                   </span>
@@ -102,7 +107,23 @@ export function AntigravitySidebarLimits() {
               </button>
             </div>
 
-            {acc.quotas.length > 0 ? (
+            {acc.verificationRequired ? (
+              <div className="mt-1.5 flex flex-col gap-1 rounded bg-rose-500/10 p-2 border border-rose-500/30">
+                <span className="text-[10px] text-rose-300 font-medium leading-tight">
+                  Google requires account verification before this account can be used.
+                </span>
+                {acc.verificationUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => void openDesktopUrl(acc.verificationUrl!)}
+                    className="flex items-center gap-1 text-[10px] text-primary underline text-left hover:text-primary/80 cursor-pointer font-medium mt-0.5"
+                  >
+                    <span>Open verification in browser</span>
+                    <ExternalLink className="size-2.5" />
+                  </button>
+                ) : null}
+              </div>
+            ) : acc.quotas.length > 0 ? (
               <div className="mt-1.5 flex flex-col gap-1">
                 {acc.quotas.map((q) => {
                   const pct = q.remainingFraction < 0.01 ? 0 : Math.round(q.remainingFraction * 100);

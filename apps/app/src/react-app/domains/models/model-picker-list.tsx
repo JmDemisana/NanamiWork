@@ -142,7 +142,20 @@ function ConnectedAccountGroup({
           <span className="truncate" title={`${account.email} (Antigravity)`}>
             {account.email} (Antigravity)
           </span>
-          {account.isPlus ? (
+          {account.verificationRequired ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (account.verificationUrl) void openDesktopUrl(account.verificationUrl);
+              }}
+              className="shrink-0 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-400 hover:underline cursor-pointer"
+              title="Click to complete verification in browser"
+            >
+              ⚠ Needs Verification
+            </button>
+          ) : account.isPlus ? (
             <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
               Plus
             </span>
