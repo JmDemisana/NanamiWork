@@ -7,4 +7,4 @@ protocols:
       - openwork
 linux:
   executableName: openwork
-artifactName: openwork-${os}-${arch}-${version}.${ext}
+artifactName: Nanami-${version}-${os}-${arch}.${ext}

@@ -1,0 +1,191 @@
+name: Release NanamiWork
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app
+        run: pnpm --filter @openwork/desktop build:electron
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Package Windows installer
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          if-no-files-found: error
+          path: |
+            apps/desktop/dist-electron/*.exe
+
+  build-linux:
+    name: Build Linux (AppImage & Debian)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app
+        run: pnpm --filter @openwork/desktop build:electron
+
+      - name: Package Linux (AppImage & Debian)
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --linux AppImage deb --publish never
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          if-no-files-found: error
+          path: |
+            apps/desktop/dist-electron/*.AppImage
+            apps/desktop/dist-electron/*.deb
+
+  build-macos:
+    name: Build macOS (DMG & Zip)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app
+        run: pnpm --filter @openwork/desktop build:electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Package macOS DMG & Zip
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --mac dmg zip --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          if-no-files-found: error
+          path: |
+            apps/desktop/dist-electron/*.dmg
+            apps/desktop/dist-electron/*.zip
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List downloaded artifacts
+        run: ls -la release-assets
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.0' }}
+          name: "Initial Release v1.0.0"
+          draft: false
+          prerelease: false
+          files: release-assets/*
+          generate_release_notes: false
+          body: |
+            # 🌸 NanamiWork v1.0.0 (Initial Release)
+            
+            Welcome to the initial release of **NanamiWork**, an AI pair-programming and desktop agent workspace powered by Google Antigravity, Nanami Gateway, and OpenCode!
+            
+            ### 📦 Downloads & Installers
+            - **Windows**: `Nanami-1.0.0-windows-*.exe` (NSIS Installer)
+            - **Linux (Debian/Ubuntu)**: `Nanami-1.0.0-linux-*.deb`
+            - **Linux (Universal)**: `Nanami-1.0.0-linux-*.AppImage`
+            - **macOS**: `Nanami-1.0.0-mac-*.dmg` / `.zip`
+            
+            ### ✨ Highlights
+            - **Multi-Account Antigravity Integration**: Direct browser OAuth with Google, automatic quota bucket tracking (Gemini Flash/Pro, Claude Sonnet/Opus, GPT-OSS, Argon), and intelligent multi-account load balancing.
+            - **Nanami Gateway & Router**: Pre-configured access to Nanami's curated model ladder (`gemini-router`, `openrouter-auto`, `uncensored`) with secure server-side Gate PIN verification.
+            - **Undo Up to This Point**: Native chat timeline rewinding that restores your original prompt back into the composer and auto-focuses the input for seamless adjustments.
+            - **Conflict-Free Sandboxing**: Stores configuration in `~/.config/nanamiwork`, bundling its own OpenCode engine so it never clashes with standalone OpenCode CLI installations.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
