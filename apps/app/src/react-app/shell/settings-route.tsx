@@ -1,4 +1,4 @@
-/** @jsxImportSource react */
+﻿/** @jsxImportSource react */
 import { useChatEngineClient } from "@/react-app/domains/models/use-chat-engine-client";
 import { useAutoAccess } from "@/react-app/domains/cloud/auto-access-ui";
 import { freeAutoSwitchedOff } from "@/app/lib/inference-access";
@@ -85,7 +85,7 @@ import {
 } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { createProviderAuthStore, useProviderAuthStoreSnapshot } from "@/react-app/domains/connections/provider-auth/store";
 import ProviderAuthModal, { PROVIDER_LABELS } from "@/react-app/domains/connections/provider-auth/provider-auth-modal";
-import { openWorkbenchInstancesEvent, ensureAntigravityPluginInstalled } from "./new-providers-listener";
+import { openWorkbenchInstancesEvent, ensureAntigravityPluginInstalled, startAntigravityOAuth } from "./new-providers-listener";
 import { keylessProviderIds } from "@/react-app/domains/connections/provider-auth/provider-policy";
 import ConnectionsModals from "@/react-app/domains/connections/modals";
 import { AiSettingsView } from "@/react-app/domains/settings/pages/ai-view";
@@ -810,7 +810,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   useEffect(() => {
     const handleAddAntigravity = async () => {
       await ensureAntigravityPluginInstalled();
-      providerAuthStore.openProviderAuthModal({ preferredProviderId: "google" });
+      void startAntigravityOAuth();
     };
     window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
     return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
@@ -818,7 +818,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   useEffect(() => {
     const handleAddAntigravity = async () => {
       await ensureAntigravityPluginInstalled();
-      providerAuthStore.openProviderAuthModal({ preferredProviderId: "google" });
+      void startAntigravityOAuth();
     };
     window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
     return () => window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);

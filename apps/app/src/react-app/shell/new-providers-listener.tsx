@@ -1,4 +1,4 @@
-/** @jsxImportSource react */
+﻿/** @jsxImportSource react */
 import { useCallback, useEffect, useState } from "react";
 import { resolveProviderDisplayName } from "@/app/utils";
 import {
@@ -13,7 +13,7 @@ import { requestMemberActivityRefresh } from "@/react-app/kernel/activity-types"
 import { notifyEvent } from "./notifications";
 import { orgOnboardingVisibilityEvent } from "./reload-coordinator";
 
-import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile } from "@/app/lib/desktop";
+import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile, openDesktopUrl } from "@/app/lib/desktop";
 import { applyEdits, modify, parse } from "jsonc-parser";
 
 const SEEN_KEY = "openwork.seenProviderIds";
@@ -25,6 +25,67 @@ export const openModelPickerEvent = "openwork-open-model-picker";
 export const openProviderAuthEvent = "openwork-open-provider-auth";
 /** Custom event to request Nanami Workbench's Antigravity account sign-in. */
 export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
+
+// ---------------------------------------------------------------------------
+// Antigravity OAuth constants (mirrored from opencode-antigravity-auth plugin)
+// ---------------------------------------------------------------------------
+const ANTIGRAVITY_CLIENT_ID =
+  "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
+const ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback";
+const ANTIGRAVITY_SCOPES = [
+  "https://www.googleapis.com/auth/cloud-platform",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/cclog",
+  "https://www.googleapis.com/auth/experimentsandconfigs",
+];
+
+/** Generate a PKCE code verifier (43-128 chars, URL-safe base64). */
+async function generatePKCEVerifier(): Promise<string> {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+/** Derive the S256 code challenge from a verifier. */
+async function derivePKCEChallenge(verifier: string): Promise<string> {
+  const encoded = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+/** Build the Google OAuth URL and open it in the system browser. */
+export async function startAntigravityOAuth(): Promise<void> {
+  try {
+    const verifier = await generatePKCEVerifier();
+    const challenge = await derivePKCEChallenge(verifier);
+    const state = btoa(JSON.stringify({ verifier, projectId: "" }))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
+
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.searchParams.set("client_id", ANTIGRAVITY_CLIENT_ID);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("redirect_uri", ANTIGRAVITY_REDIRECT_URI);
+    url.searchParams.set("scope", ANTIGRAVITY_SCOPES.join(" "));
+    url.searchParams.set("code_challenge", challenge);
+    url.searchParams.set("code_challenge_method", "S256");
+    url.searchParams.set("state", state);
+    url.searchParams.set("access_type", "offline");
+    url.searchParams.set("prompt", "consent");
+
+    await openDesktopUrl(url.toString());
+  } catch (err) {
+    console.warn("Could not start Antigravity OAuth:", err);
+  }
+}
 
 export async function ensureAntigravityPluginInstalled(): Promise<void> {
   try {
