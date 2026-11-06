@@ -126,7 +126,9 @@ function signComputerUseHelper(context) {
 
 function moveTargetToCanonical(sidecarsDir, targetName, aliasName) {
   const targetPath = path.join(sidecarsDir, targetName);
+  const aliasPath = path.join(sidecarsDir, aliasName);
   if (!fs.existsSync(targetPath)) {
+    if (fs.existsSync(aliasPath)) return;
     throw new Error(`Missing packaged sidecar for target: ${targetName}`);
   }
 
@@ -168,10 +170,13 @@ function canonicalizeSidecars(context) {
   const versionsTarget = `versions.json-${triple}`;
   const versionsTargetPath = path.join(sidecarsDir, versionsTarget);
   if (!fs.existsSync(versionsTargetPath)) {
-    throw new Error(`Missing packaged sidecar metadata for target: ${versionsTarget}`);
+    if (!fs.existsSync(path.join(sidecarsDir, versionsAlias))) {
+      throw new Error(`Missing packaged sidecar metadata for target: ${versionsTarget}`);
+    }
+  } else {
+    fs.rmSync(path.join(sidecarsDir, versionsAlias), { force: true });
+    fs.renameSync(versionsTargetPath, path.join(sidecarsDir, versionsAlias));
   }
-  fs.rmSync(path.join(sidecarsDir, versionsAlias), { force: true });
-  fs.renameSync(versionsTargetPath, path.join(sidecarsDir, versionsAlias));
   keep.add(versionsAlias);
 
   for (const entry of fs.readdirSync(sidecarsDir)) {
