@@ -131,8 +131,6 @@ function moveTargetToCanonical(sidecarsDir, targetName, aliasName) {
     if (fs.existsSync(aliasPath)) return;
     throw new Error(`Missing packaged sidecar for target: ${targetName}`);
   }
-
-  const aliasPath = path.join(sidecarsDir, aliasName);
   fs.rmSync(aliasPath, { force: true });
   fs.renameSync(targetPath, aliasPath);
   try {
