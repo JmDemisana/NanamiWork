@@ -109,6 +109,7 @@ import { SidebarContext, useSidebarContext } from "./app-sidebar-provider";
 import { RemoteTaskSidebarRows } from "./remote-task-sidebar-rows";
 import { AntigravitySidebarLimits } from "./antigravity-sidebar-limits";
 import { CopilotSidebarLimits } from "./copilot-sidebar-limits";
+import { CodexSidebarLimits } from "./codex-sidebar-limits";
 import type { AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -960,6 +961,7 @@ export function AppSidebar(props: AppSidebarProps) {
 
         <AntigravitySidebarLimits />
         <CopilotSidebarLimits />
+        <CodexSidebarLimits />
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
           <div className="flex min-w-0 select-none cursor-default items-center gap-2 px-2.5 py-1.5 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
             <span className="truncate select-none cursor-default">A fork of OpenWork.</span>

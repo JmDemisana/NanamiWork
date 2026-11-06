@@ -12,11 +12,9 @@ import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
-import { AntigravityAuthModal } from "./antigravity-auth-modal";
 import { useCopilotAccountsStore } from "./copilot-accounts-store";
-import { CopilotAuthModal } from "./copilot-auth-modal";
 import { useChatGptAccountsStore } from "./chatgpt-accounts-store";
-import { ChatGptAuthModal } from "./chatgpt-auth-modal";
+import { PlatformConnectModal } from "./platform-connect-modal";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -667,9 +665,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               <RefreshCw className="size-3.5" />
             </Button>
           </div>
-          <AntigravityAuthModal />
-          <CopilotAuthModal />
-          <ChatGptAuthModal />
+          <PlatformConnectModal />
           <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
             For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
           </p>

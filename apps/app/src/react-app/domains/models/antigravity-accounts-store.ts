@@ -332,6 +332,32 @@ if (fs.existsSync(accFile)) {
         deletedAtByEmail: delMap,
         accounts: sanitized,
       };
+      try {
+        const codexAuthFile = path.join(home, '.codex', 'auth.json');
+        if (fs.existsSync(codexAuthFile)) {
+          const cData = parseJ(fs.readFileSync(codexAuthFile, 'utf8'));
+          if (cData && cData.tokens && cData.tokens.access_token) {
+            let email = '';
+            let plan = 'free';
+            if (cData.tokens.id_token) {
+              try {
+                const payload = JSON.parse(Buffer.from(cData.tokens.id_token.split('.')[1], 'base64').toString('utf8'));
+                email = payload.email || '';
+                if (payload['https://api.openai.com/auth'] && payload['https://api.openai.com/auth'].chatgpt_plan_type) {
+                  plan = payload['https://api.openai.com/auth'].chatgpt_plan_type;
+                }
+              } catch {}
+            }
+            cfg.x_nanami_codex = {
+              accessToken: cData.tokens.access_token,
+              accountId: cData.tokens.account_id || '',
+              email,
+              planType: plan,
+              lastRefresh: cData.last_refresh || Date.now()
+            };
+          }
+        }
+      } catch {}
       fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\\n', 'utf8');
     }
   }
