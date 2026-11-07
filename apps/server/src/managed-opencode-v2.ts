@@ -486,6 +486,7 @@ async function createManagedOpencodeV2ServerInner(
       OPENCODE_PASSWORD: password,
       OPENCODE_DB: join(options.rootDir, "opencode.db"),
       OPENCODE_CONFIG_DIR: join(homedir(), ".config", "nanamiwork"),
+      XDG_DATA_HOME: join(homedir(), ".config", "nanamiwork", "data"),
       ...(opencodeModelsUrl === undefined ? {} : { OPENCODE_MODELS_URL: opencodeModelsUrl }),
     },
     stdio: ["ignore", "pipe", "pipe", options.providerSession ? "pipe" : "ignore"],

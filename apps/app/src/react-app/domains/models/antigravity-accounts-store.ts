@@ -181,8 +181,8 @@ export function formatQuotaResetShort(resetTime: string | null | undefined): str
 }
 
 async function getNanamiConfigDir(): Promise<string> {
-  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
-  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+  const home = (await getCachedDesktopHomeDir()) || "";
+  return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
 async function readNanamiMetaAndConfigDir(): Promise<{

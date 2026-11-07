@@ -175,8 +175,8 @@ export async function startAntigravityOAuth(
 }
 
 async function getNanamiworkConfigDir(): Promise<string> {
-  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
-  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+  const home = (await getCachedDesktopHomeDir()) || "";
+  return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
 export async function ensureAntigravityPluginInstalled(): Promise<boolean> {

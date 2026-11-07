@@ -1,12 +1,11 @@
 <p align="center">
   <h1 align="center">🌸 NanamiWork</h1>
   <p align="center">
-    <strong>A high-performance desktop agent workspace for AI pair-programming and system automation.</strong>
+    <strong>An agent instance manager and unified desktop frontend bringing your Antigravity, Codex, and GitHub Copilot accounts together.</strong>
   </p>
   <p align="center">
     <a href="https://github.com/JmDemisana/NanamiWork/releases"><img src="https://img.shields.io/github/v/release/JmDemisana/NanamiWork?color=emerald&label=Release" alt="Latest Release" /></a>
     <a href="https://github.com/JmDemisana/NanamiWork/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
-    <a href="https://nanami-ai.pages.dev"><img src="https://img.shields.io/badge/Powered%20By-Nanami%20AI-pink.svg" alt="Nanami AI" /></a>
   </p>
 </p>
 
@@ -18,23 +17,33 @@
 
 ## 🌟 Overview
 
-**NanamiWork** is a distraction-free desktop environment for AI pair-programming, terminal automation, and workflow orchestration. Designed with speed, precision, and elegance in mind, NanamiWork brings effortless multi-account management, real-time quota monitoring, and curated AI routing straight to your desktop.
+**NanamiWork** is a desktop agent workspace and instance manager designed to effortlessly unify your developer accounts across the three major agent platforms: **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot**.
+
+Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane-of-glass desktop frontend. Connect multiple personal, student, or team accounts, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free sandbox.
+
+*(Note: The built-in Nanami Gateway section is a private, optional utility reserved for trusted peers with a Gate PIN. The core application is entirely powered by your own connected developer instances and accounts.)*
 
 ---
 
 ## ✨ Features
 
-* **🛡️ Seamless Multi-Account Management**  
-  Connect multiple developer accounts with one click via official browser authentication. Switch between profiles effortlessly and monitor remaining usage quotas in real time.
+* **🛡️ 3-in-1 Agent Instance Manager**  
+  Easily link, manage, and switch between your instances across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot** with 1-click device & browser authorization.
 
-* **🔒 Nanami Gateway Integration**  
-  Direct, secure access to curated high-performance AI models, smart auto-routing, and dedicated coding assistants.
+* **📊 Live Quotas & Rolling Limits**  
+  Track independent account health and quota exhaustion at a glance:
+  * **Antigravity**: Real-time bucket trackers for Gemini, Claude, and GPT-OSS models with accurate reset timers.
+  * **Codex (ChatGPT)**: Adaptive rolling limit trackers distinguishing Free allowances from Paid 5-hour and weekly limits, with reasoning effort controls (Low / Medium / High).
+  * **GitHub Copilot**: 1-click GitHub device flow for Student Pack and Individual accounts with automatic model discovery and monthly quota tracking.
+
+* **⚡ Complete Sandbox Isolation**  
+  NanamiWork operates strictly inside its isolated profile (`~/.config/nanamiwork`). It never modifies or pollutes your global OpenCode, OpenWork, VS Code Copilot, Antigravity, or Codex installations.
 
 * **⏪ "Undo Up to This Point"**  
-  Made a detour or want to rephrase? Rewind your conversation timeline with one click. NanamiWork restores your prompt back into the composer and readies your cursor so you can iterate instantly.
+  Rewind any turn on the fly. Restores your exact previous prompt back into the composer with instant autofocus so you can refine instructions without losing context.
 
-* **⚡ Completely Conflict-Free & Portable**  
-  Runs with fully sandboxed configurations and bundled sidecars. It will never interfere with existing global terminal tools or local configurations on your machine.
+* **💻 Fully Cross-Platform & Portable**  
+  Zero hardcoded paths or assumptions. Works seamlessly out of the box across Windows, Linux, and macOS.
 
 ---
 
@@ -53,13 +62,13 @@ Grab the latest installer for your operating system from the [**Releases Page**]
 
 ## 🚀 Quick Start
 
-1. **Launch NanamiWork** on your computer.
-2. **Add Your Account**:
-   * Open the model selector and click **+ Add Antigravity Account**.
-   * Sign in via your browser to link your account and view live quotas.
-3. **Select a Model & Start Working**:
-   * Choose any model from your active account or the Nanami suite.
-   * Open a project folder and start pair-programming!
+1. **Launch NanamiWork**.
+2. **Connect Your Platforms**:
+   * Open the Model Picker modal (`Select Model`).
+   * Connect your desired platform (**Antigravity**, **Copilot**, or **ChatGPT**) via 1-click device or browser authorization.
+3. **Choose Your Instance & Code**:
+   * Pick any model from your connected accounts.
+   * Open your local workspace folder and start building!
 
 ---
 
@@ -85,5 +94,4 @@ pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 ## 📄 License & Attribution
 
 NanamiWork is licensed under the [MIT License](./LICENSE).  
-Built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) and [OpenCode](https://opencode.ai).  
-Nanami integrations and design enhancements maintained by the [Nanami Project](https://nanami-ai.pages.dev).
+Built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) and [OpenCode](https://opencode.ai).

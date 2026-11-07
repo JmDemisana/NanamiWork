@@ -174,13 +174,14 @@ export const OpenWorkGatewayQuota = async () => ({
           codexList.find((a) => String(a.email ?? "").toLowerCase() === String(codexMeta.activeEmail ?? "").toLowerCase()) ??
           codexList[0];
         if (activeCodex && activeCodex.accessToken) {
-          const ocShareDir = path.join(os.homedir(), ".local", "share", "opencode");
-          fs.mkdirSync(ocShareDir, { recursive: true });
-          const ocShareAuthFile = path.join(ocShareDir, "auth.json");
+          const nanamiDataDir = path.join(nanamiCfgDir, "data", "opencode");
+          fs.mkdirSync(nanamiDataDir, { recursive: true });
+          const nanamiAuthFile = path.join(nanamiDataDir, "auth.json");
+          const nanamiRootAuthFile = path.join(nanamiCfgDir, "auth.json");
           let ocAuth: Record<string, unknown> = {};
-          if (fs.existsSync(ocShareAuthFile)) {
+          if (fs.existsSync(nanamiAuthFile)) {
             try {
-              ocAuth = parseJsoncSafe(fs.readFileSync(ocShareAuthFile, "utf8"));
+              ocAuth = parseJsoncSafe(fs.readFileSync(nanamiAuthFile, "utf8"));
             } catch {}
           }
           ocAuth.openai = {
@@ -190,7 +191,11 @@ export const OpenWorkGatewayQuota = async () => ({
             expires: Date.now() + 3600000,
             ...(activeCodex.accountId ? { accountId: String(activeCodex.accountId) } : {}),
           };
-          fs.writeFileSync(ocShareAuthFile, JSON.stringify(ocAuth, null, 2) + "\n", "utf8");
+          const authContent = JSON.stringify(ocAuth, null, 2) + "\n";
+          fs.writeFileSync(nanamiAuthFile, authContent, "utf8");
+          try {
+            fs.writeFileSync(nanamiRootAuthFile, authContent, "utf8");
+          } catch {}
         }
       } catch {}
 

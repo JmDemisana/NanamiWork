@@ -10,8 +10,8 @@ import { applyEdits, modify, parse } from "jsonc-parser";
 import type { Client } from "@/app/types";
 
 async function getNanamiConfigDir(): Promise<string> {
-  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
-  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+  const home = (await getCachedDesktopHomeDir()) || "";
+  return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
 const GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98";

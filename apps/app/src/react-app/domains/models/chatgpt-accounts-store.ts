@@ -207,8 +207,8 @@ type ChatGptAccountsStore = {
 let latestClient: Client | null = null;
 
 async function getNanamiConfigDir(): Promise<string> {
-  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
-  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+  const home = (await getCachedDesktopHomeDir()) || "";
+  return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
 async function readNanamiCodexMeta(): Promise<{

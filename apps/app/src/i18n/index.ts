@@ -81,7 +81,16 @@ const resolvePluralKey = (loc: Language, key: string, count: number): string => 
   return key;
 };
 
-export function t(key: string, params?: Record<string, unknown>): string {
+export function t(
+  key: string,
+  fallbackOrParams?: string | Record<string, unknown>,
+  paramsOrNever?: Record<string, unknown>,
+): string {
+  const params =
+    typeof fallbackOrParams === "object" && fallbackOrParams !== null
+      ? fallbackOrParams
+      : paramsOrNever;
+  const fallbackText = typeof fallbackOrParams === "string" ? fallbackOrParams : null;
   const loc = locale();
   let text: string | null = null;
 
@@ -103,7 +112,7 @@ export function t(key: string, params?: Record<string, unknown>): string {
   }
 
   if (text === null) {
-    return key;
+    return fallbackText ?? key;
   }
 
   if (params) {
