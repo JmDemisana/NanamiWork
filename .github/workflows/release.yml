@@ -56,7 +56,6 @@ jobs:
             apps/desktop/dist-electron/latest*.yml
 
   build-linux:
-    if: false
     name: Build Linux (AppImage & Debian)
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -102,7 +101,6 @@ jobs:
             apps/desktop/dist-electron/latest-linux*.yml
 
   build-macos:
-    if: false
     name: Build macOS (DMG & Zip)
     runs-on: macos-latest
     timeout-minutes: 60
@@ -148,7 +146,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [build-windows]
+    needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -188,5 +186,7 @@ jobs:
 
             ### 📦 Downloads & Installers
             - **Windows**: `NanamiWork-1.1.1-win-x64.exe` (NSIS Installer)
+            - **macOS**: `NanamiWork-1.1.1-mac-universal.dmg` / `.zip` (Apple Silicon & Intel)
+            - **Linux**: `NanamiWork-1.1.1-linux-x86_64.AppImage` / `nanamiwork_1.1.1_amd64.deb`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
