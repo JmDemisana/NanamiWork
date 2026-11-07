@@ -39,21 +39,22 @@ type RouteSessionListResult = { nextCursor?: string | null } & (
   | { data: RouteSession[]; error?: undefined; request: Request; response: Response }
   | { data?: undefined; error: unknown; request: Request; response: Response });
 export type RouteSessionListTransport = (input: {
-  endpoint: ResolvedWorkspaceEndpoint;
+  endpoint: ResolvedWorkspaceEndpoint,
   limit: number;
   cursor?: string;
+  directory?: string;
 }) => Promise<RouteSessionListResult>;
 
-const nativeRouteSessionList: RouteSessionListTransport = async ({ endpoint, limit }) => {
-  const client = createClient(endpoint.opencodeBaseUrl, undefined, {
+export const nativeRouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, directory }) => {
+  const client = createClient(endpoint.opencodeBaseUrl, directory, {
     mode: "openwork",
     token: endpoint.token,
   });
-  return client.session.list({ limit });
+  return client.session.list({ limit, directory } as any);
 };
 
-export const v2RouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, cursor }) =>
-  createClientV2(`${endpoint.mountedBaseUrl}/opencode2`, undefined, {
+export const v2RouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, cursor, directory }) =>
+  createClientV2(`${endpoint.mountedBaseUrl}/opencode2`, directory, {
     token: endpoint.token,
   }).listSessionsPage({ limit, cursor });
 
@@ -103,13 +104,14 @@ function openworkConfigErrorMessage(error: unknown): string | null {
 export async function listRouteSessions(
   endpoint: ResolvedWorkspaceEndpoint,
   transport: RouteSessionListTransport = nativeRouteSessionList,
+  directory?: string,
 ): Promise<RouteSession[]> {
   let limit = 200;
   let cursor: string | undefined;
   const cursors = new Set<string>();
   const sessions = new Map<string, RouteSession>();
   for (;;) {
-    const result = await transport({ endpoint, limit, ...(cursor === undefined ? {} : { cursor }) });
+    const result = await transport({ endpoint, limit, directory, ...(cursor === undefined ? {} : { cursor }) });
     let items: RouteSession[];
     try {
       items = unwrap(result);

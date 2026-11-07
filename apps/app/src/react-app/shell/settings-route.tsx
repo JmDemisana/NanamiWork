@@ -1453,7 +1453,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
           }
           try {
             const response = await readRouteSessionsWithRetry({
-              load: () => listRouteSessions(endpoint),
+              load: () => listRouteSessions(endpoint, nativeRouteSessionList, workspace.path?.trim() || undefined),
               retryDelaysMs: [250, 750, 1_500],
             });
             const workspaceRoot = normalizeDirectoryPath(workspace.path ?? "");

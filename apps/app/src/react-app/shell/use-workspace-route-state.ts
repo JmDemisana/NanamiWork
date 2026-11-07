@@ -468,9 +468,10 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
             if (!endpoint) return;
             try {
               // The sidebar lists from whichever engine chat is routed to.
+              const workspacePath = workspace.path?.trim() || undefined;
               const fetchedItems = engineV2ChatRouting
-                ? await listRouteSessions(endpoint, v2RouteSessionList)
-                : await listRouteSessions(endpoint);
+                ? await listRouteSessions(endpoint, v2RouteSessionList, workspacePath)
+                : await listRouteSessions(endpoint, nativeRouteSessionList, workspacePath);
               if (!isCurrent()) return;
               const workspaceRoot = normalizeDirectoryPath(workspace.path ?? "");
               let items = workspaceRoot
