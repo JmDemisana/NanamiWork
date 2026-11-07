@@ -477,6 +477,29 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
         return;
       }
       if (result.reason) {
+        if (result.reason.includes("latest.yml") || result.reason.includes("404")) {
+          try {
+            const ghRes = await fetch("https://api.github.com/repos/JmDemisana/NanamiWork/releases/latest", {
+              headers: { "User-Agent": "NanamiWork-App" }
+            });
+            if (ghRes.ok) {
+              const ghData = await ghRes.json();
+              const latestTag = String(ghData.tag_name || "").replace(/^v/i, "");
+              const current = String(appVersion || result.currentVersion || "1.1.0").replace(/^v/i, "");
+              const isNewer = compareVersions(latestTag, current) === 1;
+              const asset = ghData.assets?.find((a: any) => a.name.endsWith(".exe"));
+              setUpdateStatus({
+                state: isNewer ? "available" : "idle",
+                lastCheckedAt: Date.now(),
+                version: latestTag,
+                date: ghData.published_at,
+                notes: ghData.body,
+                totalBytes: asset?.size ?? null,
+              });
+              return;
+            }
+          } catch {}
+        }
         setUpdateStatus({
           state: "error",
           message: result.reason,
