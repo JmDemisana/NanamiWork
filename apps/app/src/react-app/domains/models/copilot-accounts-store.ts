@@ -1,11 +1,17 @@
 import { create } from "zustand";
 import {
   desktopFetchViaMain,
+  getCachedDesktopHomeDir,
   readOpencodeConfig,
   writeOpencodeConfig,
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
 import { applyEdits, modify, parse } from "jsonc-parser";
+
+async function getNanamiConfigDir(): Promise<string> {
+  const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
+  return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
+}
 
 const GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe81";
 const GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code";
@@ -65,7 +71,8 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
   loadAccount: async () => {
     try {
       set({ loading: true, error: null });
-      const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+      const configDir = await getNanamiConfigDir();
+      const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
       if (!configRes?.content) {
         set({ account: null, loading: false });
         return;
@@ -288,7 +295,8 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
   disconnect: async () => {
     try {
       set({ loading: true, error: null });
-      const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+      const configDir = await getNanamiConfigDir();
+      const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
       if (configRes?.content) {
         let raw = configRes.content;
         let edits = modify(raw, ["x_nanami_copilot"], undefined, {
@@ -302,7 +310,7 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
         });
         raw = applyEdits(raw, edits);
 
-        await writeOpencodeConfig("global", "", raw);
+        await writeOpencodeConfig("project", configDir, raw);
       }
       set({ account: null, loading: false });
     } catch (e) {
@@ -415,7 +423,8 @@ async function fetchCopilotModels(copilotToken: string): Promise<string[]> {
 }
 
 async function updateOpencodeConfigWithCopilot(account: CopilotAccountInfo) {
-  const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+  const configDir = await getNanamiConfigDir();
+  const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
   let raw = configRes?.content?.trim()
     ? configRes.content
     : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
@@ -546,5 +555,5 @@ async function updateOpencodeConfigWithCopilot(account: CopilotAccountInfo) {
   });
   raw = applyEdits(raw, edits);
 
-  await writeOpencodeConfig("global", "", raw);
+  await writeOpencodeConfig("project", configDir, raw);
 }

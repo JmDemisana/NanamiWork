@@ -260,22 +260,6 @@ if (!fs.existsSync(accFile)) {
 }
 if (fs.existsSync(accFile)) {
   const data = parseJ(fs.readFileSync(accFile, 'utf8'));
-  const opencodeAccFile = path.join(home, '.config', 'opencode', 'antigravity-accounts.json');
-  if (fs.existsSync(opencodeAccFile)) {
-    try {
-      const oData = parseJ(fs.readFileSync(opencodeAccFile, 'utf8'));
-      if (Array.isArray(oData.accounts)) {
-        for (const oAcc of oData.accounts) {
-          if (!oAcc || !oAcc.email || !oAcc.refreshToken) continue;
-          if (!Array.isArray(data.accounts)) data.accounts = [];
-          const exists = data.accounts.some(a => String(a.email).toLowerCase() === String(oAcc.email).toLowerCase());
-          if (!exists) {
-            data.accounts.push(oAcc);
-          }
-        }
-      }
-    } catch {}
-  }
   let meta = {};
   if (fs.existsSync(jsoncFile)) {
     try { meta = parseJ(fs.readFileSync(jsoncFile, 'utf8')).x_nanami_antigravity || {}; } catch {}
@@ -332,26 +316,6 @@ if (fs.existsSync(accFile)) {
         deletedAtByEmail: delMap,
         accounts: sanitized,
       };
-      try {
-        const codexAuthFile = path.join(home, '.codex', 'auth.json');
-        if (fs.existsSync(codexAuthFile)) {
-          const cData = parseJ(fs.readFileSync(codexAuthFile, 'utf8'));
-          if (cData && cData.tokens && cData.tokens.access_token) {
-            let email = '';
-            let plan = 'free';
-            if (cData.tokens.id_token) {
-              try {
-                const payload = JSON.parse(Buffer.from(cData.tokens.id_token.split('.')[1], 'base64').toString('utf8'));
-                email = payload.email || '';
-                if (payload['https://api.openai.com/auth'] && payload['https://api.openai.com/auth'].chatgpt_plan_type) {
-                  plan = payload['https://api.openai.com/auth'].chatgpt_plan_type;
-                }
-              } catch {}
-            }
-            // x_nanami_codex managed by chatgpt-accounts-store.ts
-          }
-        }
-      } catch {}
       fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\\n', 'utf8');
     }
   }
@@ -819,31 +783,6 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     try {
       await syncDiskAccountsViaTerminal();
       let { meta } = await readNanamiMetaAndConfigDir();
-
-      // Auto-import accounts from global config if available
-      try {
-        const globalRes = (await readOpencodeConfig("global")) as OpencodeConfigFile;
-        if (globalRes?.content?.trim()) {
-          const globalParsed = (parse(globalRes.content) ?? {}) as {
-            x_nanami_antigravity?: NanamiAntigravityMeta;
-          };
-          const globalAccounts = globalParsed.x_nanami_antigravity?.accounts;
-          if (Array.isArray(globalAccounts) && globalAccounts.length > 0) {
-            const currentEmails = new Set((meta.accounts ?? []).map((a) => a?.email?.toLowerCase()));
-            const newToImport = globalAccounts.filter(
-              (a) => a?.email && a?.refreshToken && !currentEmails.has(a.email.toLowerCase()),
-            );
-            if (newToImport.length > 0) {
-              const merged = [...(meta.accounts ?? []), ...newToImport];
-              meta.accounts = merged;
-              await writeNanamiMeta((prev) => ({
-                ...prev,
-                accounts: merged,
-              }));
-            }
-          }
-        }
-      } catch {}
 
       const savedTier: ThinkingTier =
         meta.thinkingTier === "low" || meta.thinkingTier === "medium" || meta.thinkingTier === "high"

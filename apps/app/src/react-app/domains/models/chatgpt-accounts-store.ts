@@ -231,18 +231,84 @@ async function readNanamiCodexMeta(): Promise<{
   return { configDir, meta };
 }
 
+const CODEX_PROVIDER_MODELS_CONFIG = {
+  "gpt-6.1-sol": {
+    name: "GPT-6.1 Sol",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-6-astra": {
+    name: "GPT-6 Astra",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-6.1-terra": {
+    name: "GPT-6.1 Terra",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-6-sol": {
+    name: "GPT-6 Sol",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-6-luna": {
+    name: "GPT-6 Luna",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-5.6-sol": {
+    name: "GPT-5.6 Sol",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-5.6-terra": {
+    name: "GPT-5.6 Terra",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+  "gpt-5.6-luna": {
+    name: "GPT-5.6 Luna",
+    limit: { context: 400000, output: 128000 },
+    modalities: { input: ["text", "image"], output: ["text"] },
+  },
+};
+
 async function writeNanamiCodexMeta(
   updater: (prev: NanamiCodexMeta) => NanamiCodexMeta,
 ): Promise<void> {
   try {
     const configDir = await getNanamiConfigDir();
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
-    const raw = res?.content?.trim()
+    let raw = res?.content?.trim()
       ? res.content
       : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
     const parsed = (parse(raw) ?? {}) as {
+      enabled_providers?: string[];
+      provider?: Record<string, unknown>;
       x_nanami_codex?: NanamiCodexMeta;
     };
+    const enabled = Array.isArray(parsed.enabled_providers) ? parsed.enabled_providers : ["nanami", "google"];
+    if (!enabled.includes("openai")) {
+      raw = applyEdits(
+        raw,
+        modify(raw, ["enabled_providers"], [...enabled, "openai"], {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      );
+    }
+    const existingOpenai = parsed.provider?.openai as { options?: { apiKey?: string } } | undefined;
+    if (!existingOpenai?.options?.apiKey) {
+      raw = applyEdits(
+        raw,
+        modify(
+          raw,
+          ["provider", "openai"],
+          { name: "OpenAI / ChatGPT", models: CODEX_PROVIDER_MODELS_CONFIG },
+          { formattingOptions: { insertSpaces: true, tabSize: 2 } },
+        ),
+      );
+    }
     const nextMeta = updater(parsed.x_nanami_codex ?? {});
     const edits = modify(raw, ["x_nanami_codex"], nextMeta, {
       formattingOptions: { insertSpaces: true, tabSize: 2 },
@@ -338,26 +404,8 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
 
       const { meta } = await readNanamiCodexMeta();
       let rawAccounts: StoredCodexAccount[] = Array.isArray(meta.accounts) ? [...meta.accounts] : [];
-      let activeEmail: string | null = meta.activeEmail || null;
+      const activeEmail: string | null = meta.activeEmail || null;
       const deletedMap = meta.deletedAtByEmail ?? {};
-
-      // Also merge from global opencode.json if present
-      try {
-        const globalRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
-        if (globalRes?.content?.trim()) {
-          const parsed = (parse(globalRes.content) ?? {}) as Record<string, unknown>;
-          const gMeta = parsed?.x_nanami_codex as NanamiCodexMeta | undefined;
-          if (Array.isArray(gMeta?.accounts)) {
-            for (const gAcc of gMeta.accounts) {
-              if (!gAcc?.email) continue;
-              if (!rawAccounts.some((a) => a.email.toLowerCase() === gAcc.email.toLowerCase())) {
-                rawAccounts.push(gAcc);
-              }
-            }
-            if (!activeEmail && gMeta.activeEmail) activeEmail = gMeta.activeEmail;
-          }
-        }
-      } catch {}
 
       // Filter out deleted accounts unless re-added more recently
       rawAccounts = rawAccounts.filter((acc) => {
@@ -666,10 +714,11 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
             const secondaryWindow = buildQuotaWindow(data.rate_limit?.secondary_window);
             const baseModels =
               fetchedModels ?? defaultModelsForPlan(planType);
+            const modalWindow = secondaryWindow ?? primaryWindow;
             const stampedModels = baseModels.map((m) => ({
               ...m,
-              remainingFraction: primaryWindow ? primaryWindow.remainingFraction : null,
-              resetTime: primaryWindow ? primaryWindow.resetTimeIso : null,
+              remainingFraction: modalWindow ? modalWindow.remainingFraction : null,
+              resetTime: modalWindow ? modalWindow.resetTimeIso : null,
             }));
 
             set((state) => {
@@ -826,14 +875,15 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
   disconnect: async () => {
     try {
       set({ loading: true, error: null });
-      const configRes = (await readOpencodeConfig("global", "")) as OpencodeConfigFile;
+      const configDir = await getNanamiConfigDir();
+      const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
       if (configRes?.content) {
         let raw = configRes.content;
         let edits = modify(raw, ["x_nanami_codex"], undefined, {
           formattingOptions: { insertSpaces: true, tabSize: 2 },
         });
         raw = applyEdits(raw, edits);
-        await writeOpencodeConfig("global", "", raw);
+        await writeOpencodeConfig("project", configDir, raw);
       }
       set({ accounts: [], activeEmail: null, account: null, loading: false });
     } catch (e) {
@@ -905,22 +955,18 @@ const server = http.createServer(async (req, res) => {
       accountId = payload.chatgpt_account_id || (payload['https://api.openai.com/auth'] && payload['https://api.openai.com/auth'].chatgpt_account_id) || '';
     } catch {}
 
-    // 1. Save to ~/.codex/auth.json
-    const codexDir = path.join(home, '.codex');
-    fs.mkdirSync(codexDir, { recursive: true });
-    fs.writeFileSync(path.join(codexDir, 'auth.json'), JSON.stringify({
-      auth_mode: 'chatgpt',
-      OPENAI_API_KEY: null,
-      tokens: {
-        id_token: tokens.id_token || '',
-        access_token: tokens.access_token || '',
-        refresh_token: tokens.refresh_token || '',
-        account_id: accountId,
-      },
-      last_refresh: new Date().toISOString(),
+    // 1. Save pending OAuth to isolated ~/.config/nanamiwork/codex-pending-oauth.json
+    const cfgDir = path.join(home, '.config', 'nanamiwork');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    fs.writeFileSync(path.join(cfgDir, 'codex-pending-oauth.json'), JSON.stringify({
+      id_token: tokens.id_token || '',
+      access_token: tokens.access_token || '',
+      refresh_token: tokens.refresh_token || '',
+      account_id: accountId,
+      saved_at: Date.now(),
     }, null, 2), 'utf8');
 
-    // 2. Save to ~/.local/share/opencode/auth.json
+    // 2. Save to ~/.local/share/opencode/auth.json for managed opencode engine
     const ocShareDir = path.join(home, '.local', 'share', 'opencode');
     fs.mkdirSync(ocShareDir, { recursive: true });
     const ocAuthFile = path.join(ocShareDir, 'auth.json');
@@ -1012,21 +1058,22 @@ const parseJ=(r)=>JSON.parse(String(r||'').replace(/^\\uFEFF/,'').replace(/\\\\"
 const home=${JSON.stringify(home)},action=${JSON.stringify(action ?? null)};
 const cfgDir=path.join(home,'.config','nanamiwork');
 fs.mkdirSync(cfgDir,{recursive:true});
-const codexAccFile=path.join(cfgDir,'codex-accounts.json'),jsoncFile=path.join(cfgDir,'opencode.jsonc'),jsonFile=path.join(cfgDir,'opencode.json');
-const codexAuthFile=path.join(home,'.codex','auth.json'),ocShareAuthFile=path.join(home,'.local','share','opencode','auth.json');
+const codexAccFile=path.join(cfgDir,'codex-accounts.json'),pendingFile=path.join(cfgDir,'codex-pending-oauth.json'),jsoncFile=path.join(cfgDir,'opencode.jsonc'),jsonFile=path.join(cfgDir,'opencode.json');
+const ocShareAuthFile=path.join(home,'.local','share','opencode','auth.json'),rcFile=path.join(home,'AppData','Roaming','openwork','runtime-opencode-config.json');
 const decode=(t)=>{try{const p=JSON.parse(Buffer.from(String(t||'').split('.')[1],'base64').toString('utf8')),pr=p['https://api.openai.com/profile']||{},au=p['https://api.openai.com/auth']||{};return{email:p.email||pr.email||'',planType:au.chatgpt_plan_type||p.chatgpt_plan_type||'free',accountId:au.chatgpt_account_id||p.chatgpt_account_id||''};}catch{return{};}};
 let meta={activeEmail:'',deletedAtByEmail:{},accounts:[]};
 for(const f of[codexAccFile,jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const d=parseJ(fs.readFileSync(f,'utf8')),cx=d.x_nanami_codex||d;if(cx.deletedAtByEmail)meta.deletedAtByEmail={...meta.deletedAtByEmail,...cx.deletedAtByEmail};if(Array.isArray(cx.accounts)){for(const a of cx.accounts){if(a&&a.email&&(a.accessToken||a.apiKey)&&!meta.accounts.some(e=>e.email.toLowerCase()===a.email.toLowerCase()))meta.accounts.push(a);}}if(!meta.activeEmail&&cx.activeEmail)meta.activeEmail=cx.activeEmail;}catch{}}}
 const upsert=(acc,act)=>{if(!acc||!acc.email||!acc.accessToken)return;const k=acc.email.toLowerCase();if(action&&action.type==='confirm')delete meta.deletedAtByEmail[k];else if(meta.deletedAtByEmail[k])return;const i=meta.accounts.findIndex(a=>a.email.toLowerCase()===k);if(i>=0)meta.accounts[i]={...meta.accounts[i],...acc};else meta.accounts.push(acc);if(act||!meta.activeEmail)meta.activeEmail=acc.email;};
-if(fs.existsSync(ocShareAuthFile)){try{const oc=parseJ(fs.readFileSync(ocShareAuthFile,'utf8')).openai;if(oc&&oc.access){const c=decode(oc.access);if(c.email)upsert({email:c.email,planType:c.planType,accessToken:oc.access,refreshToken:oc.refresh||'',accountId:oc.accountId||c.accountId,addedAt:Date.now(),lastLoadedAt:Date.now()},action&&action.type==='confirm');}}catch{}}
-if(fs.existsSync(codexAuthFile)){try{const tk=parseJ(fs.readFileSync(codexAuthFile,'utf8')).tokens;if(tk&&tk.access_token){const ic=decode(tk.id_token),ac=decode(tk.access_token),em=ic.email||ac.email;if(em)upsert({email:em,planType:ic.planType||ac.planType,accessToken:tk.access_token,refreshToken:tk.refresh_token||'',idToken:tk.id_token||'',accountId:tk.account_id||ic.accountId||ac.accountId,addedAt:Date.now(),lastLoadedAt:Date.now()},action&&action.type==='confirm');}}catch{}}
+if(fs.existsSync(pendingFile)){try{const tk=parseJ(fs.readFileSync(pendingFile,'utf8'));if(tk&&tk.access_token){const ic=decode(tk.id_token),ac=decode(tk.access_token),em=ic.email||ac.email;if(em)upsert({email:em,planType:ic.planType||ac.planType,accessToken:tk.access_token,refreshToken:tk.refresh_token||'',idToken:tk.id_token||'',accountId:tk.account_id||ic.accountId||ac.accountId,addedAt:Date.now(),lastLoadedAt:Date.now()},true);}fs.unlinkSync(pendingFile);}catch{}}
+if(action&&action.type==='confirm'&&fs.existsSync(ocShareAuthFile)){try{const oc=parseJ(fs.readFileSync(ocShareAuthFile,'utf8')).openai;if(oc&&oc.access){const c=decode(oc.access);if(c.email)upsert({email:c.email,planType:c.planType,accessToken:oc.access,refreshToken:oc.refresh||'',accountId:oc.accountId||c.accountId,addedAt:Date.now(),lastLoadedAt:Date.now()},true);}}catch{}}
 if(action&&action.type==='delete'&&action.email){const dk=action.email.toLowerCase();meta.deletedAtByEmail[dk]=Date.now();meta.accounts=meta.accounts.filter(a=>a.email.toLowerCase()!==dk);if((meta.activeEmail||'').toLowerCase()===dk)meta.activeEmail=meta.accounts[0]?.email||'';}else if(action&&action.type==='select'&&action.email){meta.activeEmail=action.email;}
 const act=meta.accounts.find(a=>a.email.toLowerCase()===(meta.activeEmail||'').toLowerCase())||meta.accounts[0];
-if(act){meta.activeEmail=act.email;if(act.accessToken){try{fs.mkdirSync(path.dirname(ocShareAuthFile),{recursive:true});const oc=fs.existsSync(ocShareAuthFile)?parseJ(fs.readFileSync(ocShareAuthFile,'utf8')):{};oc.openai={type:'oauth',refresh:act.refreshToken||'',access:act.accessToken,expires:Date.now()+3600000,...(act.accountId?{accountId:act.accountId}:{})};fs.writeFileSync(ocShareAuthFile,JSON.stringify(oc,null,2),'utf8');}catch{}if(action&&action.type==='select'){try{fs.mkdirSync(path.dirname(codexAuthFile),{recursive:true});fs.writeFileSync(codexAuthFile,JSON.stringify({auth_mode:'chatgpt',OPENAI_API_KEY:null,tokens:{id_token:act.idToken||act.accessToken,access_token:act.accessToken,refresh_token:act.refreshToken||'',account_id:act.accountId||''},last_refresh:new Date().toISOString()},null,2),'utf8');}catch{}}}}
+if(act){meta.activeEmail=act.email;if(act.accessToken){try{fs.mkdirSync(path.dirname(ocShareAuthFile),{recursive:true});const oc=fs.existsSync(ocShareAuthFile)?parseJ(fs.readFileSync(ocShareAuthFile,'utf8')):{};oc.openai={type:'oauth',refresh:act.refreshToken||'',access:act.accessToken,expires:Date.now()+3600000,...(act.accountId?{accountId:act.accountId}:{})};fs.writeFileSync(ocShareAuthFile,JSON.stringify(oc,null,2),'utf8');}catch{}}}
 fs.writeFileSync(codexAccFile,JSON.stringify(meta,null,2)+'\\n','utf8');
 const mDef=(n)=>({name:n,limit:{context:400000,output:128000},modalities:{input:['text','image'],output:['text']}});
 const codexModels={'gpt-6.1-sol':mDef('GPT-6.1 Sol'),'gpt-6-astra':mDef('GPT-6 Astra'),'gpt-6.1-terra':mDef('GPT-6.1 Terra'),'gpt-6-sol':mDef('GPT-6 Sol'),'gpt-6-luna':mDef('GPT-6 Luna'),'gpt-5.6-sol':mDef('GPT-5.6 Sol'),'gpt-5.6-terra':mDef('GPT-5.6 Terra'),'gpt-5.6-luna':mDef('GPT-5.6 Luna')};
-for(const f of[jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const cfg=parseJ(fs.readFileSync(f,'utf8'));cfg.x_nanami_codex=meta;if(!cfg.provider)cfg.provider={};if(!cfg.provider.openai||!cfg.provider.openai.options||!cfg.provider.openai.options.apiKey)cfg.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(f,JSON.stringify(cfg,null,2)+'\\n','utf8');}catch{}}}
+for(const f of[jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const cfg=parseJ(fs.readFileSync(f,'utf8'));cfg.x_nanami_codex=meta;if(!Array.isArray(cfg.enabled_providers))cfg.enabled_providers=['nanami','google','openai','github-copilot'];else if(!cfg.enabled_providers.includes('openai'))cfg.enabled_providers.push('openai');if(!cfg.provider)cfg.provider={};if(!cfg.provider.openai||!cfg.provider.openai.options||!cfg.provider.openai.options.apiKey)cfg.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(f,JSON.stringify(cfg,null,2)+'\\n','utf8');}catch{}}}
+if(fs.existsSync(rcFile)){try{const rc=parseJ(fs.readFileSync(rcFile,'utf8'));rc.enabled_providers=['nanami','google','openwork-free','openwork','opencode','github-copilot','openai'];rc.disabled_providers=['azure','anthropic'];if(!rc.provider)rc.provider={};if(!rc.provider.openai||!rc.provider.openai.options||!rc.provider.openai.options.apiKey)rc.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(rcFile,JSON.stringify(rc)+'\\n','utf8');}catch{}}
 `.trim();
 
     const b64 = btoa(script);

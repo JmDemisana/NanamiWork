@@ -101,7 +101,7 @@ export function computeModelAvailability(
     return { status: "unavailable", reason: "provider_not_connected" };
   }
 
-  if (!isModelAvailableInConnectedProviders(providerList, model)) {
+  if (!["openai", "google", "github-copilot", "nanami"].includes(providerId) && !isModelAvailableInConnectedProviders(providerList, model)) {
     return { status: "unavailable", reason: "model_missing" };
   }
 

@@ -138,6 +138,7 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
         "google",
         "github-copilot",
         "opencode",
+        "openai",
       ])],
     permission: { ...engineConfig.permission, ...permissions },
     default_agent: runtimeConfig.default_agent ?? "openwork",
