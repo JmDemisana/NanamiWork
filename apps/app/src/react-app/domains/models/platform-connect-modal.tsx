@@ -46,9 +46,11 @@ export function PlatformConnectModal() {
   const setCopilotOpen = useCopilotAccountsStore((s) => s.setModalOpen);
   const copilotFlow = useCopilotAccountsStore((s) => s.deviceFlow);
   const copilotConnecting = useCopilotAccountsStore((s) => s.isConnecting);
+  const copilotError = useCopilotAccountsStore((s) => s.error);
   const startCopilotFlow = useCopilotAccountsStore((s) => s.startDeviceFlow);
   const pollCopilotFlow = useCopilotAccountsStore((s) => s.pollDeviceFlow);
   const cancelCopilotFlow = useCopilotAccountsStore((s) => s.cancelDeviceFlow);
+  const loadCopilotAccounts = useCopilotAccountsStore((s) => s.loadAccounts);
 
   // ChatGPT Store
   const chatGptOpen = useChatGptAccountsStore((s) => s.modalOpen);
@@ -213,12 +215,32 @@ export function PlatformConnectModal() {
                 </div>
               </div>
 
+              {copilotError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-center justify-between gap-2">
+                  <span className="truncate">{copilotError}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[11px] shrink-0 hover:bg-destructive/20 text-destructive"
+                    onClick={() => {
+                      void (async () => {
+                        const flow = await startCopilotFlow();
+                        if (flow) void pollCopilotFlow();
+                      })();
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                Authorize your GitHub account using the device activation code below.
+              </div>
+
               {copilotFlow ? (
                 <>
-                  <div className="text-xs text-muted-foreground">
-                    Copy your one-time activation code, then enter it on the GitHub device activation page:
-                  </div>
-
                   <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background/60 px-3.5 py-2.5">
                     <div>
                       <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Activation Code</div>
@@ -239,26 +261,54 @@ export function PlatformConnectModal() {
                       ) : (
                         <>
                           <Copy className="size-3.5" />
-                          <span>Copy</span>
+                          <span>Copy Code</span>
                         </>
                       )}
                     </Button>
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
-                    onClick={handleOpenCopilot}
-                  >
-                    <span>Open GitHub Activation Page</span>
-                    <ExternalLink className="size-3.5 text-muted-foreground" />
-                  </Button>
+                  <div className="space-y-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                      onClick={handleOpenCopilot}
+                    >
+                      <span>Open GitHub Activation Page</span>
+                      <ExternalLink className="size-3.5 text-muted-foreground" />
+                    </Button>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                        onClick={handleOpenCopilot}
+                      >
+                        Open github.com/login/device →
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                     <Loader2 className="size-3.5 animate-spin text-emerald-500 shrink-0" />
-                    <span>Waiting for device authorization on GitHub…</span>
+                    <span>
+                      {copilotConnecting
+                        ? "Waiting for device authorization on GitHub…"
+                        : "Device code ready. Authorize in your browser…"}
+                    </span>
                   </div>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full h-9 text-xs font-medium gap-2 border border-border/70"
+                    onClick={async () => {
+                      await loadCopilotAccounts();
+                      setCopilotOpen(false);
+                    }}
+                  >
+                    <RefreshCw className="size-3.5" />
+                    <span>Click to Confirm & Refresh</span>
+                  </Button>
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
@@ -361,14 +411,15 @@ export function PlatformConnectModal() {
               variant="secondary"
               size="sm"
               className="gap-1.5 text-xs"
-              onClick={() => {
+              onClick={async () => {
                 if (activePlatform === "chatgpt") {
                   window.dispatchEvent(new Event(confirmCodexAuthEvent));
                   void confirmChatGpt();
                 } else if (activePlatform === "antigravity") {
                   window.dispatchEvent(new Event(confirmAntigravityAuthEvent));
                 } else {
-                  window.location.reload();
+                  await loadCopilotAccounts();
+                  setCopilotOpen(false);
                 }
               }}
               title="Confirm & Refresh"

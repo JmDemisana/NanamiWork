@@ -14,7 +14,7 @@ async function getNanamiConfigDir(): Promise<string> {
   return `${home.replace(/\\/g, "/")}/.config/nanamiwork`;
 }
 
-const GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe81";
+const GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98";
 const GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code";
 const GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token";
