@@ -158,6 +158,15 @@ export const OpenWorkGatewayQuota = async () => ({
               activeEmail?: string;
               accounts?: Array<Record<string, unknown>>;
             };
+            for (const f of [jsoncFile, jsonFile]) {
+              const d = fs.existsSync(f) ? parseJsoncSafe(fs.readFileSync(f, "utf8")) : { $schema: "https://opencode.ai/config.json" };
+              d.x_nanami_codex = codexMeta;
+              fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n", "utf8");
+            }
+          } catch {}
+        } else if (codexMeta.accounts && codexMeta.accounts.length > 0) {
+          try {
+            fs.writeFileSync(codexAccFile, JSON.stringify(codexMeta, null, 2) + "\n", "utf8");
           } catch {}
         }
         const codexList = Array.isArray(codexMeta.accounts) ? codexMeta.accounts : [];
