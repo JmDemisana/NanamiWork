@@ -67,6 +67,10 @@ export function runtimeModelOptions(data: ProviderList, isNewProvider: (provider
       modelID: "openai/gpt-6-luna",
       title: "OpenWork Free (GPT-6 Luna)",
       description: "OpenWork Free Models",
+      behaviorTitle: "",
+      behaviorLabel: "",
+      behaviorDescription: "",
+      behaviorValue: null,
       isFree: true,
     });
   }
@@ -78,6 +82,10 @@ export function runtimeModelOptions(data: ProviderList, isNewProvider: (provider
       modelID: "big-pickle",
       title: "Big Pickle (Zen Free)",
       description: "OpenCode Zen Free Models",
+      behaviorTitle: "",
+      behaviorLabel: "",
+      behaviorDescription: "",
+      behaviorValue: null,
       isFree: true,
     });
   }

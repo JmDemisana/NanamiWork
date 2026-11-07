@@ -13,7 +13,7 @@ import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandIte
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
 import { useCopilotAccountsStore } from "./copilot-accounts-store";
-import { useChatGptAccountsStore } from "./chatgpt-accounts-store";
+import { useChatGptAccountsStore, type ChatGptAccountInfo, type ChatGptModelItem } from "./chatgpt-accounts-store";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -243,6 +243,116 @@ function ConnectedAccountGroup({
   );
 }
 
+function ConnectedChatGptAccountGroup({
+  account,
+  current,
+  query,
+  onSelectModel,
+}: {
+  account: ChatGptAccountInfo;
+  current: ModelRef;
+  query: string;
+  onSelectModel: (account: ChatGptAccountInfo, item: ChatGptModelItem) => void;
+}) {
+  const search = query.trim().toLowerCase();
+  const visibleModels = useMemo(() => {
+    if (!search) return account.models;
+    return account.models.filter((m) =>
+      `${m.displayName} ${m.modelID} ${account.email} openai chatgpt codex`.toLowerCase().includes(search),
+    );
+  }, [account.models, account.email, search]);
+
+  if (visibleModels.length === 0) return null;
+
+  return (
+    <div className="px-2 pt-1 pb-1" data-testid={`chatgpt-account-group-${account.email}`}>
+      <div className="flex min-h-7 items-center justify-between gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate" title={`${account.email} (ChatGPT)`}>
+            {account.email} (ChatGPT)
+          </span>
+          <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">
+            {account.planType}
+          </span>
+          {account.isActive ? (
+            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              Active
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:text-foreground"
+            title="Refresh account limits"
+            aria-label={`Refresh limits for ${account.email}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void useChatGptAccountsStore.getState().refreshQuotas(account.email);
+            }}
+          >
+            <RefreshCw className={`size-3 ${account.quotaLoading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            title={`Remove ${account.email}`}
+            aria-label={`Remove ${account.email}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void useChatGptAccountsStore.getState().deleteAccount(account.email);
+            }}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {visibleModels.map((item) => {
+          const isSelected =
+            account.isActive &&
+            current.providerID === "openai" &&
+            current.modelID === item.modelID;
+          return (
+            <button
+              key={`${account.email}:${item.modelID}`}
+              type="button"
+              data-testid={`chatgpt-model-${account.email}-${item.modelID}`}
+              onClick={() => onSelectModel(account, item)}
+              className={`group/model flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                isSelected ? "bg-accent/60 font-medium" : ""
+              }`}
+            >
+              <div className="flex size-4 shrink-0 items-center justify-center">
+                <ProviderIcon providerId="openai" size={16} />
+              </div>
+              <span className="min-w-0 flex-1 truncate leading-5" title={item.displayName}>
+                {item.displayName}
+              </span>
+
+              {account.primaryWindow ? (
+                <span className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-mono">
+                  {Math.min(100, Math.max(0, account.primaryWindow.usedPercent))}% used
+                </span>
+              ) : null}
+
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, searchInputRef,
   catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
@@ -251,6 +361,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const recent = useModelCollectionsStore((state) => state.recent);
   const antigravityAccounts = useAntigravityAccountsStore((state) => state.accounts);
   const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
+  const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
 
   // Filter out generic "google" provider models from standard groups since connected Antigravity accounts render as peer groups.
   const nonGoogleOptions = useMemo(
@@ -354,6 +465,15 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
     );
   };
+  const selectChatGptModel = (account: ChatGptAccountInfo, item: ChatGptModelItem) => {
+    void useChatGptAccountsStore.getState().selectAccount(account.email);
+    onSelect({
+      providerID: "openai",
+      modelID: item.modelID,
+      title: item.displayName,
+      description: `${account.email} (ChatGPT)`,
+    } as unknown as ModelOption);
+  };
   const alternative = pins.find((option) => !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current))
     ?? nonGoogleOptions.find((option) => !option.disabled && !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current));
   const alternativeKey = alternative ? modelRefKey(alternative) : undefined;
@@ -378,7 +498,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const toggle = (option: ModelOption) => {
     if (!immutableModelPin(option) && canSelect(option)) useModelCollectionsStore.getState().toggleFavorite(option);
   };
-  const hasOptions = nonGoogleOptions.some((option) => !option.disabled) || antigravityAccounts.length > 0;
+  const hasOptions =
+    nonGoogleOptions.some((option) => !option.disabled) ||
+    antigravityAccounts.length > 0 ||
+    chatGptAccounts.length > 0;
   const loading = catalogState?.state === "loading";
   const failed = catalogState?.state === "error" || retryFailed;
   const empty = !loading && !hasOptions && !query.trim() && !failed;
@@ -598,6 +721,19 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                 current={current}
                 query={query}
                 onSelectModel={selectAntigravityModel}
+              />
+            ))}
+          </div>
+        ) : null}
+        {chatGptAccounts.length > 0 ? (
+          <div className="pb-1">
+            {chatGptAccounts.map((acc) => (
+              <ConnectedChatGptAccountGroup
+                key={acc.email}
+                account={acc}
+                current={current}
+                query={query}
+                onSelectModel={selectChatGptModel}
               />
             ))}
           </div>

@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -47,9 +48,12 @@ export function PlatformConnectModal() {
   // ChatGPT Store
   const chatGptOpen = useChatGptAccountsStore((s) => s.modalOpen);
   const setChatGptOpen = useChatGptAccountsStore((s) => s.setModalOpen);
-  const chatGptAccount = useChatGptAccountsStore((s) => s.account);
+  const chatGptAccounts = useChatGptAccountsStore((s) => s.accounts);
   const chatGptConnecting = useChatGptAccountsStore((s) => s.isConnecting);
+  const startChatGptLogin = useChatGptAccountsStore((s) => s.startBrowserLogin);
+  const confirmChatGpt = useChatGptAccountsStore((s) => s.confirmAndRefresh);
   const connectChatGptKey = useChatGptAccountsStore((s) => s.connectApiKey);
+  const deleteChatGptAccount = useChatGptAccountsStore((s) => s.deleteAccount);
   const chatGptError = useChatGptAccountsStore((s) => s.error);
 
   const [copiedCode, setCopiedCode] = React.useState(false);
@@ -268,7 +272,7 @@ export function PlatformConnectModal() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-foreground">OpenAI / ChatGPT</div>
-                  <div className="text-[11px] text-muted-foreground">Consumer Session & Direct API Key</div>
+                  <div className="text-[11px] text-muted-foreground">Consumer Session & Multi-Account Pool</div>
                 </div>
               </div>
 
@@ -278,30 +282,90 @@ export function PlatformConnectModal() {
                 </div>
               )}
 
-              {chatGptAccount?.accessToken ? (
-                <div className="flex items-center justify-between rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs">
-                  <span className="font-medium text-sky-400">Connected ChatGPT Session</span>
-                  <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-300">
-                    {chatGptAccount.planType || "Active"}
-                  </span>
-                </div>
-              ) : null}
-
               <div className="text-xs text-muted-foreground">
-                Sign in to ChatGPT in your browser, or paste an OpenAI API key below:
+                Sign in with your ChatGPT account in your browser, then confirm and refresh.
               </div>
 
+              {/* Step 1: Open Browser Sign-In */}
+              <div className="space-y-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                  onClick={() => void startChatGptLogin()}
+                >
+                  <span>Open ChatGPT Sign-In</span>
+                  <ExternalLink className="size-3.5 text-muted-foreground" />
+                </Button>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                    onClick={handleOpenChatGpt}
+                  >
+                    Open chatgpt.com →
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 2: Live status */}
+              <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin text-sky-500 shrink-0" />
+                <span>
+                  {chatGptConnecting
+                    ? "Waiting for authorization in browser..."
+                    : "Ready to authenticate via browser…"}
+                </span>
+              </div>
+
+              {/* Step 3: Confirm & Refresh Button */}
               <Button
                 type="button"
-                variant="outline"
-                className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
-                onClick={handleOpenChatGpt}
+                className="w-full h-9 text-xs font-semibold bg-sky-500 hover:bg-sky-600 text-white gap-2 shadow-sm"
+                onClick={() => void confirmChatGpt()}
               >
-                <span>Open ChatGPT in Browser</span>
-                <ExternalLink className="size-3.5 text-muted-foreground" />
+                <RefreshCw className="size-3.5" />
+                <span>Click to Confirm & Refresh</span>
               </Button>
 
-              <div className="space-y-1.5 pt-1">
+              {/* Connected Accounts List */}
+              {chatGptAccounts.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-border/40">
+                  <div className="text-[11px] font-medium text-muted-foreground">
+                    Connected Accounts ({chatGptAccounts.length}):
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {chatGptAccounts.map((acc) => (
+                      <div
+                        key={acc.email}
+                        className="flex items-center justify-between rounded-lg border border-border/60 bg-background/50 px-3 py-1.5 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Bot className="size-3.5 text-sky-500 shrink-0" />
+                          <span className="truncate font-medium text-foreground">{acc.email}</span>
+                          <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-400">
+                            {acc.planType}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                          onClick={() => void deleteChatGptAccount(acc.email)}
+                          title={`Remove ${acc.email}`}
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Direct API Key option */}
+              <div className="space-y-1.5 pt-2 border-t border-border/40">
+                <div className="text-[11px] text-muted-foreground">Or paste an OpenAI API key:</div>
                 <div className="flex gap-1.5">
                   <div className="relative flex-1">
                     <Key className="absolute left-3 top-2.5 size-3.5 text-muted-foreground pointer-events-none" />
@@ -330,13 +394,15 @@ export function PlatformConnectModal() {
                   </Button>
                 </div>
 
-                <button
-                  type="button"
-                  className="text-[11px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
-                  onClick={handleOpenOpenAiKeys}
-                >
-                  Get an OpenAI API Key →
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                    onClick={handleOpenOpenAiKeys}
+                  >
+                    Get an OpenAI API Key →
+                  </button>
+                </div>
               </div>
             </div>
           )}
