@@ -64,6 +64,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow, closeBrowse
                 { role: "about" },
                 {
                   label: "Check for Updates...",
+                  enabled: !isStoreBuild(),
                   click: () => {
                     runDetachedTask("check for updates from menu", checkForUpdatesFromNativeMenu);
                   },
@@ -208,6 +209,7 @@ export function createApplicationMenu({ appName, docsUrl, getWindow, closeBrowse
             : [
                 {
                   label: "Check for Updates...",
+                  enabled: !isStoreBuild(),
                   click: () => {
                     runDetachedTask("check for updates from menu", checkForUpdatesFromNativeMenu);
                   },

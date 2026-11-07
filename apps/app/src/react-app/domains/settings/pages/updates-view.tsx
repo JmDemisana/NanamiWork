@@ -131,8 +131,10 @@ export function UpdatesView(props: UpdatesViewProps) {
   );
   const updatesSupported = !props.webDeployment && props.updateEnv?.supported !== false;
   const canDownload = updateState === "available" || Boolean(candidate);
-  const statusLabel = checking
-    ? t("settings.update_checking")
+  const statusLabel = !updatesSupported && props.updateEnv?.reason
+    ? props.updateEnv.reason
+    : checking
+      ? t("settings.update_checking")
     : updateState === "available"
       ? t("updates.available")
       : updateState === "blocked"

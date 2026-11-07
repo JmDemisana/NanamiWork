@@ -248,8 +248,16 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
     let cancelled = false;
     void bridge
       .getChannel()
-      .then(async (state) => {
+      .then(async (state: any) => {
         if (cancelled) return;
+        if (state && state.supported === false) {
+          dispatchEnvState({
+            type: "unsupported",
+            reason: state.reason || "This build installs updates directly from Microsoft Store or WinGet.",
+          });
+          dispatchEnvState({ type: "app-version", appVersion: state.currentVersion ?? null });
+          return;
+        }
         dispatchEnvState({ type: "app-version", appVersion: state.currentVersion ?? null });
         if (state.channel && state.channel !== policyReleaseChannel && bridge.setChannel) {
           const nextState = await bridge.setChannel(policyReleaseChannel);

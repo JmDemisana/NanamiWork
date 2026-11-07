@@ -43,6 +43,24 @@ export function resolveAppVersion(app) {
   }
   return _cachedAppVersion;
 }
+
+export function isStoreBuild(env = process.env) {
+  return Boolean(
+    process.windowsStore ||
+    process.mas ||
+    env.NANAMIWORK_STORE_BUILD === "1" ||
+    env.OPENWORK_STORE_BUILD === "1" ||
+    env.STORE_BUILD === "1"
+  );
+}
+
+export function storeUpdaterReason() {
+  if (process.mas) {
+    return "This build installs updates directly from the Mac App Store.";
+  }
+  return "This build installs updates directly from Microsoft Store or WinGet.";
+}
+
 const ELECTRON_UPDATER_FEEDS = Object.freeze({
   stable: "https://github.com/JmDemisana/NanamiWork/releases/latest/download",
   alpha: "https://github.com/JmDemisana/NanamiWork/releases/download/alpha-macos-latest",
@@ -202,15 +220,25 @@ export function targetedStableUpdaterFeed(currentVersion, targetVersion, allowOl
   return `https://github.com/JmDemisana/NanamiWork/releases/download/v${normalizedTarget}`;
 }
 
-function updaterChannelState(app, channel, targetVersion = null, manifestChannel = "latest") {
-  const normalized = normalizeElectronUpdaterChannel(channel, manifestChannel);
+function updaterChannelState(app, channel, targetVersion = null, manifestChannel = "latest", env = process.env) {
   const currentVersion = resolveAppVersion(app);
+  if (isStoreBuild(env)) {
+    return {
+      channel: "store",
+      feedUrl: null,
+      currentVersion,
+      supported: false,
+      reason: storeUpdaterReason(),
+    };
+  }
+  const normalized = normalizeElectronUpdaterChannel(channel, manifestChannel);
   return {
     channel: normalized,
     feedUrl: targetVersion
       ? targetedStableUpdaterFeed(currentVersion, targetVersion)
       : electronUpdaterFeedUrl(normalized, manifestChannel),
     currentVersion,
+    supported: true,
   };
 }
 
@@ -384,7 +412,7 @@ export function registerUpdaterIpc({
   }
 
   async function ensureAutoUpdater() {
-    if (!app.isPackaged) return null;
+    if (!app.isPackaged || isStoreBuild(env)) return null;
     if (!autoUpdaterLoadPromise) {
       autoUpdaterLoadPromise = (async () => {
         try {
@@ -699,8 +727,11 @@ export function registerUpdaterIpc({
   }));
 
   ipcMain.handle("openwork:updater:getChannel", async () => queueUpdaterOperation(async () => {
+    if (isStoreBuild(env)) {
+      return updaterChannelState(app, "store", null, manifestChannel, env);
+    }
     const channel = await readElectronUpdaterChannel(app, manifestChannel);
-    return updaterChannelState(app, channel, null, manifestChannel);
+    return updaterChannelState(app, channel, null, manifestChannel, env);
   }));
 
   ipcMain.handle("openwork:updater:setChannel", async (_event, rawChannel) => queueUpdaterOperation(async () => {
@@ -721,6 +752,15 @@ export function registerUpdaterIpc({
   }));
 
   ipcMain.handle("openwork:updater:check", async (_event, rawChannel, rawTargetVersion, options) => queueUpdaterOperation(async () => {
+    if (isStoreBuild(env)) {
+      return {
+        available: false,
+        supported: false,
+        reason: storeUpdaterReason(),
+        totalBytes: null,
+        currentVersion: resolveAppVersion(app),
+      };
+    }
     assertActivation();
     // A check selects a feed for this operation only. The persisted preference
     // belongs exclusively to setChannel so a stale check cannot undo a choice.
@@ -799,6 +839,9 @@ export function registerUpdaterIpc({
   }));
 
   ipcMain.handle("openwork:updater:download", async () => queueUpdaterOperation(async () => {
+    if (isStoreBuild(env)) {
+      return { ok: false, reason: storeUpdaterReason() };
+    }
     assertActivation();
     const updater = await ensureAutoUpdater();
     if (!updater) return { ok: false, reason: "unavailable" };
@@ -848,6 +891,9 @@ export function registerUpdaterIpc({
   }));
 
   ipcMain.handle("openwork:updater:installAndRestart", async () => queueUpdaterOperation(async () => {
+    if (isStoreBuild(env)) {
+      return { ok: false, reason: storeUpdaterReason() };
+    }
     assertActivation();
     if (!updateDownloaded) return { ok: false, reason: "update-not-downloaded" };
     const updater = await ensureAutoUpdater();

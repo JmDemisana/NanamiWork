@@ -25,7 +25,7 @@ import { configureFakeMediaForTests, installMediaPermissionHandlers } from "./me
 import { registerMigrationIpc } from "./migration.mjs";
 import { registerSessionPins } from "./session-pins.mjs";
 import { createRuntimeManager, createSystemCaCertificateVerifyProc } from "./runtime.mjs";
-import { registerUpdaterIpc, resolveAppVersion } from "./updater.mjs";
+import { registerUpdaterIpc, resolveAppVersion, isStoreBuild } from "./updater.mjs";
 import { createUiControlServer } from "./ui-control-server.mjs";
 import { createApplicationMenu } from "./app-menu.mjs";
 import { createNativeContextMenus } from "./context-menu.mjs";
@@ -3322,7 +3322,9 @@ or use: pnpm dev:worktree`);
     // Initialize the packaged updater after the window is up so the user sees
     // a working app first. Renderer-owned checks pass the selected release
     // channel explicitly, avoiding stale stable-feed results for alpha users.
-    runDetachedTask("initialize updater", ensureAutoUpdater);
+    if (!isStoreBuild()) {
+      runDetachedTask("initialize updater", ensureAutoUpdater);
+    }
   })).catch((error) => {
     console.error("[desktop] startup failed", error);
     // A quit that arrives mid-startup aborts the pending window load and
