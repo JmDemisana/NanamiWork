@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { Bot, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
 import {
   formatQuotaResetShort,
@@ -119,15 +119,6 @@ export function CopilotSidebarLimits() {
                       acc.isActive ? "bg-emerald-400" : "bg-muted-foreground/40"
                     }`}
                   />
-                  {acc.avatarUrl ? (
-                    <img
-                      src={acc.avatarUrl}
-                      alt={acc.username}
-                      className="size-3.5 rounded-full shrink-0"
-                    />
-                  ) : (
-                    <Bot className="size-3.5 text-emerald-500 shrink-0" />
-                  )}
                   <span className="truncate text-[11px] font-medium text-sidebar-foreground">
                     @{acc.username}
                   </span>

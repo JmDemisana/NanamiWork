@@ -365,11 +365,6 @@ function ConnectedCopilotAccountGroup({
     <div className="px-2 pt-1 pb-1" data-testid={`copilot-account-group-${account.username}`}>
       <div className="flex min-h-7 items-center justify-between gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
         <div className="flex min-w-0 items-center gap-1.5">
-          {account.avatarUrl ? (
-            <img src={account.avatarUrl} alt={account.username} className="size-3.5 rounded-full shrink-0" />
-          ) : (
-            <Bot className="size-3.5 text-emerald-500 shrink-0" />
-          )}
           <span className="truncate" title={`@${account.username} (Copilot)`}>
             @{account.username} (Copilot)
           </span>
