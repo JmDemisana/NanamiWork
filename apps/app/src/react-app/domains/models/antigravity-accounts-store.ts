@@ -100,7 +100,7 @@ export const DEFAULT_ANTIGRAVITY_IDE_MODELS: readonly AntigravityModelItem[] = [
     displayName: "Claude Sonnet 4.6",
     remainingFraction: null,
     resetTime: null,
-    supportsThinkingTier: true,
+    supportsThinkingTier: false,
     tierModelIds: {
       low: "antigravity-claude-sonnet-4-6",
       medium: "antigravity-claude-sonnet-4-6",
@@ -114,7 +114,7 @@ export const DEFAULT_ANTIGRAVITY_IDE_MODELS: readonly AntigravityModelItem[] = [
     displayName: "Claude Opus 4.6",
     remainingFraction: null,
     resetTime: null,
-    supportsThinkingTier: true,
+    supportsThinkingTier: false,
     tierModelIds: {
       low: "antigravity-claude-opus-4-6-thinking",
       medium: "antigravity-claude-opus-4-6-thinking",
@@ -444,8 +444,6 @@ async function fetchAccountModelsAndQuota(
   const argonHighEntry = modelsMap["gemini-4-argon-high"] ?? modelsMap["gemini-4-argon-medium"] ?? modelsMap["gemini-4-argon"];
   const isPlus = Boolean(argonHighEntry && !argonHighEntry.disabled);
 
-  const hasClaude55 = Boolean(modelsMap["claude-opus-5-5-high"] || modelsMap["claude-sonnet-5-5-high"]);
-
   // Fetch official user quota summary from Google's internal quota service
   // to reflect authentic 5h and weekly limit buckets.
   type QuotaSummaryResponse = {
@@ -578,71 +576,36 @@ async function fetchAccountModelsAndQuota(
     tierModelIds: flashTierIds,
   });
 
-  if (hasClaude55) {
-    const sonnet55TierIds: Record<ThinkingTier, string> = {
-      low: "antigravity-claude-sonnet-5-5-low",
-      medium: "antigravity-claude-sonnet-5-5-medium",
-      high: "antigravity-claude-sonnet-5-5-high",
-    };
-    const opus55TierIds: Record<ThinkingTier, string> = {
-      low: "antigravity-claude-opus-5-5-low",
-      medium: "antigravity-claude-opus-5-5-medium",
-      high: "antigravity-claude-opus-5-5-high",
-    };
-    resolvedModels.push(
-      {
-        familyKey: "claude-sonnet",
-        modelID: sonnet55TierIds[thinkingTier],
-        rawId: `claude-sonnet-5-5-${thinkingTier}`,
-        displayName: "Claude Sonnet 5.5",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
-        supportsThinkingTier: true,
-        tierModelIds: sonnet55TierIds,
+  resolvedModels.push(
+    {
+      familyKey: "claude-sonnet",
+      modelID: "antigravity-claude-sonnet-4-6",
+      rawId: "claude-sonnet-4-6",
+      displayName: "Claude Sonnet 4.6",
+      remainingFraction: effectiveClaudeWeeklyFraction,
+      resetTime: effectiveClaudeWeeklyReset,
+      supportsThinkingTier: false,
+      tierModelIds: {
+        low: "antigravity-claude-sonnet-4-6",
+        medium: "antigravity-claude-sonnet-4-6",
+        high: "antigravity-claude-sonnet-4-6",
       },
-      {
-        familyKey: "claude-opus",
-        modelID: opus55TierIds[thinkingTier],
-        rawId: `claude-opus-5-5-${thinkingTier}`,
-        displayName: "Claude Opus 5.5",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
-        supportsThinkingTier: true,
-        tierModelIds: opus55TierIds,
+    },
+    {
+      familyKey: "claude-opus",
+      modelID: "antigravity-claude-opus-4-6-thinking",
+      rawId: "claude-opus-4-6-thinking",
+      displayName: "Claude Opus 4.6",
+      remainingFraction: effectiveClaudeWeeklyFraction,
+      resetTime: effectiveClaudeWeeklyReset,
+      supportsThinkingTier: false,
+      tierModelIds: {
+        low: "antigravity-claude-opus-4-6-thinking",
+        medium: "antigravity-claude-opus-4-6-thinking",
+        high: "antigravity-claude-opus-4-6-thinking",
       },
-    );
-  } else {
-    resolvedModels.push(
-      {
-        familyKey: "claude-sonnet",
-        modelID: "antigravity-claude-sonnet-4-6",
-        rawId: "claude-sonnet-4-6",
-        displayName: "Claude Sonnet 4.6",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
-        supportsThinkingTier: true,
-        tierModelIds: {
-          low: "antigravity-claude-sonnet-4-6",
-          medium: "antigravity-claude-sonnet-4-6",
-          high: "antigravity-claude-sonnet-4-6",
-        },
-      },
-      {
-        familyKey: "claude-opus",
-        modelID: "antigravity-claude-opus-4-6-thinking",
-        rawId: "claude-opus-4-6-thinking",
-        displayName: "Claude Opus 4.6",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
-        supportsThinkingTier: true,
-        tierModelIds: {
-          low: "antigravity-claude-opus-4-6-thinking",
-          medium: "antigravity-claude-opus-4-6-thinking",
-          high: "antigravity-claude-opus-4-6-thinking",
-        },
-      },
-    );
-  }
+    },
+  );
 
   resolvedModels.push({
     familyKey: "gpt-oss-120b",

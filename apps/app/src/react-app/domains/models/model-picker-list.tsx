@@ -835,12 +835,6 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                 </span>
                 {applies ? <span data-testid="model-search-applies" className="shrink-0 text-xs text-muted-foreground">{applies}</span> : null}
                 {shortcutLabels.get(key) ? <kbd data-testid="model-shortcut-key" className="shrink-0 rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">{shortcutLabels.get(key)}</kbd> : null}
-                <span className="flex size-6 shrink-0 items-center justify-center">{!fixed && !blocked ? <Button type="button" variant="ghost" size="icon-sm" aria-label={`${pinLabel}: ${name}`} title={pinLabel}
-                  className="size-6 text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground focus:opacity-100 group-hover/model:opacity-100 group-focus-within/model:opacity-100"
-                  onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onKeyDown={(event) => event.stopPropagation()}
-                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggle(option); }}>
-                  {pinned.has(key) ? <PinOff aria-hidden="true" strokeWidth={1.5} className="size-3.5" /> : <Pin aria-hidden="true" strokeWidth={1.5} className="size-3.5" />}
-                </Button> : null}</span>
                 <span data-slot="model-selection" className="flex size-4 shrink-0 items-center justify-center">{active ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}</span>
               </ActionContextMenu>;
             }}</CommandCollection>
