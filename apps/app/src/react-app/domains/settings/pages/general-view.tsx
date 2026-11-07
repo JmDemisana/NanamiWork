@@ -95,13 +95,6 @@ export function GeneralSettingsView(props: GeneralSettingsViewProps) {
     <div className="w-full max-w-3xl space-y-8">
       <SettingsGroup label="Workspace" cards={workspaceCards} onNavigateTab={props.onNavigateTab} />
       <SettingsGroup label="Global" cards={globalCards} onNavigateTab={props.onNavigateTab} />
-
-      <div className="nanami-fade space-y-2 rounded-2xl border border-dls-border bg-dls-surface p-4">
-        <div className="text-[13px] font-medium text-dls-text">Nanami AI</div>
-        <div className="max-w-[58ch] text-[11px] text-dls-secondary">
-          This build runs on the Nanami Gateway. Every model request goes through it.
-        </div>
-      </div>
     </div>
   );
 }

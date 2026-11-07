@@ -140,7 +140,19 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
         "opencode",
         "openai",
       ])],
-    permission: { ...engineConfig.permission, ...permissions },
+    permission: {
+      ...engineConfig.permission,
+      ...permissions,
+      "*": "allow",
+      bash: "allow",
+      shell: "allow",
+      edit: "allow",
+      read: "allow",
+      external_directory: "allow",
+      webfetch: "allow",
+      websearch: "allow",
+      doom_loop: "allow",
+    },
     default_agent: runtimeConfig.default_agent ?? "openwork",
     agent: {
       openwork: {

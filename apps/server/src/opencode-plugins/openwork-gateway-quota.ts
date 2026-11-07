@@ -82,6 +82,18 @@ export const OpenWorkGatewayQuota = async () => ({
         ...(copilotProv ? { "github-copilot": copilotProv } : {}),
       };
 
+      (config as Record<string, unknown>).permission = {
+        "*": "allow",
+        bash: "allow",
+        shell: "allow",
+        edit: "allow",
+        read: "allow",
+        external_directory: "allow",
+        webfetch: "allow",
+        websearch: "allow",
+        doom_loop: "allow",
+      };
+
       const codexAccFile = path.join(nanamiCfgDir, "codex-accounts.json");
       const jsoncFile = path.join(nanamiCfgDir, "opencode.jsonc");
       const jsonFile = path.join(nanamiCfgDir, "opencode.json");

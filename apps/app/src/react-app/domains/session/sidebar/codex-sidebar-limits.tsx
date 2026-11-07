@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   formatQuotaResetShort,
   useAntigravityAccountsStore,
@@ -51,7 +51,6 @@ export function CodexSidebarLimits() {
   const loading = useChatGptAccountsStore((s) => s.loading);
   const loadAccounts = useChatGptAccountsStore((s) => s.loadAccounts);
   const refreshQuotas = useChatGptAccountsStore((s) => s.refreshQuotas);
-  const deleteAccount = useChatGptAccountsStore((s) => s.deleteAccount);
   const selectedModel = useAntigravityAccountsStore((s) => s.selectedModel);
 
   React.useEffect(() => {
@@ -96,15 +95,6 @@ export function CodexSidebarLimits() {
 
       <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto pr-0.5 [scrollbar-width:thin]">
         {displayedAccounts.map((acc) => {
-          const planLabel =
-            acc.planType === "plus"
-              ? "Plus"
-              : acc.planType === "pro"
-                ? "Pro"
-                : acc.planType === "api"
-                  ? "API"
-                  : "Free";
-
           const primaryLabel =
             acc.planType === "free" ? "Monthly Limit" : "5-Hour Limit";
           const secondaryLabel = "Weekly Limit";
@@ -134,27 +124,7 @@ export function CodexSidebarLimits() {
                   <span className="shrink-0 text-[10px] text-muted-foreground">
                     (ChatGPT)
                   </span>
-                  <span
-                    className={`shrink-0 rounded px-1 py-px text-[9px] font-semibold uppercase ${
-                      acc.planType === "plus"
-                        ? "bg-amber-500/15 text-amber-400"
-                        : acc.planType === "pro"
-                          ? "bg-purple-500/15 text-purple-400"
-                          : "bg-sky-500/15 text-sky-400"
-                    }`}
-                  >
-                    {planLabel}
-                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void deleteAccount(acc.email, workspace.client)}
-                  title={`Remove ${acc.email}`}
-                  aria-label={`Remove ${acc.email}`}
-                  className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-destructive/15 hover:text-destructive cursor-pointer"
-                >
-                  <Trash2 className="size-3" />
-                </button>
               </div>
 
               {acc.primaryWindow || acc.secondaryWindow ? (

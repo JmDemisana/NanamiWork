@@ -70,7 +70,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   }, [value]);
 
   React.useEffect(() => {
-    if (workspace.client) {
+    if (open && workspace.client) {
       void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
       void useChatGptAccountsStore.getState().loadAccounts(workspace.client);
     }
@@ -193,7 +193,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
           <span className="max-w-72 truncate inline-flex items-center gap-1.5">
             {value.providerID === "nanami" ? <Lock className="size-3 shrink-0 text-amber-400 inline" /> : null}
             <span className="truncate">{triggerLabel}</span>
-            {!hideValue && !antigravityModelLabel && summary ? ` · ${summary}` : ""}
+            {!hideValue && !antigravityModelLabel && !chatGptModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
             {!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
           </span>
           <ChevronDown className="size-3 shrink-0" />

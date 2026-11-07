@@ -3671,6 +3671,9 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   const handleRevertToUserMessage = useCallback((messageId: string, text?: string) => {
     if (archived || !archiveStateKnown || sessionWorkHeld(props.opencodeBaseUrl, props.sessionId)) return;
+    setAwaitingAssistantBaseline(null);
+    setAdmissionOutcomeUnresolved(false);
+    useSessionActivityStore.getState().setRunStatus(props.workspaceId, props.sessionId, { type: "idle" });
     if (text) {
       replaceComposerDraft(props.sessionId, text);
       props.onDraftChange(buildDraft(text, []));
@@ -3864,13 +3867,6 @@ export function SessionSurface(props: SessionSurfaceProps) {
                   <Button variant="ghost" size="xs" onClick={() => void checkUnknownAdmission(true)}>Check status</Button>
                   <Button variant="ghost" size="xs" onClick={() => void handleAbort()}>Stop</Button>
                 </>} />
-            ) : null}
-            {revertMessageId ? (
-              <RevertedMessagesBanner
-                hiddenCount={revertedMessageCount}
-                restoring={restoringRevertedMessages}
-                onRestore={handleRestoreRevertedSession}
-              />
             ) : null}
             {error && !hideDirectGatewayError && snapshot && snapshot.messages.length > 0 ? (
               <SessionErrorCard

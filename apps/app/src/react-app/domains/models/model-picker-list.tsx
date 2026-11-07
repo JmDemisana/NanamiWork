@@ -12,7 +12,7 @@ import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
-import { useCopilotAccountsStore } from "./copilot-accounts-store";
+import { useCopilotAccountsStore, type CopilotAccountInfo, type CopilotModelItem } from "./copilot-accounts-store";
 import { useChatGptAccountsStore, type ChatGptAccountInfo, type ChatGptModelItem } from "./chatgpt-accounts-store";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
@@ -200,7 +200,9 @@ function ConnectedAccountGroup({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void useAntigravityAccountsStore.getState().deleteAccount(account.email);
+              if (window.confirm(`Are you sure you want to remove Antigravity account ${account.email}?`)) {
+                void useAntigravityAccountsStore.getState().deleteAccount(account.email);
+              }
             }}
           >
             <Trash2 className="size-3.5" />
@@ -310,7 +312,9 @@ function ConnectedChatGptAccountGroup({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void useChatGptAccountsStore.getState().deleteAccount(account.email);
+              if (window.confirm(`Are you sure you want to remove ChatGPT account ${account.email}?`)) {
+                void useChatGptAccountsStore.getState().deleteAccount(account.email);
+              }
             }}
           >
             <Trash2 className="size-3.5" />
@@ -353,6 +357,117 @@ function ConnectedChatGptAccountGroup({
   );
 }
 
+function ConnectedCopilotAccountGroup({
+  account,
+  current,
+  query,
+  onSelectModel,
+}: {
+  account: CopilotAccountInfo;
+  current: ModelRef;
+  query: string;
+  onSelectModel: (account: CopilotAccountInfo, item: CopilotModelItem) => void;
+}) {
+  const search = query.trim().toLowerCase();
+  const visibleModels = useMemo(() => {
+    if (!search) return account.models;
+    return account.models.filter((m) =>
+      `${m.displayName} ${m.modelID} ${account.username} copilot github`.toLowerCase().includes(search),
+    );
+  }, [account.models, account.username, search]);
+
+  if (visibleModels.length === 0) return null;
+
+  return (
+    <div className="px-2 pt-1 pb-1" data-testid={`copilot-account-group-${account.username}`}>
+      <div className="flex min-h-7 items-center justify-between gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {account.avatarUrl ? (
+            <img src={account.avatarUrl} alt={account.username} className="size-3.5 rounded-full shrink-0" />
+          ) : (
+            <Bot className="size-3.5 text-emerald-500 shrink-0" />
+          )}
+          <span className="truncate" title={`@${account.username} (Copilot)`}>
+            @{account.username} (Copilot)
+          </span>
+          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
+            {account.planSku}
+          </span>
+          {account.isActive ? (
+            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              Active
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:text-foreground"
+            title="Refresh Copilot token"
+            aria-label={`Refresh token for @${account.username}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void useCopilotAccountsStore.getState().refreshCopilotToken(account.username);
+            }}
+          >
+            <RefreshCw className={`size-3 ${account.loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+            title={`Remove @${account.username}`}
+            aria-label={`Remove @${account.username}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.confirm(`Are you sure you want to remove GitHub Copilot account @${account.username}?`)) {
+                void useCopilotAccountsStore.getState().deleteAccount(account.username);
+              }
+            }}
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {visibleModels.map((item) => {
+          const isSelected =
+            account.isActive &&
+            current.providerID === "github-copilot" &&
+            current.modelID === item.modelID;
+          return (
+            <button
+              key={`${account.username}:${item.modelID}`}
+              type="button"
+              data-testid={`copilot-model-${account.username}-${item.modelID}`}
+              onClick={() => onSelectModel(account, item)}
+              className={`group/model flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                isSelected ? "bg-accent/60 font-medium" : ""
+              }`}
+            >
+              <div className="flex size-4 shrink-0 items-center justify-center">
+                <ProviderIcon providerId="github-copilot" size={16} />
+              </div>
+              <span className="min-w-0 flex-1 truncate leading-5" title={item.displayName}>
+                {item.displayName}
+              </span>
+
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, searchInputRef,
   catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
@@ -362,38 +477,43 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const antigravityAccounts = useAntigravityAccountsStore((state) => state.accounts);
   const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
   const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
+  const copilotAccounts = useCopilotAccountsStore((state) => state.accounts);
 
   useEffect(() => {
     void useChatGptAccountsStore.getState().loadAccounts();
+    void useCopilotAccountsStore.getState().loadAccounts();
   }, []);
 
-  // Filter out generic "google" and "openai" provider models from standard groups since connected Antigravity and ChatGPT accounts render as peer groups.
+  // Filter out generic "google", "openai", and "github-copilot" provider models from standard groups since connected accounts render as peer groups.
   const nonGoogleOptions = useMemo(
     () =>
       options.filter(
         (option) =>
           option.providerID !== "google" &&
-          (chatGptAccounts.length === 0 || option.providerID !== "openai"),
+          (chatGptAccounts.length === 0 || option.providerID !== "openai") &&
+          (copilotAccounts.length === 0 || option.providerID !== "github-copilot"),
       ),
-    [options, chatGptAccounts.length],
+    [options, chatGptAccounts.length, copilotAccounts.length],
   );
   const nonGoogleFavorites = useMemo(
     () =>
       favorites.filter(
         (fav) =>
           fav.providerID !== "google" &&
-          (chatGptAccounts.length === 0 || fav.providerID !== "openai"),
+          (chatGptAccounts.length === 0 || fav.providerID !== "openai") &&
+          (copilotAccounts.length === 0 || fav.providerID !== "github-copilot"),
       ),
-    [favorites, chatGptAccounts.length],
+    [favorites, chatGptAccounts.length, copilotAccounts.length],
   );
   const nonGoogleRecent = useMemo(
     () =>
       recent.filter(
         (rec) =>
           rec.providerID !== "google" &&
-          (chatGptAccounts.length === 0 || rec.providerID !== "openai"),
+          (chatGptAccounts.length === 0 || rec.providerID !== "openai") &&
+          (copilotAccounts.length === 0 || rec.providerID !== "github-copilot"),
       ),
-    [recent, chatGptAccounts.length],
+    [recent, chatGptAccounts.length, copilotAccounts.length],
   );
 
   const modelShortcuts = useModelShortcutsStore((state) => state.shortcuts);
@@ -499,6 +619,19 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       } as unknown as ModelOption,
       { variant: thinkingTier },
     );
+  };
+  const selectCopilotModel = (account: CopilotAccountInfo, item: CopilotModelItem) => {
+    useAntigravityAccountsStore.getState().setSelectedModel({
+      providerID: "github-copilot",
+      modelID: item.modelID,
+    });
+    void useCopilotAccountsStore.getState().selectAccount(account.username);
+    onSelect({
+      providerID: "github-copilot",
+      modelID: item.modelID,
+      title: item.displayName,
+      description: `@${account.username} (Copilot)`,
+    } as unknown as ModelOption);
   };
   const alternative = pins.find((option) => !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current))
     ?? nonGoogleOptions.find((option) => !option.disabled && !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current));
@@ -761,6 +894,19 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                 current={current}
                 query={query}
                 onSelectModel={selectChatGptModel}
+              />
+            ))}
+          </div>
+        ) : null}
+        {copilotAccounts.length > 0 ? (
+          <div className="pb-1">
+            {copilotAccounts.map((acc) => (
+              <ConnectedCopilotAccountGroup
+                key={acc.username}
+                account={acc}
+                current={current}
+                query={query}
+                onSelectModel={selectCopilotModel}
               />
             ))}
           </div>

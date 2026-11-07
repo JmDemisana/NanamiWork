@@ -1995,6 +1995,7 @@ export function SessionRoute() {
           // Stamp the revert cursor into the local caches so the transcript
           // rewinds immediately instead of waiting for a full reload.
           applySessionRevert(selectedWorkspaceId, reverted);
+          useSessionActivityStore.getState().setRunStatus(selectedWorkspaceId, targetSessionId, { type: "idle" });
           return true;
         } catch (error) {
           console.warn("[revert] failed", error);
@@ -2331,6 +2332,7 @@ export function SessionRoute() {
           });
           const reverted = await revertSession(workspaceOpencodeClient, targetSessionId, messageId);
           applySessionRevert(endpoint.workspaceId, reverted);
+          useSessionActivityStore.getState().setRunStatus(endpoint.workspaceId, targetSessionId, { type: "idle" });
           return true;
         } catch (error) {
           console.warn("[revert] failed", error);

@@ -7,6 +7,7 @@ import {
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
 import { applyEdits, modify, parse } from "jsonc-parser";
+import type { Client } from "@/app/types";
 
 async function getNanamiConfigDir(): Promise<string> {
   const home = (await getCachedDesktopHomeDir()) || "C:/Users/jmdem";
@@ -19,6 +20,55 @@ const GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token";
 const GITHUB_USER_URL = "https://api.github.com/user";
 
+export type CopilotModelItem = {
+  modelID: string;
+  displayName: string;
+  contextLimit: number;
+  outputLimit: number;
+  supportsReasoning?: boolean;
+};
+
+export const DEFAULT_COPILOT_MODELS: CopilotModelItem[] = [
+  {
+    modelID: "auto",
+    displayName: "Auto (Copilot Fusion)",
+    contextLimit: 128000,
+    outputLimit: 8192,
+  },
+  {
+    modelID: "gpt-4o",
+    displayName: "GPT-4o (Copilot)",
+    contextLimit: 128000,
+    outputLimit: 4096,
+  },
+  {
+    modelID: "gpt-4o-mini",
+    displayName: "GPT-4o mini (Copilot)",
+    contextLimit: 128000,
+    outputLimit: 4096,
+  },
+  {
+    modelID: "claude-3.5-sonnet",
+    displayName: "Claude 3.5 Sonnet (Copilot)",
+    contextLimit: 200000,
+    outputLimit: 8192,
+  },
+  {
+    modelID: "o1-mini",
+    displayName: "o1-mini (Copilot)",
+    contextLimit: 128000,
+    outputLimit: 65536,
+    supportsReasoning: true,
+  },
+  {
+    modelID: "o1-preview",
+    displayName: "o1-preview (Copilot)",
+    contextLimit: 128000,
+    outputLimit: 32768,
+    supportsReasoning: true,
+  },
+];
+
 export type CopilotAccountInfo = {
   username: string;
   name?: string;
@@ -29,6 +79,9 @@ export type CopilotAccountInfo = {
   lastUsed: number;
   oauthToken: string;
   copilotToken: string;
+  isActive: boolean;
+  models: CopilotModelItem[];
+  loading?: boolean;
 };
 
 export type CopilotDeviceFlowState = {
@@ -39,7 +92,25 @@ export type CopilotDeviceFlowState = {
   interval: number;
 };
 
+type StoredCopilotMeta = {
+  activeUsername?: string;
+  deletedAtByUsername?: Record<string, number>;
+  accounts?: Array<{
+    username: string;
+    name?: string;
+    avatarUrl?: string;
+    planSku?: string;
+    expiresAt?: number;
+    addedAt?: number;
+    lastUsed?: number;
+    oauthToken: string;
+    copilotToken: string;
+  }>;
+};
+
 type CopilotAccountsStore = {
+  accounts: CopilotAccountInfo[];
+  activeUsername: string | null;
   account: CopilotAccountInfo | null;
   loading: boolean;
   error: string | null;
@@ -48,17 +119,142 @@ type CopilotAccountsStore = {
   modalOpen: boolean;
 
   setModalOpen: (open: boolean) => void;
-  loadAccount: () => Promise<void>;
+  loadAccounts: (client?: Client | null) => Promise<void>;
+  selectAccount: (username: string, client?: Client | null) => Promise<void>;
+  deleteAccount: (username: string, client?: Client | null) => Promise<void>;
   startDeviceFlow: () => Promise<CopilotDeviceFlowState | null>;
   cancelDeviceFlow: () => void;
   pollDeviceFlow: () => Promise<boolean>;
-  refreshCopilotToken: () => Promise<string | null>;
+  refreshCopilotToken: (username?: string) => Promise<string | null>;
   disconnect: () => Promise<void>;
 };
 
 let activePollAbortController: AbortController | null = null;
+let latestClient: Client | null = null;
+
+async function readNanamiCopilotMeta(): Promise<{
+  configDir: string;
+  meta: StoredCopilotMeta;
+}> {
+  const configDir = await getNanamiConfigDir();
+  let meta: StoredCopilotMeta = {};
+  try {
+    const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    if (res?.content?.trim()) {
+      const parsed = (parse(res.content) ?? {}) as {
+        x_nanami_copilot?: StoredCopilotMeta | CopilotAccountInfo;
+      };
+      const raw = parsed.x_nanami_copilot;
+      if (raw && typeof raw === "object") {
+        if ("oauthToken" in raw && "username" in raw) {
+          // Migrating legacy single-account format
+          const single = raw as CopilotAccountInfo;
+          meta = {
+            activeUsername: single.username,
+            accounts: [
+              {
+                username: single.username,
+                name: single.name,
+                avatarUrl: single.avatarUrl,
+                planSku: single.planSku,
+                expiresAt: single.expiresAt,
+                addedAt: single.addedAt || Date.now(),
+                lastUsed: single.lastUsed || Date.now(),
+                oauthToken: single.oauthToken,
+                copilotToken: single.copilotToken,
+              },
+            ],
+          };
+        } else {
+          meta = raw as StoredCopilotMeta;
+        }
+      }
+    }
+  } catch {}
+  return { configDir, meta };
+}
+
+async function writeNanamiCopilotMeta(
+  updater: (prev: StoredCopilotMeta) => StoredCopilotMeta,
+  activeAccount?: CopilotAccountInfo | null,
+): Promise<void> {
+  try {
+    const configDir = await getNanamiConfigDir();
+    const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    let raw = res?.content?.trim()
+      ? res.content
+      : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+
+    const parsed = (parse(raw) ?? {}) as Record<string, unknown>;
+    const enabled = Array.isArray(parsed?.enabled_providers)
+      ? (parsed.enabled_providers as string[])
+      : ["nanami", "google"];
+    if (!enabled.includes("github-copilot")) {
+      raw = applyEdits(
+        raw,
+        modify(raw, ["enabled_providers"], [...enabled, "github-copilot"], {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      );
+    }
+
+    const nextMeta = updater(
+      (parsed.x_nanami_copilot as StoredCopilotMeta) ?? { accounts: [] },
+    );
+    raw = applyEdits(
+      raw,
+      modify(raw, ["x_nanami_copilot"], nextMeta, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      }),
+    );
+
+    if (activeAccount && activeAccount.copilotToken) {
+      const configuredModels: Record<string, unknown> = {};
+      for (const m of activeAccount.models || DEFAULT_COPILOT_MODELS) {
+        configuredModels[m.modelID] = {
+          name: m.displayName,
+          limit: { context: m.contextLimit, output: m.outputLimit },
+          capabilities: {
+            tools: true,
+            ...(m.supportsReasoning ? { reasoning: true } : {}),
+            input: ["text", "image"],
+            output: ["text"],
+          },
+        };
+      }
+      const copilotProviderConfig = {
+        npm: "@ai-sdk/openai-compatible",
+        name: "GitHub Copilot (Fusion)",
+        options: {
+          baseURL: "https://api.githubcopilot.com",
+          apiKey: activeAccount.copilotToken,
+          headers: {
+            "Editor-Version": "vscode/1.96.2",
+            "Editor-Plugin-Version": "copilot-chat/0.22.4",
+            "Copilot-Integration-Id": "vscode-chat",
+            "Openai-Organization": "github-copilot",
+            "Openai-Intent": "conversation-panel",
+          },
+        },
+        models: configuredModels,
+      };
+      raw = applyEdits(
+        raw,
+        modify(raw, ["provider", "github-copilot"], copilotProviderConfig, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      );
+    }
+
+    await writeOpencodeConfig("project", configDir, raw);
+  } catch (err) {
+    console.warn("Could not write x_nanami_copilot metadata:", err);
+  }
+}
 
 export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) => ({
+  accounts: [],
+  activeUsername: null,
   account: null,
   loading: false,
   error: null,
@@ -68,34 +264,139 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
 
   setModalOpen: (open) => set({ modalOpen: open }),
 
-  loadAccount: async () => {
+  loadAccounts: async (client) => {
+    if (client) latestClient = client;
     try {
       set({ loading: true, error: null });
-      const configDir = await getNanamiConfigDir();
-      const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
-      if (!configRes?.content) {
-        set({ account: null, loading: false });
+      const { meta } = await readNanamiCopilotMeta();
+      let rawAccounts = Array.isArray(meta.accounts) ? [...meta.accounts] : [];
+      const activeUsername = meta.activeUsername || null;
+      const deletedMap = meta.deletedAtByUsername ?? {};
+
+      rawAccounts = rawAccounts.filter((acc) => {
+        if (!acc?.username || !acc?.oauthToken) return false;
+        const delAt = deletedMap[acc.username.toLowerCase()];
+        const ts = Math.max(acc.addedAt ?? 0, acc.lastUsed ?? 0);
+        if (delAt && ts <= delAt) return false;
+        return true;
+      });
+
+      if (rawAccounts.length === 0) {
+        set({ accounts: [], activeUsername: null, account: null, loading: false });
         return;
       }
 
-      const parsed = parse(configRes.content) as Record<string, unknown>;
-      const copilotMeta = parsed?.x_nanami_copilot as CopilotAccountInfo | undefined;
+      const activeLower = (activeUsername || rawAccounts[0]?.username || "").toLowerCase();
+      const prevAccounts = get().accounts;
 
-      if (!copilotMeta?.oauthToken) {
-        set({ account: null, loading: false });
-        return;
+      const accounts: CopilotAccountInfo[] = rawAccounts.map((raw) => {
+        const existing = prevAccounts.find(
+          (p) => p.username.toLowerCase() === raw.username.toLowerCase(),
+        );
+        const isActive = raw.username.toLowerCase() === activeLower;
+        return {
+          username: raw.username,
+          name: raw.name,
+          avatarUrl: raw.avatarUrl,
+          planSku: raw.planSku || "student",
+          expiresAt: raw.expiresAt || 0,
+          addedAt: raw.addedAt || Date.now(),
+          lastUsed: raw.lastUsed || Date.now(),
+          oauthToken: raw.oauthToken,
+          copilotToken: raw.copilotToken,
+          isActive,
+          models: existing?.models?.length ? existing.models : DEFAULT_COPILOT_MODELS,
+          loading: false,
+        };
+      });
+
+      if (!accounts.some((a) => a.isActive) && accounts.length > 0) {
+        accounts[0].isActive = true;
       }
 
-      set({ account: copilotMeta, loading: false });
+      const activeAcc = accounts.find((a) => a.isActive) || accounts[0] || null;
 
-      // If token is expired or expiring within 5 minutes, refresh it automatically
+      set({
+        accounts,
+        activeUsername: activeAcc?.username || null,
+        account: activeAcc,
+        loading: false,
+      });
+
+      // Check if any active account token is expiring within 5 minutes and auto-refresh
       const now = Math.floor(Date.now() / 1000);
-      if (!copilotMeta.copilotToken || copilotMeta.expiresAt <= now + 300) {
-        void get().refreshCopilotToken();
+      if (activeAcc && (!activeAcc.copilotToken || activeAcc.expiresAt <= now + 300)) {
+        void get().refreshCopilotToken(activeAcc.username);
       }
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : String(e) });
     }
+  },
+
+  selectAccount: async (username: string, client) => {
+    if (client) latestClient = client;
+    const activeClient = client ?? latestClient;
+    const lower = username.toLowerCase();
+    const current = get().accounts;
+    const target = current.find((a) => a.username.toLowerCase() === lower);
+    if (!target) return;
+    const wasAlreadyActive = target.isActive;
+
+    const updatedAccounts = current.map((a) => ({
+      ...a,
+      isActive: a.username.toLowerCase() === lower,
+    }));
+
+    set({
+      accounts: updatedAccounts,
+      activeUsername: target.username,
+      account: { ...target, isActive: true },
+    });
+
+    await writeNanamiCopilotMeta(
+      (prev) => ({
+        ...prev,
+        activeUsername: target.username,
+      }),
+      { ...target, isActive: true },
+    );
+
+    if (!wasAlreadyActive) {
+      try {
+        await activeClient?.instance.dispose();
+      } catch {}
+    }
+  },
+
+  deleteAccount: async (username: string, client) => {
+    if (client) latestClient = client;
+    const lower = username.toLowerCase();
+    const remaining = get().accounts.filter((a) => a.username.toLowerCase() !== lower);
+    const nextActive = remaining.find((a) => a.isActive) ?? remaining[0] ?? null;
+
+    const updatedAccounts = remaining.map((a) => ({
+      ...a,
+      isActive: nextActive ? a.username.toLowerCase() === nextActive.username.toLowerCase() : false,
+    }));
+
+    set({
+      accounts: updatedAccounts,
+      activeUsername: nextActive?.username || null,
+      account: nextActive,
+    });
+
+    await writeNanamiCopilotMeta(
+      (prev) => ({
+        ...prev,
+        activeUsername: nextActive?.username ?? "",
+        deletedAtByUsername: {
+          ...(prev.deletedAtByUsername ?? {}),
+          [lower]: Date.now(),
+        },
+        accounts: (prev.accounts ?? []).filter((a) => a?.username?.toLowerCase() !== lower),
+      }),
+      nextActive,
+    );
   },
 
   startDeviceFlow: async () => {
@@ -209,17 +510,16 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
           };
 
           if (tokenData.access_token) {
-            // Success! Save OAuth token and mint Copilot session token
+            // Authorized! Upsert account to multi-account list
             await setupCopilotIntegration(tokenData.access_token);
             set({ deviceFlow: null, isConnecting: false, modalOpen: false });
-            await get().loadAccount();
+            await get().loadAccounts();
             return true;
           }
 
           if (tokenData.error === "authorization_pending") {
-            // User hasn't finished typing the code yet, keep waiting
+            // Still waiting for user authorization
           } else if (tokenData.error === "slow_down") {
-            // Server requested slower polling
             await new Promise((r) => setTimeout(r, ((tokenData.interval || interval) + 5) * 1000));
             continue;
           } else if (tokenData.error) {
@@ -244,8 +544,11 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
     return false;
   },
 
-  refreshCopilotToken: async () => {
-    const { account } = get();
+  refreshCopilotToken: async (targetUsername?: string) => {
+    const { accounts, activeUsername } = get();
+    const username = targetUsername || activeUsername;
+    if (!username) return null;
+    const account = accounts.find((a) => a.username.toLowerCase() === username.toLowerCase());
     if (!account?.oauthToken) return null;
 
     try {
@@ -283,8 +586,31 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
         lastUsed: Date.now(),
       };
 
-      await updateOpencodeConfigWithCopilot(updatedAccount);
-      set({ account: updatedAccount });
+      await writeNanamiCopilotMeta(
+        (prev) => ({
+          ...prev,
+          accounts: (prev.accounts ?? []).map((a) =>
+            a.username.toLowerCase() === username.toLowerCase()
+              ? {
+                  ...a,
+                  copilotToken: data.token!,
+                  expiresAt: updatedAccount.expiresAt,
+                  planSku: updatedAccount.planSku,
+                  lastUsed: updatedAccount.lastUsed,
+                }
+              : a,
+          ),
+        }),
+        account.isActive ? updatedAccount : undefined,
+      );
+
+      set((state) => ({
+        accounts: state.accounts.map((a) =>
+          a.username.toLowerCase() === username.toLowerCase() ? updatedAccount : a,
+        ),
+        account: state.activeUsername?.toLowerCase() === username.toLowerCase() ? updatedAccount : state.account,
+      }));
+
       return data.token;
     } catch (e) {
       console.warn("Could not refresh Copilot token:", e);
@@ -304,7 +630,6 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
         });
         raw = applyEdits(raw, edits);
 
-        // Remove provider github-copilot
         edits = modify(raw, ["provider", "github-copilot"], undefined, {
           formattingOptions: { insertSpaces: true, tabSize: 2 },
         });
@@ -312,7 +637,7 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
 
         await writeOpencodeConfig("project", configDir, raw);
       }
-      set({ account: null, loading: false });
+      set({ accounts: [], activeUsername: null, account: null, loading: false });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -320,7 +645,6 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
 }));
 
 async function setupCopilotIntegration(oauthToken: string) {
-  // 1. Fetch user profile
   let username = "GitHub User";
   let avatarUrl: string | undefined;
   let name: string | undefined;
@@ -351,7 +675,6 @@ async function setupCopilotIntegration(oauthToken: string) {
     console.warn("Could not fetch GitHub user info:", e);
   }
 
-  // 2. Mint initial Copilot session token
   const tokenRes = await desktopFetchViaMain(
     COPILOT_TOKEN_URL,
     {
@@ -390,170 +713,36 @@ async function setupCopilotIntegration(oauthToken: string) {
     lastUsed: Date.now(),
     oauthToken,
     copilotToken: tokenData.token,
+    isActive: true,
+    models: DEFAULT_COPILOT_MODELS,
   };
 
-  await updateOpencodeConfigWithCopilot(account);
-}
-
-async function fetchCopilotModels(copilotToken: string): Promise<string[]> {
-  try {
-    const res = await desktopFetchViaMain(
-      "https://api.githubcopilot.com/models",
-      {
-        headers: {
-          "Authorization": `Bearer ${copilotToken}`,
-          "Copilot-Integration-Id": "vscode-chat",
-          "Editor-Version": "vscode/1.96.2",
-          "Editor-Plugin-Version": "copilot-chat/0.22.4",
-          "Accept": "application/json",
-        },
-      },
-      10000,
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { data?: Array<{ id: string }> };
-      if (Array.isArray(data?.data)) {
-        return data.data.map((m) => m.id).filter(Boolean);
-      }
-    }
-  } catch (e) {
-    console.warn("Could not fetch Copilot models list:", e);
-  }
-  return [];
-}
-
-async function updateOpencodeConfigWithCopilot(account: CopilotAccountInfo) {
-  const configDir = await getNanamiConfigDir();
-  const configRes = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
-  let raw = configRes?.content?.trim()
-    ? configRes.content
-    : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
-
-  // 1. Update enabled_providers
-  const parsed = parse(raw) as Record<string, unknown>;
-  const enabled = Array.isArray(parsed?.enabled_providers) ? (parsed.enabled_providers as string[]) : [];
-  if (!enabled.includes("github-copilot")) {
-    const edits = modify(raw, ["enabled_providers"], [...enabled, "github-copilot"], {
-      formattingOptions: { insertSpaces: true, tabSize: 2 },
-    });
-    raw = applyEdits(raw, edits);
-  }
-
-  // 2. Fetch accessible models dynamically from GitHub Copilot backend
-  const liveModelIds = await fetchCopilotModels(account.copilotToken);
-
-  const defaultKnownModels: Record<string, { name: string; limit: { context: number; output: number }; capabilities: Record<string, unknown> }> = {
-    "auto": {
-      name: "Auto (Copilot Fusion)",
-      limit: { context: 128000, output: 8192 },
-      capabilities: {
-        tools: true,
-        input: ["text", "image"],
-        output: ["text"],
-      },
+  await writeNanamiCopilotMeta(
+    (prev) => {
+      const list = Array.isArray(prev.accounts) ? [...prev.accounts] : [];
+      const idx = list.findIndex((a) => a.username.toLowerCase() === username.toLowerCase());
+      const item = {
+        username: account.username,
+        name: account.name,
+        avatarUrl: account.avatarUrl,
+        planSku: account.planSku,
+        expiresAt: account.expiresAt,
+        addedAt: account.addedAt,
+        lastUsed: account.lastUsed,
+        oauthToken: account.oauthToken,
+        copilotToken: account.copilotToken,
+      };
+      if (idx >= 0) list[idx] = item;
+      else list.push(item);
+      const del = { ...(prev.deletedAtByUsername ?? {}) };
+      delete del[username.toLowerCase()];
+      return {
+        ...prev,
+        activeUsername: username,
+        deletedAtByUsername: del,
+        accounts: list,
+      };
     },
-    "gpt-4o": {
-      name: "GPT-4o (Copilot Fusion)",
-      limit: { context: 128000, output: 4096 },
-      capabilities: {
-        tools: true,
-        input: ["text", "image"],
-        output: ["text"],
-      },
-    },
-    "gpt-4o-mini": {
-      name: "GPT-4o mini (Copilot Fusion)",
-      limit: { context: 128000, output: 4096 },
-      capabilities: {
-        tools: true,
-        input: ["text", "image"],
-        output: ["text"],
-      },
-    },
-    "claude-3.5-sonnet": {
-      name: "Claude 3.5 Sonnet (Copilot Fusion)",
-      limit: { context: 200000, output: 8192 },
-      capabilities: {
-        tools: true,
-        input: ["text", "image"],
-        output: ["text"],
-      },
-    },
-    "o1-mini": {
-      name: "o1-mini (Copilot Fusion)",
-      limit: { context: 128000, output: 65536 },
-      capabilities: {
-        tools: true,
-        reasoning: true,
-        input: ["text"],
-        output: ["text"],
-      },
-    },
-    "o1-preview": {
-      name: "o1-preview (Copilot Fusion)",
-      limit: { context: 128000, output: 32768 },
-      capabilities: {
-        tools: true,
-        reasoning: true,
-        input: ["text"],
-        output: ["text"],
-      },
-    },
-  };
-
-  const configuredModels: Record<string, unknown> = {
-    "auto": defaultKnownModels["auto"],
-  };
-
-  if (liveModelIds.length > 0) {
-    for (const id of liveModelIds) {
-      if (defaultKnownModels[id]) {
-        configuredModels[id] = defaultKnownModels[id];
-      } else {
-        configuredModels[id] = {
-          name: `${id} (Copilot Fusion)`,
-          limit: { context: 128000, output: 8192 },
-          capabilities: {
-            tools: true,
-            input: ["text"],
-            output: ["text"],
-          },
-        };
-      }
-    }
-  } else {
-    // If /models query returned empty, fall back to known models
-    Object.assign(configuredModels, defaultKnownModels);
-  }
-
-  // 3. Configure github-copilot provider with VS Code Copilot Fusion headers
-  const copilotProviderConfig = {
-    npm: "@ai-sdk/openai-compatible",
-    name: "GitHub Copilot (Fusion)",
-    options: {
-      baseURL: "https://api.githubcopilot.com",
-      apiKey: account.copilotToken,
-      headers: {
-        "Editor-Version": "vscode/1.96.2",
-        "Editor-Plugin-Version": "copilot-chat/0.22.4",
-        "Copilot-Integration-Id": "vscode-chat",
-        "Openai-Organization": "github-copilot",
-        "Openai-Intent": "conversation-panel",
-      },
-    },
-    models: configuredModels,
-  };
-
-  let edits = modify(raw, ["provider", "github-copilot"], copilotProviderConfig, {
-    formattingOptions: { insertSpaces: true, tabSize: 2 },
-  });
-  raw = applyEdits(raw, edits);
-
-  // 3. Store metadata under x_nanami_copilot
-  edits = modify(raw, ["x_nanami_copilot"], account, {
-    formattingOptions: { insertSpaces: true, tabSize: 2 },
-  });
-  raw = applyEdits(raw, edits);
-
-  await writeOpencodeConfig("project", configDir, raw);
+    account,
+  );
 }

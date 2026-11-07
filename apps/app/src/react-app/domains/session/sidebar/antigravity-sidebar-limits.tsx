@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { RefreshCw, Trash2, ExternalLink } from "lucide-react";
+import { RefreshCw, ExternalLink } from "lucide-react";
 import { openDesktopUrl } from "@/app/lib/desktop";
 import {
   formatQuotaResetShort,
@@ -86,25 +86,8 @@ export function AntigravitySidebarLimits() {
                   <span className="shrink-0 rounded bg-rose-500/15 px-1 py-px text-[9px] font-semibold text-rose-400">
                     Verify
                   </span>
-                ) : acc.isPlus ? (
-                  <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-semibold uppercase text-amber-400">
-                    Plus
-                  </span>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  void useAntigravityAccountsStore
-                    .getState()
-                    .deleteAccount(acc.email, workspace.client)
-                }
-                title={`Remove ${acc.email}`}
-                aria-label={`Remove ${acc.email}`}
-                className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-destructive/15 hover:text-destructive cursor-pointer"
-              >
-                <Trash2 className="size-3" />
-              </button>
             </div>
 
             {acc.verificationRequired ? (
