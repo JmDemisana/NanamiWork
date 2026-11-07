@@ -199,15 +199,15 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
 
   return (
     <>
-      <div className="inline-flex items-center gap-1">
+      <div className="inline-flex min-w-0 max-w-full items-center gap-1">
         <button
           type="button"
           disabled={disabled}
           aria-label="Change model"
           onClick={() => onOpenChange(!open)}
-          className="inline-flex h-9 min-w-0 items-center gap-1.5 px-2.5 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="inline-flex h-9 min-w-0 max-w-full shrink items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
-          <span className="max-w-72 truncate inline-flex items-center gap-1.5">
+          <span className="min-w-0 max-w-[140px] sm:max-w-[200px] md:max-w-72 truncate inline-flex items-center gap-1.5">
             {value.providerID === "nanami" ? <Lock className="size-3 shrink-0 text-amber-400 inline" /> : null}
             <span className="truncate">{triggerLabel}</span>
             {!hideValue && !antigravityModelLabel && !chatGptModelLabel && !copilotModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
@@ -222,7 +222,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
             onClick={cycleThinkingTier}
             title={`Thinking Capacity: ${thinkingTier.charAt(0).toUpperCase() + thinkingTier.slice(1)} (Click to switch)`}
             aria-label={`Thinking Capacity: ${thinkingTier}`}
-            className="inline-flex h-7 items-center rounded-md border border-border/70 bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+            className="shrink-0 inline-flex h-7 items-center rounded-md border border-border/70 bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
           >
             <span>Thinking: {thinkingTier.charAt(0).toUpperCase() + thinkingTier.slice(1)}</span>
           </button>
