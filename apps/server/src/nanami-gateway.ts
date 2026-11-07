@@ -73,6 +73,7 @@ function configuredGatewayKey(env: NodeJS.ProcessEnv): string {
     const apiKey = nanami.options.apiKey;
     if (typeof apiKey === "string" && apiKey.trim()) return apiKey.trim();
   }
+  }
   return "";
 }
 

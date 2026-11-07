@@ -680,7 +680,7 @@ const AssistantMessage = React.memo(
 
     return (
       <Message
-        className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
+        className="nanami-rise mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -1015,7 +1015,7 @@ const UserMessage = React.memo(
 
     return (
       <Message
-        className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-2 md:px-10"
+        className="nanami-rise mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-2 md:px-10"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -1231,10 +1231,12 @@ const LoadingMessage = React.memo(({ elapsedSeconds, starting, backgroundShells 
   ) : null
   return (
     <Message className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10">
-      <div role={starting ? "status" : undefined} data-loading-message={starting ? "starting" : "working"} className="group/working py-1 text-sm text-muted-foreground">
-        {/* One shimmer sweeps the whole line, so Working and the count move as
-            one. A count the connection cannot confirm stays outside it, still. */}
-        <span className="ow-text-shimmer tabular-nums">
+      <div role={starting ? "status" : undefined} data-loading-message={starting ? "starting" : "working"} className="group/working flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
+        <span className="relative flex size-2 items-center justify-center">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60 duration-1000" />
+          <span className="relative inline-flex size-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]" />
+        </span>
+        <span className="ow-text-shimmer tabular-nums font-medium">
           {starting ? "Starting…" : `Working ${formatElapsedSeconds(elapsedSeconds)}`}
           {backgroundStale ? null : background}
         </span>

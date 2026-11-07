@@ -29,7 +29,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:hidden",
+        "fixed inset-0 isolate z-50 bg-black/45 backdrop-blur-xs duration-200 ease-out data-open:animate-in data-open:fade-in-0 data-closed:hidden",
         className
       )}
       {...props}
@@ -53,7 +53,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed z-50 grid w-[min(calc(100vw-2rem),32rem)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 overflow-y-auto overscroll-contain bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-100 outline-none dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-closed:hidden top-[max(1rem,calc(env(safe-area-inset-top)+1rem))] left-1/2 -translate-x-1/2 data-open:zoom-in-95 sm:top-1/2 sm:-translate-y-1/2",
+          "fixed z-50 grid w-[min(calc(100vw-2rem),32rem)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-6 overflow-y-auto overscroll-contain bg-popover p-6 text-sm text-popover-foreground shadow-2xl ring-1 ring-foreground/5 duration-200 ease-out outline-none dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-closed:hidden top-[max(1rem,calc(env(safe-area-inset-top)+1rem))] left-1/2 -translate-x-1/2 data-open:zoom-in-[0.98] sm:top-1/2 sm:-translate-y-1/2",
           className
         )}
         {...props}

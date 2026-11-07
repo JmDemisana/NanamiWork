@@ -73,6 +73,21 @@ const ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG: Record<string, unknown> = {
       limit: { context: 200000, output: 64000 },
       modalities: ANTIGRAVITY_MODALITIES,
     },
+    "antigravity-claude-sonnet-5-5-high": {
+      name: "Claude Sonnet 5.5 (High)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-sonnet-5-5-medium": {
+      name: "Claude Sonnet 5.5 (Medium)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-sonnet-5-5-low": {
+      name: "Claude Sonnet 5.5 (Low)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
     "antigravity-claude-opus-4-6-thinking": {
       name: "Claude Opus 4.6 (Thinking)",
       limit: { context: 200000, output: 64000 },
@@ -81,6 +96,21 @@ const ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG: Record<string, unknown> = {
         low: { thinkingConfig: { thinkingBudget: 8192 } },
         max: { thinkingConfig: { thinkingBudget: 32768 } },
       },
+    },
+    "antigravity-claude-opus-5-5-high": {
+      name: "Claude Opus 5.5 (High)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-opus-5-5-medium": {
+      name: "Claude Opus 5.5 (Medium)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
+    },
+    "antigravity-claude-opus-5-5-low": {
+      name: "Claude Opus 5.5 (Low)",
+      limit: { context: 200000, output: 64000 },
+      modalities: ANTIGRAVITY_MODALITIES,
     },
     "antigravity-gpt-oss-120b-medium": {
       name: "GPT-OSS 120B (Medium)",

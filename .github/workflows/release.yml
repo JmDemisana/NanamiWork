@@ -51,6 +51,7 @@ jobs:
           if-no-files-found: error
           path: |
             apps/desktop/dist-electron/*.exe
+            apps/desktop/dist-electron/latest*.yml
 
   build-linux:
     name: Build Linux (AppImage & Debian)
@@ -95,6 +96,7 @@ jobs:
           path: |
             apps/desktop/dist-electron/*.AppImage
             apps/desktop/dist-electron/*.deb
+            apps/desktop/dist-electron/latest-linux*.yml
 
   build-macos:
     name: Build macOS (DMG & Zip)
@@ -138,6 +140,7 @@ jobs:
           path: |
             apps/desktop/dist-electron/*.dmg
             apps/desktop/dist-electron/*.zip
+            apps/desktop/dist-electron/latest-mac*.yml
 
   publish-release:
     name: Publish GitHub Release

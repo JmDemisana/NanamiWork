@@ -436,41 +436,7 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
         if (!isCurrentRequest()) return;
       }
       if (manual && activeReleaseChannel === "stable") {
-        const channelState = await bridge.getChannel?.();
-        if (!isCurrentRequest()) return;
-        const currentVersion = channelState?.currentVersion ?? appVersion;
-        if (!currentVersion) {
-          throw new Error("Could not determine the installed OpenWork version.");
-        }
-
-        const selection = await resolveFreshStableDesktopUpdate({
-          currentVersion,
-          refreshDesktopConfig,
-        });
-        if (!isCurrentRequest()) return;
-        if (!selection) {
-          throw new Error("Den returned an invalid desktop release inventory.");
-        }
-        if (selection.kind === "blocked") {
-          setUpdateStatus({
-            state: "blocked",
-            lastCheckedAt: Date.now(),
-            version: selection.latestPublishedVersion,
-            message: t("settings.update_blocked_org", undefined, {
-              version: selection.latestPublishedVersion,
-            }),
-          });
-          return;
-        }
-        if (selection.kind === "current") {
-          setUpdateStatus({
-            state: "idle",
-            lastCheckedAt: Date.now(),
-            version: selection.latestPublishedVersion,
-          });
-          return;
-        }
-        targetVersion = selection.targetVersion;
+        targetVersion = undefined;
       }
 
       let result = await bridge.check(activeReleaseChannel, targetVersion);
@@ -580,14 +546,7 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
     const channel = downloadedReleaseChannelRef.current ?? releaseChannel;
     let targetVersion: string | undefined;
     if (channel === "stable") {
-      const channelState = await bridge.getChannel?.();
-      if (!isCurrentRequest()) return null;
-      const currentVersion = channelState?.currentVersion ?? appVersion;
-      if (!currentVersion) throw new Error(t("updates.installed_version_unknown"));
-      const selection = await resolveFreshStableDesktopUpdate({ currentVersion, refreshDesktopConfig });
-      if (!isCurrentRequest()) return null;
-      if (!selection) throw new Error(t("updates.release_inventory_invalid"));
-      if (selection.kind === "update") targetVersion = selection.targetVersion;
+      targetVersion = undefined;
     }
     const result = await bridge.check(channel, targetVersion, { preserveStaged: true });
     if (!isCurrentRequest()) return null;

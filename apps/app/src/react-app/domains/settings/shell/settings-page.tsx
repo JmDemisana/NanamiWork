@@ -213,7 +213,7 @@ export function getGlobalSettingsTabs(
   _capabilities: Pick<PlatformCapabilities, "autoUpdate">,
   options: { computerUse?: boolean } = {},
 ): SettingsTab[] {
-  const tabs: SettingsTab[] = ["appearance", "shortcuts", "environment"];
+  const tabs: SettingsTab[] = ["appearance", "shortcuts", "environment", "updates"];
   if (options.computerUse) tabs.push("computer");
   if (developerMode) tabs.push("debug");
   return tabs;
