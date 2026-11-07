@@ -1000,6 +1000,8 @@ const UserMessage = React.memo(
       () => message.parts.filter((part) => (part.type === "text" && Boolean(part.text)) || isFileUIPart(part)),
       [message.parts],
     )
+    const fileParts = React.useMemo(() => inlineParts.filter(isFileUIPart), [inlineParts])
+    const textParts = React.useMemo(() => inlineParts.filter((p) => !isFileUIPart(p)), [inlineParts])
     const hasContent = inlineParts.length > 0
     // Same actions, in the same order, as the buttons below the bubble.
     const [confirmUndo, setConfirmUndo] = React.useState(false);
@@ -1035,38 +1037,34 @@ const UserMessage = React.memo(
                     style={{ userSelect: "text" }}
                     onClick={openLink}
                   >
-                    {inlineParts.map((part, index) => {
-                      const pill = textPartComposerPill(part)
-                      if (pill) return <ComposerPillChip key={`pill-${index}`} pill={pill} />
-                      if (part.type === "text" && isPastedTextPart(part)) return <PastedTextChip key={`pasted-${index}`} text={part.text} />
-                      const mention = textPartMentionBadge(part)
-                      if (mention) return <ComposerBadgeChip key={`mention-${index}`} badge={mention} />
-                      if (part.type === "text") {
-                        return (
-                          <span key={`text-${index}`} className="whitespace-pre-wrap">
-                            {renderUserText(part.text, highlightQuery, references)}
-                          </span>
-                        )
-                      }
-                      if (isFileUIPart(part)) {
-                        // An attachment is identified by its position among the
-                        // message's files, not by its URL or filename: a sent image
-                        // first shows the composer's blob: preview, then the server's
-                        // recompressed data: copy. Keeping one element lets the
-                        // browser swap the bitmap in place instead of remounting an
-                        // <img> that has to decode before it can paint.
-                        const attachmentIndex = inlineParts.slice(0, index).filter(isFileUIPart).length
-                        return (
-                          <span
-                            key={`file-${attachmentIndex}`}
-                            className="mx-1 inline-flex align-middle not-prose"
-                          >
+                    {fileParts.length > 0 && (
+                      <div className={cn("flex flex-wrap items-center gap-2 not-prose", textParts.length > 0 && "mb-2")}>
+                        {fileParts.map((part, index) => (
+                          <span key={`file-${index}`} className="inline-flex">
                             <FileMessage part={part} tone="user" />
                           </span>
-                        )
-                      }
-                      return null
-                    })}
+                        ))}
+                      </div>
+                    )}
+                    {textParts.length > 0 && (
+                      <div className="whitespace-pre-wrap leading-6">
+                        {textParts.map((part, index) => {
+                          const pill = textPartComposerPill(part)
+                          if (pill) return <ComposerPillChip key={`pill-${index}`} pill={pill} />
+                          if (part.type === "text" && isPastedTextPart(part)) return <PastedTextChip key={`pasted-${index}`} text={part.text} />
+                          const mention = textPartMentionBadge(part)
+                          if (mention) return <ComposerBadgeChip key={`mention-${index}`} badge={mention} />
+                          if (part.type === "text") {
+                            return (
+                              <span key={`text-${index}`}>
+                                {renderUserText(part.text, highlightQuery, references)}
+                              </span>
+                            )
+                          }
+                          return null
+                        })}
+                      </div>
+                    )}
                   </MessageContent>
                 ) : null}
                 {!isStreaming && !wall && (
