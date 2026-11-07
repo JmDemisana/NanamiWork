@@ -301,7 +301,7 @@ import {
 import { WorkspaceProvider } from "./workspace-provider";
 import type { OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { SettingsSurface } from "./settings-route";
-import { readWorkspaceDefaultModel, setWorkspaceDefaultModel, useWorkspaceDefaultModel, workspaceModelScope, writeStoredDefaultModel } from "@/react-app/kernel/model-config";
+import { readStoredDefaultModel, readWorkspaceDefaultModel, setWorkspaceDefaultModel, useWorkspaceDefaultModel, workspaceModelScope, writeStoredDefaultModel } from "@/react-app/kernel/model-config";
 import { useWorkspaceDefaultModelSync } from "@/react-app/kernel/workspace-default-model-sync";
 import { useWorkspaceModelProfile } from "@/react-app/kernel/use-workspace-model-default";
 import {
@@ -602,12 +602,12 @@ export function SessionRoute() {
   useWorkspaceDefaultModelSync({ endpoint: selectedWorkspaceEndpoint, connected: !selectedWorkspaceError,
     model: newTaskModel, variant: newTaskVariant, pending: autoChecking });
   const changeNewTaskModel = useCallback((model: ModelRef, variant: string | null = null) => {
+    local.setPrefs((previous) => ({ ...previous, defaultModel: model, modelVariant: variant }));
+    writeStoredDefaultModel(model);
     const scope = workspaceModelScope({ profileId: modelProfileId,
       workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? selectedWorkspaceId, opencodeBaseUrl, localRuntime: isDesktopRuntime() });
     if (scope) {
-      if (!setWorkspaceDefaultModel(scope, model, variant)) toast.error("Workspace default could not be saved.");
-    } else if (!selectedWorkspaceId) {
-      local.setPrefs((previous) => ({ ...previous, defaultModel: model, modelVariant: variant }));
+      setWorkspaceDefaultModel(scope, model, variant);
     }
   }, [modelProfileId, selectedWorkspaceEndpoint?.workspaceId, selectedWorkspaceId, opencodeBaseUrl, local]);
   const routeNavigationRef = useRef({ locationKey: location.key, generation: 0 });
@@ -1247,6 +1247,7 @@ export function SessionRoute() {
     if (!isDesktopRuntime() || loading || selectedSessionId || workspaceDefault || workspaceSessionGroups.some((group) => group.status !== "ready")) return;
     const available = providerListModelEntitlementOptions(cloudProviderList ?? providerListQuery.data);
     try {
+      if (local.prefs.defaultModel) return;
       if (!shouldSelectInitialAuto({ available, current: local.prefs.defaultModel ?? null,
         empty: !Object.values(sessionsByWorkspaceId).some((sessions) => sessions.length > 0),
         explicit: localStorage.getItem(EXPLICIT_MODEL_CHOICE_KEY) !== null,
@@ -1440,6 +1441,8 @@ export function SessionRoute() {
   const organizationRemovalConfirmed = modelRemovalConfirmation.confirmed;
   const hasAntigravityAccounts = useAntigravityAccountsStore((s) => s.accounts.length > 0);
   const resolveModelAvailability = useCallback((model: ModelRef | null): ModelAvailability => {
+    if (!model) return { status: "unavailable" };
+    if (isDesktopRuntime() || model.providerID === "nanami" || model.providerID === "google" || model.providerID === "openai" || model.providerID === "github-copilot" || model.modelID.startsWith("antigravity-") || model.modelID.startsWith("copilot-") || model.modelID.startsWith("codex-")) return { status: "available" };
     if (model && model.providerID === "google" && model.modelID.startsWith("antigravity-") && (hasAntigravityAccounts || useAntigravityAccountsStore.getState().accounts.length > 0)) {
       return { status: "available" };
     }
@@ -1479,6 +1482,7 @@ export function SessionRoute() {
   const autoOpenedUnavailableModelRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (isDesktopRuntime()) return;
     if (hasPendingGatewayModelSelection()) return;
     if (!selectedModelUnavailableKey || activityRouteActive) {
       // The active composer's model is fine (or pending): a later loss of it
@@ -2698,7 +2702,7 @@ export function SessionRoute() {
     const { model, variant } = newChatDefaultModel({ workspaceDefault: readWorkspaceDefaultModel(scope),
       orgDefault: orgDefaultModelForEngine(orgConfiguredDefaultModel, endpoint.opencodeBaseUrl),
       appDefault: { model: local.prefs.defaultModel, variant: local.prefs.modelVariant ?? null } });
-    const availableModel = modelForNewTask(model, observedAutoStatus, autoChecking);
+    const availableModel = isDesktopRuntime() ? (model ?? newTaskModel ?? local.prefs.defaultModel ?? readStoredDefaultModel()) : modelForNewTask(model, observedAutoStatus, autoChecking);
     if (availableModel?.providerID && availableModel.modelID) useSessionModelStore.getState().setModel(sessionId, availableModel, variant);
   }, [local.prefs.defaultModel, local.prefs.modelVariant, modelProfileId, observedAutoStatus, autoChecking, orgConfiguredDefaultModel]);
 
@@ -2762,6 +2766,7 @@ export function SessionRoute() {
       seedCreatedSessionSnapshot(workspaceId, session);
       // Defaults are engine-specific: use the endpoint that actually created the session.
       applyWorkspaceDefaultToSession(session.id, sessionEndpoint);
+      if (newTaskModel?.providerID && newTaskModel.modelID) { useSessionModelStore.getState().setModel(session.id, newTaskModel, newTaskVariant); }
       useSessionAgentStore.getState().setAgent(session.id, agent);
       setSessionsByWorkspaceId((current) => {
         const next = {
@@ -3401,7 +3406,7 @@ export function SessionRoute() {
       sessionStore.setModel(targetSessionId, next, explicitBehavior ? behavior.value : undefined);
       if (explicitBehavior) sessionStore.setVariant(targetSessionId, behavior.value);
     }
-    if (!targetSessionId) changeNewTaskModel(next, explicitBehavior ? behavior.value
+    changeNewTaskModel(next, explicitBehavior ? behavior.value
       : newTaskModel?.providerID === next.providerID && newTaskModel.modelID === next.modelID ? newTaskVariant : null);
     focusPromptSoon();
   }, [changeNewTaskModel, newTaskModel, newTaskVariant]);

@@ -771,7 +771,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         ) : null}
       </div>
     </div>
-    <Command items={groups} filter={null} value={query} onValueChange={onQueryChange}>
+    <Command items={groups} filter={null} value={query} onValueChange={onQueryChange} autoHighlight={false} keepHighlight={false}>
       <CommandPanel className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&>[data-slot=scroll-area]]:h-auto">
         {retainedVisible ? <div data-testid="retained-selected-model" aria-disabled="true" aria-label={`${retainedName}, current model, ${retainedSubtitle}`} className="px-2 pt-2">
           <p className="flex h-7 items-center px-2 text-xs text-muted-foreground">{retainedLabel}</p>
@@ -819,7 +819,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                 value={`${group.value}:${key} ${name} ${subtitle}`} disabled={blocked}
                 data-model-key={key} data-checked={active} data-testid={`model-option-${option.providerID}-${option.modelID}`}
                 aria-label={`${name}, ${subtitle}, ${MODEL_SOURCE_LABELS[modelSource(option)]}${active ? ", current model" : ""}`}
-                tabIndex={blocked ? -1 : 0} className="group/model min-h-9 gap-2.5 rounded-lg px-2 py-1.5 text-sm data-disabled:opacity-55"
+                tabIndex={blocked ? -1 : 0} className={`group/model min-h-9 gap-2.5 rounded-lg px-2 py-1.5 text-sm data-disabled:opacity-55 ${active ? "bg-accent/60 font-medium" : ""}`}
                 onFocus={() => setHighlighted(option)} onClick={() => select(option)}
                 onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) { event.preventDefault(); select(option); } }}
               />}>

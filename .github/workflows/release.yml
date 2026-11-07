@@ -40,7 +40,7 @@ jobs:
           SIGN_WINDOWS: "false"
 
       - name: Package Windows installer
-        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis appx --publish never
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
         env:
           SIGN_WINDOWS: "false"
 
@@ -56,6 +56,7 @@ jobs:
             apps/desktop/dist-electron/latest*.yml
 
   build-linux:
+    if: false
     name: Build Linux (AppImage & Debian)
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -101,6 +102,7 @@ jobs:
             apps/desktop/dist-electron/latest-linux*.yml
 
   build-macos:
+    if: false
     name: Build macOS (DMG & Zip)
     runs-on: macos-latest
     timeout-minutes: 60
@@ -146,7 +148,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -164,14 +166,14 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.0' }}
-          name: "NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.0' }}"
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}
+          name: "NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            # 🌸 NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.0' }}
+            # 🌸 NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}
 
             **NanamiWork** is an agent instance manager and unified desktop frontend bringing your **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot** accounts together.
 
@@ -183,7 +185,7 @@ jobs:
             - **Linux (Universal)**: `Nanami-*-linux-*.AppImage`
             - **macOS**: `Nanami-*-mac-*.dmg` / `.zip`
 
-            ### ✨ What's New in v1.1.0
+            ### ✨ What's New in v1.1.1
             - **Unified 3-in-1 Agent Instance Manager**: Easily connect and switch across Google Antigravity, Codex (ChatGPT), and GitHub Copilot with 1-click device & browser authorization.
             - **GitHub Copilot Integration**: Full personal account support (Student Developer Pack & Individual) via 1-click GitHub device authorization, automatic model discovery (`gpt-4.1` Auto routing), and live monthly quota monitoring.
             - **Multi-Account Codex (ChatGPT)**: Dynamic rolling limit monitoring (5-hour, weekly, monthly) with reasoning effort selector (Low / Medium / High).
