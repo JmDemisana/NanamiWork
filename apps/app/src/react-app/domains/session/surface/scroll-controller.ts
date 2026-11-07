@@ -301,7 +301,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         reserveLoadingGeometry();
         return;
       }
-      const mobile = window.matchMedia("(max-width: 1023px)").matches;
+      const mobile = false; // Disabled mobile turn pinning so narrow views never scroll to top or create empty padding
       if (pendingSubmittedMessageId && mobile) {
         mobileTurnId = pendingSubmittedMessageId;
         mobileTurnPinned = true;

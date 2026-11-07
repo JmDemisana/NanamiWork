@@ -2710,7 +2710,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
       return;
     }
     await handleSend();
-  }, [autoSending, handleQueue, handleSend, props.sessionId, sessionOwner]);
+    sessionScroll.jumpToLatest("instant");
+  }, [autoSending, handleQueue, handleSend, sessionScroll.jumpToLatest, props.sessionId, sessionOwner]);
 
   const removeQueuedDraft = useCallback((id: string) => {
     const target = queuedItems.find((item) => item.id === id);
@@ -4034,7 +4035,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         onSend={() => handleSend()}
         onSteer={handleSteer}
         childConversation={Boolean(snapshot?.session.parentID)}
-        onQueue={handleQueue}
+        onQueue={handleSteer}
         onStop={async () => { await handleAbort(); }}
         busy={composerBusy}
         editing={editing}

@@ -385,8 +385,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
       steer: options.queue,
     });
     if (action === "send") void current.onSend();
-    else if (action === "steer") void current.onSteer();
-    else if (action === "queue") void current.onQueue();
+    else if (action === "steer" || action === "queue") void current.onSteer();
   }, [props.childConversation, props.busy, props.disabled, props.editing, props.draft, props.attachments, props.onSend, props.onSteer, props.onQueue, props.submissionPreparing, props.stopping]);
 
   const showStop = props.busy && !props.editing;
