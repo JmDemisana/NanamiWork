@@ -77,7 +77,9 @@
     "release:cut": "node scripts/release/cut.mjs",
     "release:cut:watch": "node scripts/release/cut.mjs --watch",
     "evals:check-browser": "pnpm --dir evals check:browser",
-    "evals:check": "pnpm --dir evals run check"
+    "evals:check": "pnpm --dir evals run check",
+    "release:rotator": "gh workflow run rotator.yml",
+    "release:completer": "gh workflow run release.yml"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "6.16.3",

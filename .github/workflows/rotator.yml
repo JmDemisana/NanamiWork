@@ -1,0 +1,100 @@
+name: NanamiWork Rotator (Windows Test Channel)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_prerelease:
+        description: "Publish to rotator-test pre-release on GitHub"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "*rotator*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Electron app
+        run: pnpm --filter @openwork/desktop build:electron
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Package Windows installer
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+        env:
+          SIGN_WINDOWS: "false"
+
+      - name: Upload Windows test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotator-windows-installer
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            apps/desktop/dist-electron/*.exe
+
+  publish-rotator:
+    name: Publish Rotator Test Pre-release
+    needs: [build-windows]
+    if: always() && needs.build-windows.result == 'success' && (github.event_name == 'push' || github.event.inputs.publish_prerelease == 'true' || github.event.inputs.publish_prerelease == true)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: rotator-windows-installer
+          path: rotator-assets
+
+      - name: List downloaded artifacts
+        run: ls -la rotator-assets
+
+      - name: Create or Update Rotator Test Pre-Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "rotator-test"
+          target_commitish: ${{ github.sha }}
+          name: "NanamiWork Rotator (Windows Test Channel)"
+          draft: false
+          prerelease: true
+          files: rotator-assets/*.exe
+          generate_release_notes: false
+          body: |
+            ### 🧪 NanamiWork Rotator (Windows Test Channel)
+
+            > [!NOTE]
+            > This is an automated **Windows-only test build** intended for quick local testing and verification.
+            > It is flagged as a **Pre-release** and is deliberately isolated from the stable auto-update feed (`latest`).
+            > Stable desktop installations will **NOT** be prompted to update to this test build.
+
+            - **Target OS**: Windows (x64 NSIS Installer)
+            - **Commit**: ${{ github.sha }}
+            - **Channel**: Rotator (Test)
+
+            Once verified on Windows, trigger **NanamiWork Completer** (`release:completer`) to build all platforms (Windows, Linux, macOS) and publish the official production release.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

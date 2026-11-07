@@ -1,10 +1,16 @@
-name: Release NanamiWork
+name: NanamiWork Completer (Multi-Platform Release)
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.1.1)"
+        required: false
+        default: "v1.1.1"
   push:
     tags:
       - "v*"
+      - "!*rotator*"
 
 permissions:
   contents: write
@@ -164,8 +170,8 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}
-          name: "NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}"
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.1' }}
+          name: "NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.1' }}"
           draft: false
           prerelease: false
           files: release-assets/*
