@@ -745,7 +745,7 @@ export function registerUpdaterIpc({
       const targetVersion = rawTargetVersion === undefined
         ? null
         : normalizeStableTargetVersion(rawTargetVersion);
-      if (rawTargetVersion !== undefined && !targetVersion) {
+      if (Boolean(rawTargetVersion) && !targetVersion) {
         throw new Error("Target update version must use the stable x.y.z format.");
       }
       const channelState = updater
