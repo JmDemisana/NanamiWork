@@ -13,11 +13,12 @@ import { useWorkspace } from "@/react-app/shell/workspace-provider";
 import { useSetWorkspaceDefaultModel } from "@/react-app/kernel/use-workspace-model-default";
 import { useCheckDesktopRestriction } from "@/react-app/domains/cloud/desktop-config-provider";
 import { openAutoProviderSettings } from "@/react-app/domains/cloud/auto-access-ui";
-import { confirmAntigravityAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
+import { confirmAntigravityAuthEvent, confirmCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import { newProvidersEvent } from "@/app/lib/provider-events";
 import { openComposerModelPickerEvent } from "@/app/lib/inference-access";
 import { fixedModelTitle, managesOwnBehavior, modelTitle, nonDefaultModelSummary, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
 import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, resolveAntigravityModelForTier, useAntigravityAccountsStore, type ThinkingTier } from "@/react-app/domains/models/antigravity-accounts-store";
+import { useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-accounts-store";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
 
@@ -61,6 +62,8 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const antigravityAccounts = useAntigravityAccountsStore((s) => s.accounts);
   const thinkingTier = useAntigravityAccountsStore((s) => s.thinkingTier);
   const activeAntigravityAccount = antigravityAccounts.find((a) => a.isActive) ?? antigravityAccounts[0];
+  const chatGptAccounts = useChatGptAccountsStore((s) => s.accounts);
+  const activeChatGptAccount = chatGptAccounts.find((a) => a.isActive) ?? chatGptAccounts[0];
 
   React.useEffect(() => {
     useAntigravityAccountsStore.getState().setSelectedModel(value);
@@ -69,6 +72,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   React.useEffect(() => {
     if (workspace.client) {
       void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
+      void useChatGptAccountsStore.getState().loadAccounts(workspace.client);
     }
   }, [workspace.client, open]);
 
@@ -76,13 +80,16 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     const reload = () => {
       if (workspace.client) {
         void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
+        void useChatGptAccountsStore.getState().loadAccounts(workspace.client);
       }
     };
     window.addEventListener(newProvidersEvent, reload);
     window.addEventListener(confirmAntigravityAuthEvent, reload);
+    window.addEventListener(confirmCodexAuthEvent, reload);
     return () => {
       window.removeEventListener(newProvidersEvent, reload);
       window.removeEventListener(confirmAntigravityAuthEvent, reload);
+      window.removeEventListener(confirmCodexAuthEvent, reload);
     };
   }, [workspace.client]);
 
@@ -124,7 +131,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
       onOpenChange(false);
     };
 
-    if (option.providerID === "google") {
+    if (option.providerID === "google" || (option.providerID === "openai" && chatGptAccounts.length > 0)) {
       commit();
       return;
     }
@@ -154,11 +161,19 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     ? (activeAntigravityItem?.displayName
       ?? (value.modelID === "antigravity-gemini-4-argon" ? "Gemini 4 Argon" : value.modelID === "antigravity-gemini-4-argon-high" ? "Gemini 4 Argon (High)" : undefined))
     : undefined;
+  const activeChatGptItem = value.providerID === "openai"
+    ? activeChatGptAccount?.models.find((m) => m.modelID === value.modelID)
+    : undefined;
+  const chatGptModelLabel = value.providerID === "openai" && activeChatGptAccount
+    ? (activeChatGptItem?.displayName ?? value.modelID)
+    : undefined;
   const triggerLabel = hideValue
     ? "Select model"
     : antigravityModelLabel
       ? (activeAntigravityAccount ? `${antigravityModelLabel} · ${activeAntigravityAccount.email}` : antigravityModelLabel)
-      : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
+      : chatGptModelLabel
+        ? `${chatGptModelLabel} · ${activeChatGptAccount!.email}`
+        : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
 
   return (
     <>

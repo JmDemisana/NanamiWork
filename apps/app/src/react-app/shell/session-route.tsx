@@ -169,7 +169,7 @@ import {
   useModelPickerCatalogStore,
 } from "@/react-app/domains/session/models/model-collections-store";
 import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
-import { openCodexAuthEvent, openModelPickerEvent, openProviderAuthEvent, openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh } from "@/react-app/shell/new-providers-listener";
+import { openCodexAuthEvent, confirmCodexAuthEvent, openModelPickerEvent, openProviderAuthEvent, openWorkbenchInstancesEvent, confirmAntigravityAuthEvent, runAntigravityOAuthFlow, runAntigravityConfirmAndRefresh, runChatGptOAuthFlow, runChatGptConfirmAndRefresh } from "@/react-app/shell/new-providers-listener";
 import {
   markComposerAutoSend,
 } from "@/react-app/domains/session/surface/composer-auto-send";
@@ -1058,7 +1058,7 @@ export function SessionRoute() {
     setDisabledProviderIds,
   });
 
-  // Always-mounted Antigravity OAuth & Confirm/Refresh listeners
+  // Always-mounted Antigravity & ChatGPT/Codex OAuth & Confirm/Refresh listeners
   useEffect(() => {
     const handleAddAntigravity = () => {
       void runAntigravityOAuthFlow(sessionProviderAuthStore);
@@ -1066,11 +1066,21 @@ export function SessionRoute() {
     const handleConfirmAntigravity = () => {
       void runAntigravityConfirmAndRefresh(sessionProviderAuthStore);
     };
+    const handleAddCodex = () => {
+      void runChatGptOAuthFlow(sessionProviderAuthStore);
+    };
+    const handleConfirmCodex = () => {
+      void runChatGptConfirmAndRefresh(sessionProviderAuthStore);
+    };
     window.addEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
     window.addEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+    window.addEventListener(openCodexAuthEvent, handleAddCodex);
+    window.addEventListener(confirmCodexAuthEvent, handleConfirmCodex);
     return () => {
       window.removeEventListener(openWorkbenchInstancesEvent, handleAddAntigravity);
       window.removeEventListener(confirmAntigravityAuthEvent, handleConfirmAntigravity);
+      window.removeEventListener(openCodexAuthEvent, handleAddCodex);
+      window.removeEventListener(confirmCodexAuthEvent, handleConfirmCodex);
     };
   }, [sessionProviderAuthStore]);
   const organizationAssignedModelOptions = useMemo(
@@ -3347,11 +3357,8 @@ export function SessionRoute() {
   useEffect(() => {
     const handler = () => handleOpenProviderAuth();
     window.addEventListener(openProviderAuthEvent, handler);
-    const codexHandler = () => handleOpenProviderAuth("openai");
-    window.addEventListener(openCodexAuthEvent, codexHandler);
     return () => {
       window.removeEventListener(openProviderAuthEvent, handler);
-      window.removeEventListener(openCodexAuthEvent, codexHandler);
     };
   }, [handleOpenProviderAuth]);
 

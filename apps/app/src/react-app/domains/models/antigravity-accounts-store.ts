@@ -348,13 +348,7 @@ if (fs.existsSync(accFile)) {
                 }
               } catch {}
             }
-            cfg.x_nanami_codex = {
-              accessToken: cData.tokens.access_token,
-              accountId: cData.tokens.account_id || '',
-              email,
-              planType: plan,
-              lastRefresh: cData.last_refresh || Date.now()
-            };
+            // x_nanami_codex managed by chatgpt-accounts-store.ts
           }
         }
       } catch {}

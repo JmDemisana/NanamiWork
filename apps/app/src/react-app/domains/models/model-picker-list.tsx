@@ -94,7 +94,11 @@ function menuChord(label: string, chord: string) {
   return <><span className="min-w-0 flex-1">{label}</span><kbd className="ml-4 font-sans text-xs text-muted-foreground">{chord}</kbd></>;
 }
 
-function AccountQuotaPill({ item }: { item: AntigravityModelItem }) {
+function AccountQuotaPill({
+  item,
+}: {
+  item: { remainingFraction: number | null; resetTime: string | null };
+}) {
   if (item.remainingFraction === null || item.remainingFraction === undefined) {
     return null;
   }
@@ -336,11 +340,7 @@ function ConnectedChatGptAccountGroup({
                 {item.displayName}
               </span>
 
-              {account.primaryWindow ? (
-                <span className="shrink-0 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-mono">
-                  {Math.min(100, Math.max(0, account.primaryWindow.usedPercent))}% used
-                </span>
-              ) : null}
+              <AccountQuotaPill item={item} />
 
               <span className="flex size-4 shrink-0 items-center justify-center">
                 {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
@@ -363,18 +363,37 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
   const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
 
-  // Filter out generic "google" provider models from standard groups since connected Antigravity accounts render as peer groups.
+  useEffect(() => {
+    void useChatGptAccountsStore.getState().loadAccounts();
+  }, []);
+
+  // Filter out generic "google" and "openai" provider models from standard groups since connected Antigravity and ChatGPT accounts render as peer groups.
   const nonGoogleOptions = useMemo(
-    () => options.filter((option) => option.providerID !== "google"),
-    [options],
+    () =>
+      options.filter(
+        (option) =>
+          option.providerID !== "google" &&
+          (chatGptAccounts.length === 0 || option.providerID !== "openai"),
+      ),
+    [options, chatGptAccounts.length],
   );
   const nonGoogleFavorites = useMemo(
-    () => favorites.filter((fav) => fav.providerID !== "google"),
-    [favorites],
+    () =>
+      favorites.filter(
+        (fav) =>
+          fav.providerID !== "google" &&
+          (chatGptAccounts.length === 0 || fav.providerID !== "openai"),
+      ),
+    [favorites, chatGptAccounts.length],
   );
   const nonGoogleRecent = useMemo(
-    () => recent.filter((rec) => rec.providerID !== "google"),
-    [recent],
+    () =>
+      recent.filter(
+        (rec) =>
+          rec.providerID !== "google" &&
+          (chatGptAccounts.length === 0 || rec.providerID !== "openai"),
+      ),
+    [recent, chatGptAccounts.length],
   );
 
   const modelShortcuts = useModelShortcutsStore((state) => state.shortcuts);
@@ -466,6 +485,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
     );
   };
   const selectChatGptModel = (account: ChatGptAccountInfo, item: ChatGptModelItem) => {
+    useAntigravityAccountsStore.getState().setSelectedModel({
+      providerID: "openai",
+      modelID: item.modelID,
+    });
     void useChatGptAccountsStore.getState().selectAccount(account.email);
     onSelect({
       providerID: "openai",
@@ -506,7 +529,8 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const failed = catalogState?.state === "error" || retryFailed;
   const empty = !loading && !hasOptions && !query.trim() && !failed;
   const isSelectedAntigravityAvailable = current.providerID === "google" && antigravityAccounts.length > 0;
-  const retained = !isSelectedAntigravityAvailable && retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
+  const isSelectedChatGptAvailable = current.providerID === "openai" && chatGptAccounts.length > 0;
+  const retained = !isSelectedAntigravityAvailable && !isSelectedChatGptAvailable && retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
     && !options.some((option) => modelRefKey(option) === modelRefKey(current) && !option.disabled) ? retainedSelection : undefined;
   const retainedCopy = retained ? retainedModelCopy(retained.reason) : null;
   const retainedName = retained ? (fixedModelTitle(retained.model, display) ?? (retained.title ? modelTitle({ ...retained.model, title: retained.title, description: retained.description }, display) : "Saved model")) : "";
@@ -787,6 +811,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               onClick={() => {
                 onClose?.();
                 useChatGptAccountsStore.getState().setModalOpen(true);
+                window.dispatchEvent(new Event(openCodexAuthEvent));
               }}
               title="Add ChatGPT / OpenAI Account"
             >

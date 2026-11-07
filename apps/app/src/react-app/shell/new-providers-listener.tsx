@@ -17,6 +17,7 @@ import { readOpencodeConfig, writeOpencodeConfig, type OpencodeConfigFile, openD
 import { refreshProviderListQueries } from "@/react-app/infra/provider-list-query";
 import { getReactQueryClient } from "@/react-app/infra/query-client";
 import { syncDiskAccountsViaTerminal, useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
+import { syncCodexDiskAccountsViaTerminal, useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-accounts-store";
 import { applyEdits, modify, parse } from "jsonc-parser";
 
 const SEEN_KEY = "openwork.seenProviderIds";
@@ -28,6 +29,8 @@ export const openModelPickerEvent = "openwork-open-model-picker";
 export const openProviderAuthEvent = "openwork-open-provider-auth";
 /** Custom event to request the provider auth modal focused on ChatGPT/Codex. */
 export const openCodexAuthEvent = "openwork-open-codex-auth";
+/** Custom event to confirm ChatGPT/Codex OAuth sign-in and refresh NanamiWork. */
+export const confirmCodexAuthEvent = "nanami-confirm-codex-auth";
 /** Custom event to request NanamiWork's Antigravity account sign-in. */
 export const openWorkbenchInstancesEvent = "nanami-open-workbench-instances";
 /** Custom event to confirm Antigravity OAuth sign-in and refresh NanamiWork. */
@@ -323,6 +326,72 @@ export async function runAntigravityConfirmAndRefresh(store: AntigravityAuthStor
     console.warn("Confirm & Refresh warning:", err);
   }
   window.location.reload();
+}
+
+let pendingCodexOAuthPromise: Promise<{ connected: boolean; pending?: boolean; message?: string } | null> | null = null;
+
+export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Promise<void> {
+  useChatGptAccountsStore.setState({ modalOpen: true, isConnecting: true, error: null });
+  try {
+    let authResult: { methodIndex: number; authorization: { url: string; method: string; instructions?: string } };
+    try {
+      authResult = await store.startProviderAuth("openai", 0);
+    } catch {
+      await store.refreshProviders({ dispose: true, force: true, configChanged: true }).catch(() => undefined);
+      authResult = await store.startProviderAuth("openai", 0);
+    }
+    const methodIndex = typeof authResult?.methodIndex === "number" ? authResult.methodIndex : 0;
+    const authUrl = authResult?.authorization?.url;
+    if (!authUrl) {
+      throw new Error("Missing OpenAI OAuth authorization URL");
+    }
+    useChatGptAccountsStore.setState({ authUrl, isConnecting: true });
+    await openDesktopUrl(authUrl).catch(() => undefined);
+
+    const completion = store
+      .completeProviderAuthOAuth("openai", methodIndex)
+      .then(async (res) => {
+        clearCachedProviderLists();
+        await syncCodexDiskAccountsViaTerminal({ type: "confirm" }).catch(() => undefined);
+        await store.refreshProviders({ dispose: true, force: true }).catch(() => undefined);
+        clearCachedProviderLists();
+        await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
+        await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
+        useChatGptAccountsStore.setState({ modalOpen: false, isConnecting: false });
+        return res;
+      })
+      .catch((err) => {
+        console.warn("ChatGPT OAuth background completion warning:", err);
+        return null;
+      });
+    pendingCodexOAuthPromise = completion;
+  } catch (err) {
+    console.warn("Server-side ChatGPT startProviderAuth failed, falling back to local PKCE:", err);
+    await useChatGptAccountsStore.getState().startBrowserLogin();
+  }
+}
+
+export async function runChatGptConfirmAndRefresh(store: AntigravityAuthStoreHandle): Promise<void> {
+  try {
+    clearCachedProviderLists();
+    if (pendingCodexOAuthPromise) {
+      await Promise.race([
+        pendingCodexOAuthPromise,
+        new Promise((resolve) => setTimeout(resolve, 800)),
+      ]);
+    }
+    await syncCodexDiskAccountsViaTerminal({ type: "confirm" }).catch(() => undefined);
+    await Promise.race([
+      store.refreshProviders({ dispose: true, force: true }).catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 1200)),
+    ]);
+    clearCachedProviderLists();
+    await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
+    await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
+    useChatGptAccountsStore.setState({ modalOpen: false, isConnecting: false });
+  } catch (err) {
+    console.warn("ChatGPT Confirm & Refresh warning:", err);
+  }
 }
 
 function readSeenProviderIds(): Set<string> {
