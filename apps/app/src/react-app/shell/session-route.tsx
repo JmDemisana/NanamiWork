@@ -1464,7 +1464,7 @@ export function SessionRoute() {
   // The composer the user is looking at: the selected conversation's
   // remembered model when it has one, otherwise the global default.
   useEffect(() => {
-    document.title = "NanamiWork";
+    document.title = "Nanami";
   }, []);
 
   useEffect(() => {

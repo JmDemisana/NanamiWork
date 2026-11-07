@@ -1,3 +1,4 @@
+import { ConfirmModal } from "@/react-app/design-system/modals/confirm-modal"
 "use memo";
 
 import { appBuildActivity, appBuildInProgress, appCreationRuns } from "@/react-app/domains/apps/app-creation-progress"
@@ -1090,45 +1091,19 @@ const UserMessage = React.memo(
             }
           />
           {wall ? <div className="w-full"><AutoAccessNotice wall={wall} sessionId={sessionId} workspaceId={workspaceId} recovery={rejectedRecoveryFromMessage(message)} /></div> : null}
-          {confirmUndo && (
-            <div
-              onClick={() => setConfirmUndo(false)}
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs select-none animate-in fade-in-0 duration-150"
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-sm rounded-none border border-amber-500/50 bg-zinc-950/95 p-5 shadow-2xl backdrop-blur-2xl space-y-3.5 text-left"
-              >
-                <div className="flex items-center gap-2 text-amber-400">
-                  <Undo2 className="h-4 w-4" />
-                  <h3 className="text-sm font-bold text-zinc-100">Undo Up to This Point?</h3>
-                </div>
-                <p className="text-xs leading-relaxed text-zinc-300">
-                  This will remove this message and all responses that follow it from the chat. Your original message text will be pasted back into the input box so you can adjust and resend it.
-                </p>
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setConfirmUndo(false)}
-                    className="h-8 rounded-none border border-zinc-800 px-3 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 cursor-pointer"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setConfirmUndo(false);
-                      onRevertToUserMessage(message.id, messageText);
-                    }}
-                    className="h-8 rounded-none bg-amber-600 px-3.5 text-xs font-semibold text-white hover:bg-amber-500 shadow-md cursor-pointer"
-                  >
-                    Confirm Undo
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+          <ConfirmModal
+            open={confirmUndo}
+            title="Undo Up to This Point?"
+            message="This will remove this message and all responses that follow it from the chat. Your original message text will be pasted back into the input box so you can adjust and resend it."
+            confirmLabel="Confirm Undo"
+            cancelLabel="Cancel"
+            variant="warning"
+            onConfirm={() => {
+              setConfirmUndo(false);
+              onRevertToUserMessage(message.id, messageText);
+            }}
+            onCancel={() => setConfirmUndo(false)}
+          />
       </Message>
     )
   }
