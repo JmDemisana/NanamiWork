@@ -2,7 +2,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import type { Agent } from "@opencode-ai/sdk/v2/client";
-import { Cloud, Monitor, Check, ChevronDown, FileText, RefreshCw, Terminal, Zap } from "lucide-react";
+import { Cloud, Monitor, Check, ChevronDown, FileText, RefreshCw, Terminal, Zap, X } from "lucide-react";
 import { ComposerSendButton } from "./composer-send-button";
 import fuzzysort from "fuzzysort";
 import { toast } from "@/components/ui/sonner";
@@ -1443,14 +1443,62 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
             </div>
           ) : null}
 
-          <div className="px-4 pt-3 pb-2">
+          {/* Attachment rail above the text editor */}
+          {props.attachments && props.attachments.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-1" data-testid="composer-attachments-bar">
+              {props.attachments.map((attachment) => {
+                const isImg = isImageAttachment(attachment);
+                return (
+                  <div
+                    key={attachment.id}
+                    className="group relative flex items-center gap-2 rounded-xl border border-border/70 bg-muted/40 p-1.5 pr-2.5 text-xs text-foreground shadow-xs transition-colors hover:border-border"
+                  >
+                    {isImg && attachment.previewUrl ? (
+                      <img
+                        src={attachment.previewUrl}
+                        alt={attachment.name}
+                        className="size-10 rounded-lg object-cover cursor-pointer hover:opacity-90"
+                        onClick={() => setExpandedAttachmentId(attachment.id)}
+                      />
+                    ) : (
+                      <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <FileText className="size-5" />
+                      </div>
+                    )}
+                    <div className="flex flex-col min-w-0 max-w-[140px]">
+                      <span className="truncate font-medium text-xs leading-4" title={attachment.name}>
+                        {attachment.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {isImg ? "Image" : "File"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        props.onRemoveAttachment?.(attachment.id);
+                      }}
+                      className="ml-1 rounded-full p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="px-4 pt-2.5 pb-2">
             {/* Editor */}
             <LexicalPromptEditor
               ref={editorRef}
               value={props.draft}
               mentions={props.mentions}
               pastedText={pastedTextTokens}
-              attachments={attachmentTokens}
+              attachments={[]}
               submitDisabled={props.disabled}
               placeholder={t("composer.placeholder")}
               onChange={nativeDictationEnabled ? dictation.edit : props.onDraftChange}

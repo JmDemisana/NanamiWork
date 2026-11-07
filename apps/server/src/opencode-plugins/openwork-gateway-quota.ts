@@ -142,10 +142,20 @@ export const OpenWorkGatewayQuota = async () => ({
                   tool_call: true,
                   attachment: true,
                   limit: { context: 128000, output: 16384 },
-                  capabilities: {
-                    tools: true,
+                  modalities: {
                     input: ["text", "image"],
                     output: ["text"],
+                  },
+                  capabilities: {
+                    tools: true,
+                    attachment: true,
+                    input: {
+                      text: true,
+                      image: true,
+                    },
+                    output: {
+                      text: true,
+                    },
                   },
                 },
               },
