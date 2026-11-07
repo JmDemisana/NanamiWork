@@ -94,4 +94,4 @@ pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 ## 📄 License & Attribution
 
 NanamiWork is licensed under the [GNU General Public License v3.0 (GPL-3.0)](./LICENSE).  
-Derived from and built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) and [OpenCode](https://opencode.ai) (MIT License).
+Derived from and built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) by Different AI, Inc. (MIT License).
