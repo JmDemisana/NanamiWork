@@ -132,3 +132,12 @@ win:
     - nsis
 nsis:
   include: build/installer.nsh
+
+appx:
+  applicationId: NanamiWork
+  identityName: 
+  publisher: 
+  publisherDisplayName: 
+  languages:
+    - en-US
+  showNameOnTiles: true

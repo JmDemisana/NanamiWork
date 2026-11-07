@@ -1,0 +1,23 @@
+# yaml-language-server: =https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: JmDemisana.NanamiWork
+PackageVersion: 1.1.0
+InstallerLocale: en-US
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+UpgradeBehavior: install
+Protocols:
+  - openwork
+ReleaseDate: 2026-11-07
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/JmDemisana/NanamiWork/releases/download/v1.1.0/Nanami-1.1.0-win-x64.exe
+    InstallerSha256: EFD0A76BBA31ABF18CD228D73494D402315BC73569B2CF4534A9AC1989C426CF
+ManifestType: installer
+ManifestVersion: 1.6.0

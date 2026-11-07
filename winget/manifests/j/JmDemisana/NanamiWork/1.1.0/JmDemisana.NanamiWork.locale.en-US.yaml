@@ -1,0 +1,30 @@
+# yaml-language-server: =https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: JmDemisana.NanamiWork
+PackageVersion: 1.1.0
+PackageLocale: en-US
+Publisher: JmDemisana
+PublisherUrl: https://github.com/JmDemisana
+PublisherSupportUrl: https://github.com/JmDemisana/NanamiWork/issues
+Author: NanamiWork
+PackageName: NanamiWork
+PackageUrl: https://github.com/JmDemisana/NanamiWork
+License: GPL-3.0-or-later
+LicenseUrl: https://raw.githubusercontent.com/JmDemisana/NanamiWork/main/LICENSE
+Copyright: Copyright (c) 2026 NanamiWork
+CopyrightUrl: https://raw.githubusercontent.com/JmDemisana/NanamiWork/main/LICENSE
+ShortDescription: Unified AI agent instance manager and desktop workspace for Google Antigravity, OpenAI Codex, and GitHub Copilot.
+Description: |-
+  NanamiWork is an agent instance manager and unified desktop frontend bringing your
+  Google Antigravity, Codex (ChatGPT), and GitHub Copilot accounts together in one place.
+Moniker: nanamiwork
+Tags:
+  - ai
+  - agent
+  - antigravity
+  - copilot
+  - codex
+  - developer-tools
+  - electron
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
