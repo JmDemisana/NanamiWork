@@ -637,6 +637,20 @@ export async function getDesktopHomeDir(): Promise<string> {
   return invokeElectronHelper("__homeDir");
 }
 
+export async function readNanamiConfigFile(filename: string): Promise<{ exists: boolean; content: string | null }> {
+  if (typeof window === "undefined" || !window.__OPENWORK_ELECTRON__?.invokeDesktop) {
+    return { exists: false, content: null };
+  }
+  return window.__OPENWORK_ELECTRON__.invokeDesktop("readNanamiConfigFile", filename) as Promise<{ exists: boolean; content: string | null }>;
+}
+
+export async function writeNanamiConfigFile(filename: string, content: string): Promise<{ ok: boolean; path?: string }> {
+  if (typeof window === "undefined" || !window.__OPENWORK_ELECTRON__?.invokeDesktop) {
+    return { ok: false };
+  }
+  return window.__OPENWORK_ELECTRON__.invokeDesktop("writeNanamiConfigFile", filename, content) as Promise<{ ok: boolean; path?: string }>;
+}
+
 let cachedHomeDir: Promise<string | null> | null = null;
 
 /** The home folder for expanding `~/` in chat file links; null outside the desktop app. */

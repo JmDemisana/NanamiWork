@@ -5,6 +5,8 @@ import {
   getCachedDesktopHomeDir,
   readOpencodeConfig,
   writeOpencodeConfig,
+  readNanamiConfigFile,
+  writeNanamiConfigFile,
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
 import { applyEdits, modify, parse } from "jsonc-parser";
@@ -222,6 +224,67 @@ async function writeNanamiMeta(updater: (prev: NanamiAntigravityMeta) => NanamiA
     await writeOpencodeConfig("project", configDir, applyEdits(raw, edits));
   } catch (err) {
     console.warn("Could not write x_nanami_antigravity metadata:", err);
+  }
+}
+
+export async function syncAntigravityDiskState(email?: string, modelId?: string): Promise<void> {
+  try {
+    const accRes = await readNanamiConfigFile("antigravity-accounts.json");
+    if (!accRes.exists || !accRes.content) return;
+    const data = JSON.parse(accRes.content) as {
+      accounts?: Array<Record<string, unknown>>;
+      activeIndex?: number;
+      activeIndexByFamily?: Record<string, number>;
+    };
+    if (!Array.isArray(data.accounts) || data.accounts.length === 0) return;
+
+    const lowerTarget = (email ?? "").toLowerCase();
+    let targetIndex = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() === lowerTarget);
+    if (targetIndex < 0) {
+      targetIndex = Math.min(Math.max(0, data.activeIndex ?? 0), data.accounts.length - 1);
+    }
+
+    const currentModel = modelId ?? "";
+    const isClaude55 = currentModel.includes("5-5");
+    const isClaude46 = currentModel.includes("4-6");
+
+    // If Claude 5.5, ensure active account is Plus
+    if (isClaude55) {
+      const plusIdx = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() === "jmdems01@gmail.com" || (a.cachedQuota as any)?.claude?.modelCount === 6);
+      if (plusIdx >= 0) targetIndex = plusIdx;
+    } else if (isClaude46) {
+      // If Claude 4.6, ensure active account is Free
+      if (String(data.accounts[targetIndex]?.email ?? "").toLowerCase() === "jmdems01@gmail.com") {
+        const freeIdx = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() !== "jmdems01@gmail.com");
+        if (freeIdx >= 0) targetIndex = freeIdx;
+      }
+    }
+
+    data.activeIndex = targetIndex;
+    data.activeIndexByFamily = { claude: targetIndex, gemini: targetIndex };
+
+    // Set enabled flag per account based on model eligibility
+    data.accounts.forEach((a, i) => {
+      const isPlusAcc = String(a.email ?? "").toLowerCase() === "jmdems01@gmail.com" || (a.cachedQuota as any)?.claude?.modelCount === 6;
+      if (isClaude55) {
+        a.enabled = isPlusAcc;
+      } else if (isClaude46) {
+        a.enabled = !isPlusAcc && !a.verificationRequired;
+      } else {
+        a.enabled = !a.verificationRequired;
+      }
+    });
+
+    await writeNanamiConfigFile("antigravity-accounts.json", JSON.stringify(data, null, 2) + "\n");
+
+    // Also enforce sticky selection in antigravity.json
+    const cfgRes = await readNanamiConfigFile("antigravity.json");
+    const cfg = cfgRes.content ? JSON.parse(cfgRes.content) : {};
+    cfg.account_selection_strategy = "sticky";
+    cfg.soft_quota_threshold_percent = 100;
+    await writeNanamiConfigFile("antigravity.json", JSON.stringify(cfg, null, 2) + "\n");
+  } catch (err) {
+    console.warn("Could not sync Antigravity disk state:", err);
   }
 }
 
@@ -768,7 +831,13 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
   setIsConnecting: (connecting) => set({ isConnecting: connecting }),
   setError: (error) => set({ error }),
 
-  setSelectedModel: (model) => set({ selectedModel: model }),
+  setSelectedModel: (model) => {
+    set({ selectedModel: model });
+    if (model?.providerID === "google") {
+      const active = get().accounts.find((a) => a.isActive);
+      void syncAntigravityDiskState(active?.email, model.modelID);
+    }
+  },
 
   setThinkingTier: async (tier) => {
     set((state) => ({
@@ -957,6 +1026,8 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
         enabled: true,
       })),
     }));
+
+    void syncAntigravityDiskState(target.email, get().selectedModel?.modelID);
 
     if (!wasAlreadyActive) {
       try {

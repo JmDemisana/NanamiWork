@@ -2481,6 +2481,28 @@ const desktopCommandHandlers = {
         String(args[2] ?? ""),
       );
   },
+  "readNanamiConfigFile": async (event, ...args) => {
+      const filename = String(args[0] ?? "").trim();
+      const home = app.getPath("home");
+      const target = path.join(home, ".config", "nanamiwork", filename);
+      if (!existsSync(target)) return { exists: false, content: null };
+      return { exists: true, content: await readFile(target, "utf8") };
+  },
+  "writeNanamiConfigFile": async (event, ...args) => {
+      const filename = String(args[0] ?? "").trim();
+      const content = String(args[1] ?? "");
+      const home = app.getPath("home");
+      const target = path.join(home, ".config", "nanamiwork", filename);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, content, "utf8");
+      try {
+        const opencodeTarget = path.join(home, ".config", "opencode", filename);
+        if (existsSync(path.dirname(opencodeTarget))) {
+          await writeFile(opencodeTarget, content, "utf8");
+        }
+      } catch {}
+      return { ok: true, path: target };
+  },
   "resetOpenworkState": async (event, ...args) => {
       return workspaceStore.resetOpenworkState();
   },

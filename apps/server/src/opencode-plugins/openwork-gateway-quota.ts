@@ -257,6 +257,14 @@ export const OpenWorkGatewayQuota = async () => ({
         }
       } catch {}
 
+      const antigravityJsonFile = path.join(nanamiCfgDir, "antigravity.json");
+      try {
+        const agCfg = fs.existsSync(antigravityJsonFile) ? parseJsoncSafe(fs.readFileSync(antigravityJsonFile, "utf8")) : {};
+        agCfg.account_selection_strategy = "sticky";
+        agCfg.soft_quota_threshold_percent = 100;
+        fs.writeFileSync(antigravityJsonFile, JSON.stringify(agCfg, null, 2) + "\n", "utf8");
+      } catch {}
+
       const accFile = path.join(nanamiCfgDir, "antigravity-accounts.json");
       if (fs.existsSync(accFile) && fs.existsSync(jsoncFile)) {
         const accData = parseJsoncSafe(fs.readFileSync(accFile, "utf8")) as {
