@@ -40,7 +40,7 @@ jobs:
           SIGN_WINDOWS: "false"
 
       - name: Package Windows installer
-        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis appx --publish never
         env:
           SIGN_WINDOWS: "false"
 
@@ -51,6 +51,8 @@ jobs:
           if-no-files-found: error
           path: |
             apps/desktop/dist-electron/*.exe
+            apps/desktop/dist-electron/*.appx
+            apps/desktop/dist-electron/*.msix
             apps/desktop/dist-electron/latest*.yml
 
   build-linux:
