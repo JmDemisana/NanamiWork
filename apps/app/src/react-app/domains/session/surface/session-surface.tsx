@@ -2710,8 +2710,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       return;
     }
     await handleSend();
-    sessionScroll.jumpToLatest("instant");
-  }, [autoSending, handleQueue, handleSend, sessionScroll.jumpToLatest, props.sessionId, sessionOwner]);
+  }, [autoSending, handleQueue, handleSend, props.sessionId, sessionOwner]);
 
   const removeQueuedDraft = useCallback((id: string) => {
     const target = queuedItems.find((item) => item.id === id);
