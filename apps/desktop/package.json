@@ -62,5 +62,6 @@
     "electron": "^43.8.1",
     "electron-builder": "^26.18.0"
   },
-  "packageManager": "pnpm@10.27.0"
+  "packageManager": "pnpm@10.27.0",
+  "license": "GPL-3.0-or-later"
 }

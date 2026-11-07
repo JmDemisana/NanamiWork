@@ -5,7 +5,7 @@
   </p>
   <p align="center">
     <a href="https://github.com/JmDemisana/NanamiWork/releases"><img src="https://img.shields.io/github/v/release/JmDemisana/NanamiWork?color=emerald&label=Release" alt="Latest Release" /></a>
-    <a href="https://github.com/JmDemisana/NanamiWork/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" /></a>
+    <a href="https://github.com/JmDemisana/NanamiWork/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License" /></a>
   </p>
 </p>
 
@@ -93,5 +93,5 @@ pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 
 ## 📄 License & Attribution
 
-NanamiWork is licensed under the [MIT License](./LICENSE).  
-Built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) and [OpenCode](https://opencode.ai).
+NanamiWork is licensed under the [GNU General Public License v3.0 (GPL-3.0)](./LICENSE).  
+Derived from and built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) and [OpenCode](https://opencode.ai) (MIT License).
