@@ -1,13 +1,14 @@
 extends: ./electron-builder.base.yml
 appId: ai.nanami.workbench
-productName: Nanami
+productName: NanamiWork
 protocols:
-  - name: OpenWork
+  - name: NanamiWork
     schemes:
       - openwork
+      - nanamiwork
 linux:
-  executableName: openwork
-artifactName: Nanami-${version}-${os}-${arch}.${ext}
+  executableName: nanamiwork
+artifactName: NanamiWork-${version}-${os}-${arch}.${ext}
 
 appx:
   applicationId: NanamiWork

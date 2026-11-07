@@ -173,24 +173,20 @@ jobs:
           files: release-assets/*
           generate_release_notes: false
           body: |
-            # 🌸 NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}
+            # 🌸 NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }} (Hotfix)
 
-            **NanamiWork** is an agent instance manager and unified desktop frontend bringing your **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot** accounts together.
+            **NanamiWork v1.1.1** is a critical hotfix release addressing desktop UI branding, timeline rewind modal styling, and active model persistence.
 
-            *(Note: The built-in Nanami Gateway section is a private, optional utility reserved for trusted peers with a Gate PIN. The core application is entirely powered by your own connected developer instances and accounts.)*
+            ### 🩹 Hotfix Highlights & Improvements
+            - **Official NanamiWork Branding**: Restored `NanamiWork` product name across Windows Installed Apps, Start Menu shortcuts, window title bar, and startup screen.
+            - **Undo Rewind Modal Overhaul**: Replaced the previous clipped container with the authentic design-system `ConfirmModal` (Base UI Dialog portal to `document.body`) featuring soft backdrop blur, centered placement, and keyboard autofocus.
+            - **Model Selection & Anti-Flicker**:
+              - Fixed combobox auto-highlighting that previously made `Gemini 🔥` appear selected on open; the true active model is now clearly badged and highlighted.
+              - Selecting a model in any chat now locks as the persistent default across sessions.
+              - Creating a new task (`+` / `Ctrl+N`) strictly preserves your currently active model without resetting to starter models.
+              - Desktop account models (Antigravity, Copilot, ChatGPT, Nanami router) are permanently guarded against false-positive "unavailable" auto-switches while background accounts load.
 
             ### 📦 Downloads & Installers
-            - **Windows**: `Nanami-*-windows-*.exe` (NSIS Installer)
-            - **Linux (Debian/Ubuntu)**: `Nanami-*-linux-*.deb`
-            - **Linux (Universal)**: `Nanami-*-linux-*.AppImage`
-            - **macOS**: `Nanami-*-mac-*.dmg` / `.zip`
-
-            ### ✨ What's New in v1.1.1
-            - **Unified 3-in-1 Agent Instance Manager**: Easily connect and switch across Google Antigravity, Codex (ChatGPT), and GitHub Copilot with 1-click device & browser authorization.
-            - **GitHub Copilot Integration**: Full personal account support (Student Developer Pack & Individual) via 1-click GitHub device authorization, automatic model discovery (`gpt-4.1` Auto routing), and live monthly quota monitoring.
-            - **Multi-Account Codex (ChatGPT)**: Dynamic rolling limit monitoring (5-hour, weekly, monthly) with reasoning effort selector (Low / Medium / High).
-            - **Visual & Modal Parity**: Consistent, clean card designs across all platform auth dialogs and model picker lists.
-            - **Strict Sandbox Isolation**: NanamiWork runs completely inside `~/.config/nanamiwork` and `~/.config/nanamiwork/data`, with zero pollution or conflicts with standalone OpenCode, OpenWork, VS Code Copilot, or Codex installations.
-            - **Undo Up to This Point**: Timeline rewinding restoring prompt drafts directly into composer with autofocus.
+            - **Windows**: `NanamiWork-1.1.1-win-x64.exe` (NSIS Installer)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
