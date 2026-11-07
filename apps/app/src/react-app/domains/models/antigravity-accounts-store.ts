@@ -576,7 +576,19 @@ async function fetchAccountModelsAndQuota(
     tierModelIds: flashTierIds,
   });
 
-  if (isPlus) {
+  const hasClaude55 = Boolean(
+    modelsMap["claude-sonnet-5-5-high"] ||
+    modelsMap["claude-sonnet-5-5-medium"] ||
+    modelsMap["claude-sonnet-5-5-low"],
+  );
+  const hasClaude46 = Boolean(
+    modelsMap["claude-sonnet-4-6"] && !modelsMap["claude-sonnet-4-6"].disabled,
+  );
+  const hasGptOss = Boolean(
+    modelsMap["gpt-oss-120b-medium"] && !modelsMap["gpt-oss-120b-medium"].disabled,
+  );
+
+  if (hasClaude55) {
     const claudeSonnetTierIds: Record<ThinkingTier, string> = {
       low: "antigravity-claude-sonnet-5-5-low",
       medium: "antigravity-claude-sonnet-5-5-medium",
@@ -609,7 +621,7 @@ async function fetchAccountModelsAndQuota(
         tierModelIds: claudeOpusTierIds,
       },
     );
-  } else {
+  } else if (hasClaude46) {
     resolvedModels.push(
       {
         familyKey: "claude-sonnet",
@@ -642,15 +654,17 @@ async function fetchAccountModelsAndQuota(
     );
   }
 
-  resolvedModels.push({
-    familyKey: "gpt-oss-120b",
-    modelID: "antigravity-gpt-oss-120b-medium",
-    rawId: "gpt-oss-120b-medium",
-    displayName: "GPT-OSS 120B",
-    remainingFraction: effectiveClaudeWeeklyFraction,
-    resetTime: effectiveClaudeWeeklyReset,
-    supportsThinkingTier: false,
-  });
+  if (hasGptOss) {
+    resolvedModels.push({
+      familyKey: "gpt-oss-120b",
+      modelID: "antigravity-gpt-oss-120b-medium",
+      rawId: "gpt-oss-120b-medium",
+      displayName: "GPT-OSS 120B",
+      remainingFraction: effectiveClaudeWeeklyFraction,
+      resetTime: effectiveClaudeWeeklyReset,
+      supportsThinkingTier: false,
+    });
+  }
 
   const quotas: AntigravityFamilyQuota[] = [];
   if (isPlus) {
