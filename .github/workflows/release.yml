@@ -173,9 +173,7 @@ jobs:
           files: release-assets/*
           generate_release_notes: false
           body: |
-            # 🌸 NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }} (Hotfix)
-
-            **NanamiWork v1.1.1** is a critical hotfix release addressing desktop UI branding, timeline rewind modal styling, and active model persistence.
+            **NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}** is a critical hotfix release addressing desktop UI branding, timeline rewind modal styling, and active model persistence.
 
             ### 🩹 Hotfix Highlights & Improvements
             - **Official NanamiWork Branding**: Restored `NanamiWork` product name across Windows Installed Apps, Start Menu shortcuts, window title bar, and startup screen.
