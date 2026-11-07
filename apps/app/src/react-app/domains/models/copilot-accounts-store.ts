@@ -266,11 +266,21 @@ async function writeNanamiCopilotMeta(
           tool_call: true,
           attachment: true,
           limit: { context: m.contextLimit, output: m.outputLimit },
-          capabilities: {
-            tools: true,
-            ...(m.supportsReasoning ? { reasoning: true } : {}),
+          modalities: {
             input: ["text", "image"],
             output: ["text"],
+          },
+          capabilities: {
+            tools: true,
+            attachment: true,
+            ...(m.supportsReasoning ? { reasoning: true } : {}),
+            input: {
+              text: true,
+              image: true,
+            },
+            output: {
+              text: true,
+            },
           },
         };
       }
