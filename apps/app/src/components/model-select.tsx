@@ -144,7 +144,9 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const activeAntigravityItem = value.providerID === "google"
     ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, value.modelID)
     : undefined;
-  const supportsThinking = activeAntigravityItem?.supportsThinkingTier;
+  const supportsThinking = Boolean(
+    activeAntigravityItem?.supportsThinkingTier || (value.providerID === "openai" && activeChatGptAccount),
+  );
 
   const cycleThinkingTier = () => {
     const nextTier: ThinkingTier =
@@ -153,6 +155,9 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     if (activeAntigravityItem) {
       const nextModelId = resolveAntigravityModelForTier(activeAntigravityItem, nextTier);
       onChange({ providerID: "google", modelID: nextModelId }, nextTier);
+      onBehaviorChange?.(nextTier);
+    } else if (value.providerID === "openai") {
+      onChange(value, nextTier);
       onBehaviorChange?.(nextTier);
     }
   };

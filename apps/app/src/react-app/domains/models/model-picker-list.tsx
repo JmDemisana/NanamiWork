@@ -490,12 +490,15 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       modelID: item.modelID,
     });
     void useChatGptAccountsStore.getState().selectAccount(account.email);
-    onSelect({
-      providerID: "openai",
-      modelID: item.modelID,
-      title: item.displayName,
-      description: `${account.email} (ChatGPT)`,
-    } as unknown as ModelOption);
+    onSelect(
+      {
+        providerID: "openai",
+        modelID: item.modelID,
+        title: item.displayName,
+        description: `${account.email} (ChatGPT)`,
+      } as unknown as ModelOption,
+      { variant: thinkingTier },
+    );
   };
   const alternative = pins.find((option) => !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current))
     ?? nonGoogleOptions.find((option) => !option.disabled && !isAutoModel(option) && modelRefKey(option) !== modelRefKey(current));

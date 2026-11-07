@@ -330,7 +330,6 @@ if (fs.existsSync(accFile)) {
         settled = true;
         clearTimeout(timer);
         unsub?.();
-        void terminal.kill?.(terminalId).catch(() => undefined);
         resolve();
       };
       const timer = setTimeout(done, 1500);
@@ -781,7 +780,6 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     set({ loading: true });
 
     try {
-      await syncDiskAccountsViaTerminal();
       let { meta } = await readNanamiMetaAndConfigDir();
 
       const savedTier: ThinkingTier =
@@ -960,7 +958,6 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
           },
         });
       } catch {}
-      await syncDiskAccountsViaTerminal({ type: "select", email: target.email });
       try {
         await activeClient?.instance.dispose();
       } catch {}
@@ -1043,7 +1040,6 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       }
     } catch {}
 
-    await syncDiskAccountsViaTerminal({ type: "delete", email });
     try {
       await activeClient?.instance.dispose();
     } catch {}

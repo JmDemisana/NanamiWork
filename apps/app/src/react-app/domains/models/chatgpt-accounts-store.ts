@@ -231,46 +231,92 @@ async function readNanamiCodexMeta(): Promise<{
   return { configDir, meta };
 }
 
+const CODEX_MODEL_VARIANTS = {
+  low: { reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+  medium: { reasoningEffort: "medium", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+  high: { reasoningEffort: "high", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+};
+
 const CODEX_PROVIDER_MODELS_CONFIG = {
   "gpt-6.1-sol": {
+    id: "gpt-6.1-sol",
     name: "GPT-6.1 Sol",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-6-astra": {
+    id: "gpt-6-astra",
     name: "GPT-6 Astra",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-6.1-terra": {
+    id: "gpt-6.1-terra",
     name: "GPT-6.1 Terra",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-6-sol": {
+    id: "gpt-6-sol",
     name: "GPT-6 Sol",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-6-luna": {
+    id: "gpt-6-luna",
     name: "GPT-6 Luna",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-5.6-sol": {
+    id: "gpt-5.6-sol",
     name: "GPT-5.6 Sol",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-5.6-terra": {
+    id: "gpt-5.6-terra",
     name: "GPT-5.6 Terra",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
   "gpt-5.6-luna": {
+    id: "gpt-5.6-luna",
     name: "GPT-5.6 Luna",
-    limit: { context: 400000, output: 128000 },
-    modalities: { input: ["text", "image"], output: ["text"] },
+    reasoning: true,
+    tool_call: true,
+    attachment: true,
+    limit: { context: 400000, input: 272000, output: 128000 },
+    modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+    variants: CODEX_MODEL_VARIANTS,
   },
 };
 
@@ -400,7 +446,6 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
     if (client) latestClient = client;
     try {
       set({ loading: true, error: null });
-      await syncCodexDiskAccountsViaTerminal();
 
       const { meta } = await readNanamiCodexMeta();
       let rawAccounts: StoredCodexAccount[] = Array.isArray(meta.accounts) ? [...meta.accounts] : [];
@@ -529,7 +574,6 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
           });
         } catch {}
       }
-      await syncCodexDiskAccountsViaTerminal({ type: "select", email: target.email });
       try {
         await activeClient?.instance.dispose();
       } catch {}
@@ -564,8 +608,6 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
       },
       accounts: (prev.accounts ?? []).filter((a) => a?.email?.toLowerCase() !== lower),
     }));
-
-    await syncCodexDiskAccountsViaTerminal({ type: "delete", email });
   },
 
   refreshQuotas: async (targetEmail?: string) => {
@@ -1013,7 +1055,6 @@ setTimeout(() => process.exit(0), 180000);
         clearTimeout(timer);
         unsubData?.();
         unsubExit?.();
-        void terminal.kill?.(terminalId).catch(() => undefined);
         resolve(ok);
       };
       const timer = setTimeout(() => done(false), 180000);
@@ -1085,7 +1126,6 @@ if(fs.existsSync(rcFile)){try{const rc=parseJ(fs.readFileSync(rcFile,'utf8'));rc
         settled = true;
         clearTimeout(timer);
         unsub?.();
-        void terminal.kill?.(terminalId).catch(() => undefined);
         resolve();
       };
       const timer = setTimeout(done, 1500);

@@ -31,22 +31,104 @@ function noRetryFetch(base: URL, matches: (base: URL, url: URL, response: Respon
 }
 
 export const OpenWorkGatewayQuota = async () => ({
-  config: async (config: { provider?: Record<string, unknown>; enabled_providers?: unknown }) => {
-    if (Array.isArray(config.enabled_providers)) {
-      delete config.enabled_providers;
-    }
+  config: async (config: { provider?: Record<string, unknown>; providers?: unknown; enabled_providers?: unknown; disabled_providers?: unknown }) => {
     try {
-      const rcPath = process.env.OPENCODE_CONFIG || path.join(os.homedir(), "AppData", "Roaming", "openwork", "runtime-opencode-config.json");
-      if (rcPath && fs.existsSync(rcPath)) {
-        const rc = parseJsoncSafe(fs.readFileSync(rcPath, "utf8"));
-        if (rc.enabled_providers) {
-          delete rc.enabled_providers;
-          fs.writeFileSync(rcPath, JSON.stringify(rc) + "\n", "utf8");
+      const nanamiCfgDir = path.join(os.homedir(), ".config", "nanamiwork");
+      process.env.OPENCODE_CONFIG_DIR = nanamiCfgDir;
+      fs.mkdirSync(nanamiCfgDir, { recursive: true });
+
+      config.enabled_providers = ["nanami", "google", "openai", "github-copilot"];
+      config.disabled_providers = ["opencode", "azure", "openwork-free", "anthropic"];
+      if (config.providers) delete config.providers;
+
+      const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
+      nanamiProv.name = "Nanami Router Models";
+      const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
+
+      const cVar = {
+        low: { reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+        medium: { reasoningEffort: "medium", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+        high: { reasoningEffort: "high", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+      };
+      const cMod = (id: string, name: string) => ({
+        id,
+        name,
+        reasoning: true,
+        tool_call: true,
+        attachment: true,
+        limit: { context: 400000, input: 272000, output: 128000 },
+        modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+        variants: cVar,
+      });
+      const codexModels = {
+        "gpt-6.1-sol": cMod("gpt-6.1-sol", "GPT-6.1-Sol"),
+        "gpt-6-astra": cMod("gpt-6-astra", "GPT-6-Astra"),
+        "gpt-6.1-terra": cMod("gpt-6.1-terra", "GPT-6.1-Terra"),
+        "gpt-6-sol": cMod("gpt-6-sol", "GPT-6-Sol"),
+        "gpt-6-luna": cMod("gpt-6-luna", "GPT-6-Luna"),
+        "gpt-5.6-sol": cMod("gpt-5.6-sol", "GPT-5.6-Sol"),
+        "gpt-5.6-terra": cMod("gpt-5.6-terra", "GPT-5.6-Terra"),
+        "gpt-5.6-luna": cMod("gpt-5.6-luna", "GPT-5.6-Luna"),
+      };
+
+      const existingProviders = record(config.provider) ? config.provider : {};
+      config.provider = {
+        ...existingProviders,
+        nanami: nanamiProv,
+        openai: {
+          name: "OpenAI / ChatGPT",
+          models: codexModels,
+        },
+        ...(copilotProv ? { "github-copilot": copilotProv } : {}),
+      };
+
+      const codexAccFile = path.join(nanamiCfgDir, "codex-accounts.json");
+      const jsoncFile = path.join(nanamiCfgDir, "opencode.jsonc");
+      const jsonFile = path.join(nanamiCfgDir, "opencode.json");
+      try {
+        let codexMeta: { activeEmail?: string; accounts?: Array<Record<string, unknown>> } = {};
+        if (fs.existsSync(jsoncFile)) {
+          try {
+            const jd = parseJsoncSafe(fs.readFileSync(jsoncFile, "utf8"));
+            if (record(jd.x_nanami_codex)) {
+              codexMeta = jd.x_nanami_codex as { activeEmail?: string; accounts?: Array<Record<string, unknown>> };
+            }
+          } catch {}
         }
-      }
-      const cfgDir = path.join(os.homedir(), ".config", "opencode");
-      const accFile = path.join(cfgDir, "antigravity-accounts.json");
-      const jsoncFile = path.join(cfgDir, "opencode.jsonc");
+        if ((!codexMeta.accounts || codexMeta.accounts.length === 0) && fs.existsSync(codexAccFile)) {
+          try {
+            codexMeta = parseJsoncSafe(fs.readFileSync(codexAccFile, "utf8")) as {
+              activeEmail?: string;
+              accounts?: Array<Record<string, unknown>>;
+            };
+          } catch {}
+        }
+        const codexList = Array.isArray(codexMeta.accounts) ? codexMeta.accounts : [];
+        const activeCodex =
+          codexList.find((a) => String(a.email ?? "").toLowerCase() === String(codexMeta.activeEmail ?? "").toLowerCase()) ??
+          codexList[0];
+        if (activeCodex && activeCodex.accessToken) {
+          const ocShareDir = path.join(os.homedir(), ".local", "share", "opencode");
+          fs.mkdirSync(ocShareDir, { recursive: true });
+          const ocShareAuthFile = path.join(ocShareDir, "auth.json");
+          let ocAuth: Record<string, unknown> = {};
+          if (fs.existsSync(ocShareAuthFile)) {
+            try {
+              ocAuth = parseJsoncSafe(fs.readFileSync(ocShareAuthFile, "utf8"));
+            } catch {}
+          }
+          ocAuth.openai = {
+            type: "oauth",
+            refresh: String(activeCodex.refreshToken ?? ""),
+            access: String(activeCodex.accessToken),
+            expires: Date.now() + 3600000,
+            ...(activeCodex.accountId ? { accountId: String(activeCodex.accountId) } : {}),
+          };
+          fs.writeFileSync(ocShareAuthFile, JSON.stringify(ocAuth, null, 2) + "\n", "utf8");
+        }
+      } catch {}
+
+      const accFile = path.join(nanamiCfgDir, "antigravity-accounts.json");
       if (fs.existsSync(accFile) && fs.existsSync(jsoncFile)) {
         const accData = parseJsoncSafe(fs.readFileSync(accFile, "utf8")) as {
           accounts?: Array<Record<string, unknown>>;
@@ -94,7 +176,7 @@ export const OpenWorkGatewayQuota = async () => ({
           fs.writeFileSync(accFile, JSON.stringify(accData, null, 2) + "\n", "utf8");
         }
         const activeIdx = Math.min(Math.max(0, accData.activeIndex ?? 0), Math.max(0, list.length - 1));
-        jsoncData.x_nanami_antigravity = {
+        const nextMeta = {
           ...meta,
           activeEmail: String(list[activeIdx]?.email ?? meta.activeEmail ?? ""),
           activeIndex: activeIdx,
@@ -109,7 +191,11 @@ export const OpenWorkGatewayQuota = async () => ({
             enabled: a.enabled !== false,
           })),
         };
-        fs.writeFileSync(jsoncFile, JSON.stringify(jsoncData, null, 2) + "\n", "utf8");
+        for (const f of [jsoncFile, jsonFile]) {
+          const d = fs.existsSync(f) ? parseJsoncSafe(fs.readFileSync(f, "utf8")) : { $schema: "https://opencode.ai/config.json" };
+          d.x_nanami_antigravity = nextMeta;
+          fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n", "utf8");
+        }
       }
     } catch {}
     for (const [id, provider] of Object.entries(config.provider ?? {})) {
