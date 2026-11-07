@@ -159,18 +159,8 @@ export function LocalProvider({ children }: LocalProviderProps) {
     persisted.desktopNotifications = isDesktopNotificationPreference(persisted.desktopNotifications)
       ? persisted.desktopNotifications
       : DEFAULT_DESKTOP_NOTIFICATION_PREFERENCE;
-    try {
-      if (window.localStorage.getItem(MODEL_PREF_KEY) !== null) {
-        return { ...persisted, defaultModel: readStoredDefaultModel() };
-      }
-    } catch {
-      // Retain the preferences migration when storage is unavailable.
-    }
-    if (persisted.defaultModel) return persisted;
-    return {
-      ...persisted,
-      defaultModel: readStoredDefaultModel(),
-    };
+    persisted.defaultModel = { providerID: "", modelID: "" };
+    return persisted;
   });
   const prefsRef = useRef(prefs);
   const setPrefs = useCallback(

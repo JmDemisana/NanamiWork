@@ -52,8 +52,8 @@ function parseWorkspaceDefault(raw: string | null): WorkspaceDefaultModel | null
   } catch { return null; }
 }
 
-export function readWorkspaceDefaultModel(scope: WorkspaceModelScope | null): WorkspaceDefaultModel | null {
-  return parseWorkspaceDefault(readWorkspaceDefaultRaw(workspaceDefaultModelKey(scope)));
+export function readWorkspaceDefaultModel(_scope: WorkspaceModelScope | null): WorkspaceDefaultModel | null {
+  return null;
 }
 
 export function setWorkspaceDefaultModel(scope: WorkspaceModelScope | null, model: ModelRef, variant: string | null = null): boolean {
@@ -106,13 +106,7 @@ const parseStoredModel = (value: unknown) => {
 };
 
 export function readStoredDefaultModel(): ModelRef {
-  if (typeof window === "undefined") return DEFAULT_MODEL;
-  try {
-    const stored = window.localStorage.getItem(MODEL_PREF_KEY);
-    return parseModelRef(stored) ?? DEFAULT_MODEL;
-  } catch {
-    return DEFAULT_MODEL;
-  }
+  return { providerID: "", modelID: "" };
 }
 
 export function writeStoredDefaultModel(model: ModelRef): void {

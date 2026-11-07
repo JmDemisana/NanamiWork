@@ -173,13 +173,15 @@ jobs:
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}** is a critical hotfix release addressing desktop UI branding, timeline rewind modal styling, and active model persistence.
+            **NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.1' }}** is a critical hotfix release addressing desktop UI branding, timeline rewind modal styling, Google Antigravity Claude 5.5 support, and starter model safety.
 
-            ### 🩹 Hotfix Highlights & Improvements
+            ### 🚀 Hotfix Highlights & Improvements
             - **Official NanamiWork Branding**: Restored `NanamiWork` product name across Windows Installed Apps, Start Menu shortcuts, window title bar, and startup screen.
+            - **Google Antigravity Claude 5.5 Dual-Support**: Fully enabled Claude Sonnet & Opus 5.5 on Google AI Plus accounts alongside Claude 4.6 on Free accounts, with deep-merge model protection in OpenCode's runtime config.
+            - **Pick a Model Starter State**: Every app start launches with `✨ Pick a model` and a disabled Send button until a model is selected, permanently preventing starter model race conditions.
             - **Undo Rewind Modal Overhaul**: Replaced the previous clipped container with the authentic design-system `ConfirmModal` (Base UI Dialog portal to `document.body`) featuring soft backdrop blur, centered placement, and keyboard autofocus.
             - **Model Selection & Anti-Flicker**:
-              - Fixed combobox auto-highlighting that previously made `Gemini 🔥` appear selected on open; the true active model is now clearly badged and highlighted.
+              - Fixed combobox auto-highlighting that previously made models appear falsely selected on open.
               - Selecting a model in any chat now locks as the persistent default across sessions.
               - Creating a new task (`+` / `Ctrl+N`) strictly preserves your currently active model without resetting to starter models.
               - Desktop account models (Antigravity, Copilot, ChatGPT, Nanami router) are permanently guarded against false-positive "unavailable" auto-switches while background accounts load.

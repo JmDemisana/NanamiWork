@@ -18,8 +18,8 @@ export const VARIANT_PREF_KEY = "openwork.modelVariant";
 export { LANGUAGE_PREF_KEY } from "../i18n";
 
 export const DEFAULT_MODEL: ModelRef = {
-  providerID: "nanami",
-  modelID: "gemini-router",
+  providerID: "",
+  modelID: "",
 };
 
 export const SUGGESTED_PLUGINS: SuggestedPlugin[] = [];

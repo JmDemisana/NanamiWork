@@ -231,7 +231,7 @@ export async function ensureAntigravityPluginInstalled(): Promise<boolean> {
       changed = true;
     }
     const existingGoogleModels = parsed.provider?.google?.models ?? {};
-    if (!existingGoogleModels["antigravity-gemini-3.8-flash-high"] || existingGoogleModels["antigravity-gemini-3.1-pro"]) {
+    if (!existingGoogleModels["antigravity-gemini-3.8-flash-high"] || !existingGoogleModels["antigravity-claude-sonnet-5-5-high"] || existingGoogleModels["antigravity-gemini-3.1-pro"]) {
       const googleConfig = {
         ...(parsed.provider?.google ?? {}),
         name: "Google Antigravity",

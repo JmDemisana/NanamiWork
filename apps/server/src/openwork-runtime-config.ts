@@ -226,7 +226,18 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
     ...(disabledProviders.length ? { disabled_providers: disabledProviders } : {}),
     mcp: Object.fromEntries(Object.entries(runtimeMcpMap(runtimeConfig))
       .filter(([name]) => !name.startsWith(CONNECT_MCP_SERVER_NAME_PREFIX))),
-    provider: { google: ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG, ...provider, [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() },
+    provider: {
+      ...provider,
+      google: {
+        ...ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG,
+        ...((provider.google as Record<string, unknown> | undefined) ?? {}),
+        models: {
+          ...((ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG.models as Record<string, unknown>) ?? {}),
+          ...(((provider.google as Record<string, unknown> | undefined)?.models as Record<string, unknown>) ?? {}),
+        },
+      },
+      [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig(),
+    },
   };
 }
 

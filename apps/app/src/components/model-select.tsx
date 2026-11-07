@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Lock } from "lucide-react";
+import { ChevronDown, Lock, Sparkles } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { getModelBehaviorControls, getModelBehaviorSelection } from "@/app/lib/model-behavior";
@@ -187,15 +187,25 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const copilotModelLabel = value.providerID === "github-copilot" && activeCopilotAccount
     ? (activeCopilotItem?.displayName ?? "Auto (Copilot)")
     : undefined;
-  const triggerLabel = hideValue
-    ? "Select model"
+  const isAntigravity = value?.providerID === "google";
+  const hasValidAccountModel = Boolean(
+    value?.providerID &&
+    value?.modelID &&
+    value.providerID !== "" &&
+    value.modelID !== "" &&
+    (value.providerID === "nanami" ||
+      (isAntigravity ? Boolean(activeAntigravityItem) : true))
+  );
+
+  const triggerLabel = !hasValidAccountModel || hideValue
+    ? "Pick a model"
     : antigravityModelLabel
       ? (activeAntigravityAccount ? `${antigravityModelLabel} · ${activeAntigravityAccount.email}` : antigravityModelLabel)
       : chatGptModelLabel
         ? `${chatGptModelLabel} · ${activeChatGptAccount!.email}`
         : copilotModelLabel
           ? `${copilotModelLabel} · @${activeCopilotAccount!.username}`
-          : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
+          : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Pick a model");
 
   return (
     <>
@@ -205,17 +215,22 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
           disabled={disabled}
           aria-label="Change model"
           onClick={() => onOpenChange(!open)}
-          className="inline-flex h-9 min-w-0 max-w-full shrink items-center gap-1.5 px-2 text-sm text-muted-foreground hover:text-foreground focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className={`inline-flex h-8 min-w-0 max-w-full shrink items-center gap-1.5 text-sm transition-colors focus-visible:rounded focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+            !hasValidAccountModel
+              ? "rounded-md border border-dashed border-amber-500/50 bg-amber-500/10 px-2.5 text-amber-300 hover:border-amber-400 hover:bg-amber-500/20"
+              : "px-2 text-muted-foreground hover:text-foreground"
+          }`}
         >
           <span className="min-w-0 max-w-[140px] sm:max-w-[200px] md:max-w-72 truncate inline-flex items-center gap-1.5">
+            {!hasValidAccountModel ? <Sparkles className="size-3.5 shrink-0 text-amber-400 inline" /> : null}
             {value.providerID === "nanami" ? <Lock className="size-3 shrink-0 text-amber-400 inline" /> : null}
-            <span className="truncate">{triggerLabel}</span>
-            {!hideValue && !antigravityModelLabel && !chatGptModelLabel && !copilotModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
-            {!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
+            <span className={`truncate ${!hasValidAccountModel ? "font-medium" : ""}`}>{triggerLabel}</span>
+            {!hideValue && hasValidAccountModel && !antigravityModelLabel && !chatGptModelLabel && !copilotModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
+            {!hideValue && hasValidAccountModel && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
           </span>
           <ChevronDown className="size-3 shrink-0" />
         </button>
-        {supportsThinking ? (
+        {supportsThinking && hasValidAccountModel ? (
           <button
             type="button"
             disabled={disabled}

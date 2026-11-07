@@ -831,7 +831,13 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     () => [...new Set([...props.recentFiles, ...workspaceFileResults])],
     [props.recentFiles, workspaceFileResults],
   );
-  const canSend = props.draft.trim().length > 0 || props.attachments.length > 0;
+  const isModelPicked = Boolean(
+    props.selectedModel?.modelID &&
+    props.selectedModel?.providerID &&
+    props.selectedModel.modelID !== "" &&
+    props.selectedModel.providerID !== ""
+  );
+  const canSend = isModelPicked && (props.draft.trim().length > 0 || props.attachments.length > 0);
   const diagnosticsRef = useRef<ConnectionDiagnosticSource | null>(null);
   useEffect(() => {
     const diagnostics = connectionDiagnosticHistory.createSource();
