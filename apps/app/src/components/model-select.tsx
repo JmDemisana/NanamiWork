@@ -19,6 +19,7 @@ import { openComposerModelPickerEvent } from "@/app/lib/inference-access";
 import { fixedModelTitle, managesOwnBehavior, modelTitle, nonDefaultModelSummary, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
 import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, resolveAntigravityModelForTier, useAntigravityAccountsStore, type ThinkingTier } from "@/react-app/domains/models/antigravity-accounts-store";
 import { useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-accounts-store";
+import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
 
@@ -64,6 +65,8 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const activeAntigravityAccount = antigravityAccounts.find((a) => a.isActive) ?? antigravityAccounts[0];
   const chatGptAccounts = useChatGptAccountsStore((s) => s.accounts);
   const activeChatGptAccount = chatGptAccounts.find((a) => a.isActive) ?? chatGptAccounts[0];
+  const copilotAccounts = useCopilotAccountsStore((s) => s.accounts);
+  const activeCopilotAccount = copilotAccounts.find((a) => a.isActive) ?? copilotAccounts[0];
 
   React.useEffect(() => {
     useAntigravityAccountsStore.getState().setSelectedModel(value);
@@ -73,6 +76,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     if (open && workspace.client) {
       void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
       void useChatGptAccountsStore.getState().loadAccounts(workspace.client);
+      void useCopilotAccountsStore.getState().loadAccounts(workspace.client);
     }
   }, [workspace.client, open]);
 
@@ -81,6 +85,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
       if (workspace.client) {
         void useAntigravityAccountsStore.getState().loadAccounts(workspace.client);
         void useChatGptAccountsStore.getState().loadAccounts(workspace.client);
+        void useCopilotAccountsStore.getState().loadAccounts(workspace.client);
       }
     };
     window.addEventListener(newProvidersEvent, reload);
@@ -131,7 +136,11 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
       onOpenChange(false);
     };
 
-    if (option.providerID === "google" || (option.providerID === "openai" && chatGptAccounts.length > 0)) {
+    if (
+      option.providerID === "google" ||
+      (option.providerID === "openai" && chatGptAccounts.length > 0) ||
+      (option.providerID === "github-copilot" && copilotAccounts.length > 0)
+    ) {
       commit();
       return;
     }
@@ -172,13 +181,21 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const chatGptModelLabel = value.providerID === "openai" && activeChatGptAccount
     ? (activeChatGptItem?.displayName ?? value.modelID)
     : undefined;
+  const activeCopilotItem = value.providerID === "github-copilot"
+    ? activeCopilotAccount?.models.find((m) => m.modelID === value.modelID)
+    : undefined;
+  const copilotModelLabel = value.providerID === "github-copilot" && activeCopilotAccount
+    ? (activeCopilotItem?.displayName ?? "Auto (Copilot)")
+    : undefined;
   const triggerLabel = hideValue
     ? "Select model"
     : antigravityModelLabel
       ? (activeAntigravityAccount ? `${antigravityModelLabel} · ${activeAntigravityAccount.email}` : antigravityModelLabel)
       : chatGptModelLabel
         ? `${chatGptModelLabel} · ${activeChatGptAccount!.email}`
-        : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
+        : copilotModelLabel
+          ? `${copilotModelLabel} · @${activeCopilotAccount!.username}`
+          : fixedModelTitle(value, { plainFreeModel }) ?? (catalog.currentOption ? modelTitle(catalog.currentOption, { plainFreeModel }) : "Select model");
 
   return (
     <>
@@ -193,7 +210,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
           <span className="max-w-72 truncate inline-flex items-center gap-1.5">
             {value.providerID === "nanami" ? <Lock className="size-3 shrink-0 text-amber-400 inline" /> : null}
             <span className="truncate">{triggerLabel}</span>
-            {!hideValue && !antigravityModelLabel && !chatGptModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
+            {!hideValue && !antigravityModelLabel && !chatGptModelLabel && !copilotModelLabel && !supportsThinking && summary ? ` · ${summary}` : ""}
             {!hideValue && fastOn ? <span data-testid="model-fast-indicator" className="text-xs font-medium"> · Fast</span> : null}
           </span>
           <ChevronDown className="size-3 shrink-0" />

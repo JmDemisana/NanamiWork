@@ -18,6 +18,7 @@ const GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98";
 const GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code";
 const GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token";
+const COPILOT_USER_URL = "https://api.github.com/copilot_internal/user";
 const GITHUB_USER_URL = "https://api.github.com/user";
 
 export type CopilotModelItem = {
@@ -26,46 +27,18 @@ export type CopilotModelItem = {
   contextLimit: number;
   outputLimit: number;
   supportsReasoning?: boolean;
+  remainingFraction: number | null;
+  resetTime: string | null;
 };
 
 export const DEFAULT_COPILOT_MODELS: CopilotModelItem[] = [
   {
-    modelID: "auto",
-    displayName: "Auto (Copilot Fusion)",
+    modelID: "gpt-4.1",
+    displayName: "Auto (Copilot)",
     contextLimit: 128000,
-    outputLimit: 8192,
-  },
-  {
-    modelID: "gpt-4o",
-    displayName: "GPT-4o (Copilot)",
-    contextLimit: 128000,
-    outputLimit: 4096,
-  },
-  {
-    modelID: "gpt-4o-mini",
-    displayName: "GPT-4o mini (Copilot)",
-    contextLimit: 128000,
-    outputLimit: 4096,
-  },
-  {
-    modelID: "claude-3.5-sonnet",
-    displayName: "Claude 3.5 Sonnet (Copilot)",
-    contextLimit: 200000,
-    outputLimit: 8192,
-  },
-  {
-    modelID: "o1-mini",
-    displayName: "o1-mini (Copilot)",
-    contextLimit: 128000,
-    outputLimit: 65536,
-    supportsReasoning: true,
-  },
-  {
-    modelID: "o1-preview",
-    displayName: "o1-preview (Copilot)",
-    contextLimit: 128000,
-    outputLimit: 32768,
-    supportsReasoning: true,
+    outputLimit: 16384,
+    remainingFraction: null,
+    resetTime: null,
   },
 ];
 
@@ -81,6 +54,8 @@ export type CopilotAccountInfo = {
   copilotToken: string;
   isActive: boolean;
   models: CopilotModelItem[];
+  quotaRemainingPct?: number | null;
+  quotaResetTimeIso?: string | null;
   loading?: boolean;
 };
 
@@ -105,6 +80,8 @@ type StoredCopilotMeta = {
     lastUsed?: number;
     oauthToken: string;
     copilotToken: string;
+    quotaRemainingPct?: number | null;
+    quotaResetTimeIso?: string | null;
   }>;
 };
 
@@ -131,6 +108,76 @@ type CopilotAccountsStore = {
 
 let activePollAbortController: AbortController | null = null;
 let latestClient: Client | null = null;
+
+function buildCopilotModelsWithQuota(
+  quotaRemainingPct: number | null | undefined,
+  quotaResetTimeIso: string | null | undefined,
+): CopilotModelItem[] {
+  const remainingFraction =
+    typeof quotaRemainingPct === "number"
+      ? Math.max(0, Math.min(1, quotaRemainingPct / 100))
+      : null;
+  const resetTime = quotaResetTimeIso ?? null;
+  return DEFAULT_COPILOT_MODELS.map((m) => ({
+    ...m,
+    remainingFraction,
+    resetTime,
+  }));
+}
+
+async function fetchCopilotQuotaInfo(oauthToken: string): Promise<{
+  quotaRemainingPct: number | null;
+  quotaResetTimeIso: string | null;
+  planSku?: string;
+}> {
+  try {
+    const res = await desktopFetchViaMain(
+      COPILOT_USER_URL,
+      {
+        headers: {
+          "Authorization": `token ${oauthToken}`,
+          "Accept": "application/json",
+          "User-Agent": "GithubCopilot/1.155.0",
+        },
+      },
+      15000,
+    );
+    if (!res.ok) {
+      return { quotaRemainingPct: null, quotaResetTimeIso: null };
+    }
+    const data = (await res.json()) as {
+      access_type_sku?: string;
+      quota_reset_date?: string;
+      quota_reset_date_utc?: string;
+      quota_snapshots?: {
+        premium_interactions?: {
+          percent_remaining?: number;
+          unlimited?: boolean;
+        };
+        chat?: {
+          percent_remaining?: number;
+          unlimited?: boolean;
+        };
+      };
+    };
+    const snap =
+      data.quota_snapshots?.premium_interactions ?? data.quota_snapshots?.chat;
+    const quotaRemainingPct =
+      typeof snap?.percent_remaining === "number"
+        ? Math.max(0, Math.min(100, Math.round(snap.percent_remaining)))
+        : null;
+    const quotaResetTimeIso =
+      data.quota_reset_date_utc ||
+      (data.quota_reset_date ? `${data.quota_reset_date}T00:00:00.000Z` : null);
+    return {
+      quotaRemainingPct,
+      quotaResetTimeIso,
+      planSku: data.access_type_sku,
+    };
+  } catch {
+    return { quotaRemainingPct: null, quotaResetTimeIso: null };
+  }
+}
 
 async function readNanamiCopilotMeta(): Promise<{
   configDir: string;
@@ -162,6 +209,8 @@ async function readNanamiCopilotMeta(): Promise<{
                 lastUsed: single.lastUsed || Date.now(),
                 oauthToken: single.oauthToken,
                 copilotToken: single.copilotToken,
+                quotaRemainingPct: single.quotaRemainingPct ?? null,
+                quotaResetTimeIso: single.quotaResetTimeIso ?? null,
               },
             ],
           };
@@ -208,11 +257,14 @@ async function writeNanamiCopilotMeta(
       }),
     );
 
-    if (activeAccount && activeAccount.copilotToken) {
+    if (activeAccount && (activeAccount.oauthToken || activeAccount.copilotToken)) {
       const configuredModels: Record<string, unknown> = {};
       for (const m of activeAccount.models || DEFAULT_COPILOT_MODELS) {
         configuredModels[m.modelID] = {
+          id: m.modelID,
           name: m.displayName,
+          tool_call: true,
+          attachment: true,
           limit: { context: m.contextLimit, output: m.outputLimit },
           capabilities: {
             tools: true,
@@ -224,16 +276,19 @@ async function writeNanamiCopilotMeta(
       }
       const copilotProviderConfig = {
         npm: "@ai-sdk/openai-compatible",
-        name: "GitHub Copilot (Fusion)",
+        name: "GitHub Copilot",
         options: {
           baseURL: "https://api.githubcopilot.com",
-          apiKey: activeAccount.copilotToken,
+          apiKey: activeAccount.oauthToken || activeAccount.copilotToken,
           headers: {
+            "User-Agent": "opencode/1.0.0",
+            "X-GitHub-Api-Version": "2026-06-01",
             "Editor-Version": "vscode/1.96.2",
             "Editor-Plugin-Version": "copilot-chat/0.22.4",
             "Copilot-Integration-Id": "vscode-chat",
             "Openai-Organization": "github-copilot",
-            "Openai-Intent": "conversation-panel",
+            "Openai-Intent": "conversation-edits",
+            "x-initiator": "user",
           },
         },
         models: configuredModels,
@@ -294,6 +349,10 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
           (p) => p.username.toLowerCase() === raw.username.toLowerCase(),
         );
         const isActive = raw.username.toLowerCase() === activeLower;
+        const quotaRemainingPct =
+          raw.quotaRemainingPct ?? existing?.quotaRemainingPct ?? null;
+        const quotaResetTimeIso =
+          raw.quotaResetTimeIso ?? existing?.quotaResetTimeIso ?? null;
         return {
           username: raw.username,
           name: raw.name,
@@ -305,7 +364,9 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
           oauthToken: raw.oauthToken,
           copilotToken: raw.copilotToken,
           isActive,
-          models: existing?.models?.length ? existing.models : DEFAULT_COPILOT_MODELS,
+          quotaRemainingPct,
+          quotaResetTimeIso,
+          models: buildCopilotModelsWithQuota(quotaRemainingPct, quotaResetTimeIso),
           loading: false,
         };
       });
@@ -323,9 +384,7 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
         loading: false,
       });
 
-      // Check if any active account token is expiring within 5 minutes and auto-refresh
-      const now = Math.floor(Date.now() / 1000);
-      if (activeAcc && (!activeAcc.copilotToken || activeAcc.expiresAt <= now + 300)) {
+      if (activeAcc) {
         void get().refreshCopilotToken(activeAcc.username);
       }
     } catch (e) {
@@ -551,18 +610,27 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
     const account = accounts.find((a) => a.username.toLowerCase() === username.toLowerCase());
     if (!account?.oauthToken) return null;
 
+    set((state) => ({
+      accounts: state.accounts.map((a) =>
+        a.username.toLowerCase() === username.toLowerCase() ? { ...a, loading: true } : a,
+      ),
+    }));
+
     try {
-      const res = await desktopFetchViaMain(
-        COPILOT_TOKEN_URL,
-        {
-          headers: {
-            "Authorization": `token ${account.oauthToken}`,
-            "Accept": "application/json",
-            "User-Agent": "GithubCopilot/1.155.0",
+      const [res, quotaInfo] = await Promise.all([
+        desktopFetchViaMain(
+          COPILOT_TOKEN_URL,
+          {
+            headers: {
+              "Authorization": `token ${account.oauthToken}`,
+              "Accept": "application/json",
+              "User-Agent": "GithubCopilot/1.155.0",
+            },
           },
-        },
-        15000,
-      );
+          15000,
+        ),
+        fetchCopilotQuotaInfo(account.oauthToken),
+      ]);
 
       if (!res.ok) {
         throw new Error(`Copilot token refresh failed: ${res.status}`);
@@ -578,12 +646,19 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
         throw new Error("Missing token in Copilot token response.");
       }
 
+      const nextPct = quotaInfo.quotaRemainingPct ?? account.quotaRemainingPct ?? null;
+      const nextReset = quotaInfo.quotaResetTimeIso ?? account.quotaResetTimeIso ?? null;
+
       const updatedAccount: CopilotAccountInfo = {
         ...account,
         copilotToken: data.token,
         expiresAt: data.expires_at || Math.floor(Date.now() / 1000) + 1800,
-        planSku: data.sku || account.planSku || "copilot",
+        planSku: data.sku || quotaInfo.planSku || account.planSku || "copilot",
         lastUsed: Date.now(),
+        quotaRemainingPct: nextPct,
+        quotaResetTimeIso: nextReset,
+        models: buildCopilotModelsWithQuota(nextPct, nextReset),
+        loading: false,
       };
 
       await writeNanamiCopilotMeta(
@@ -597,6 +672,8 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
                   expiresAt: updatedAccount.expiresAt,
                   planSku: updatedAccount.planSku,
                   lastUsed: updatedAccount.lastUsed,
+                  quotaRemainingPct: updatedAccount.quotaRemainingPct,
+                  quotaResetTimeIso: updatedAccount.quotaResetTimeIso,
                 }
               : a,
           ),
@@ -613,6 +690,11 @@ export const useCopilotAccountsStore = create<CopilotAccountsStore>((set, get) =
 
       return data.token;
     } catch (e) {
+      set((state) => ({
+        accounts: state.accounts.map((a) =>
+          a.username.toLowerCase() === username.toLowerCase() ? { ...a, loading: false } : a,
+        ),
+      }));
       console.warn("Could not refresh Copilot token:", e);
       return null;
     }
@@ -675,17 +757,20 @@ async function setupCopilotIntegration(oauthToken: string) {
     console.warn("Could not fetch GitHub user info:", e);
   }
 
-  const tokenRes = await desktopFetchViaMain(
-    COPILOT_TOKEN_URL,
-    {
-      headers: {
-        "Authorization": `token ${oauthToken}`,
-        "Accept": "application/json",
-        "User-Agent": "GithubCopilot/1.155.0",
+  const [tokenRes, quotaInfo] = await Promise.all([
+    desktopFetchViaMain(
+      COPILOT_TOKEN_URL,
+      {
+        headers: {
+          "Authorization": `token ${oauthToken}`,
+          "Accept": "application/json",
+          "User-Agent": "GithubCopilot/1.155.0",
+        },
       },
-    },
-    15000,
-  );
+      15000,
+    ),
+    fetchCopilotQuotaInfo(oauthToken),
+  ]);
 
   if (!tokenRes.ok) {
     throw new Error(
@@ -707,14 +792,19 @@ async function setupCopilotIntegration(oauthToken: string) {
     username,
     name,
     avatarUrl,
-    planSku: tokenData.sku || "student",
+    planSku: tokenData.sku || quotaInfo.planSku || "student",
     expiresAt: tokenData.expires_at || Math.floor(Date.now() / 1000) + 1800,
     addedAt: Date.now(),
     lastUsed: Date.now(),
     oauthToken,
     copilotToken: tokenData.token,
     isActive: true,
-    models: DEFAULT_COPILOT_MODELS,
+    quotaRemainingPct: quotaInfo.quotaRemainingPct,
+    quotaResetTimeIso: quotaInfo.quotaResetTimeIso,
+    models: buildCopilotModelsWithQuota(
+      quotaInfo.quotaRemainingPct,
+      quotaInfo.quotaResetTimeIso,
+    ),
   };
 
   await writeNanamiCopilotMeta(
@@ -731,6 +821,8 @@ async function setupCopilotIntegration(oauthToken: string) {
         lastUsed: account.lastUsed,
         oauthToken: account.oauthToken,
         copilotToken: account.copilotToken,
+        quotaRemainingPct: account.quotaRemainingPct,
+        quotaResetTimeIso: account.quotaResetTimeIso,
       };
       if (idx >= 0) list[idx] = item;
       else list.push(item);

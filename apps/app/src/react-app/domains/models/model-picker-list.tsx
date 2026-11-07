@@ -163,15 +163,6 @@ function ConnectedAccountGroup({
             >
               ⚠ Needs Verification
             </button>
-          ) : account.isPlus ? (
-            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
-              Plus
-            </span>
-          ) : null}
-          {account.isActive ? (
-            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-              Active
-            </span>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -277,14 +268,6 @@ function ConnectedChatGptAccountGroup({
           <span className="truncate" title={`${account.email} (ChatGPT)`}>
             {account.email} (ChatGPT)
           </span>
-          <span className="shrink-0 rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-400">
-            {account.planType}
-          </span>
-          {account.isActive ? (
-            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-              Active
-            </span>
-          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Button
@@ -390,14 +373,6 @@ function ConnectedCopilotAccountGroup({
           <span className="truncate" title={`@${account.username} (Copilot)`}>
             @{account.username} (Copilot)
           </span>
-          <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
-            {account.planSku}
-          </span>
-          {account.isActive ? (
-            <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-              Active
-            </span>
-          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Button
@@ -456,6 +431,8 @@ function ConnectedCopilotAccountGroup({
               <span className="min-w-0 flex-1 truncate leading-5" title={item.displayName}>
                 {item.displayName}
               </span>
+
+              <AccountQuotaPill item={item} />
 
               <span className="flex size-4 shrink-0 items-center justify-center">
                 {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
@@ -660,13 +637,15 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const hasOptions =
     nonGoogleOptions.some((option) => !option.disabled) ||
     antigravityAccounts.length > 0 ||
-    chatGptAccounts.length > 0;
+    chatGptAccounts.length > 0 ||
+    copilotAccounts.length > 0;
   const loading = catalogState?.state === "loading";
   const failed = catalogState?.state === "error" || retryFailed;
   const empty = !loading && !hasOptions && !query.trim() && !failed;
   const isSelectedAntigravityAvailable = current.providerID === "google" && antigravityAccounts.length > 0;
   const isSelectedChatGptAvailable = current.providerID === "openai" && chatGptAccounts.length > 0;
-  const retained = !isSelectedAntigravityAvailable && !isSelectedChatGptAvailable && retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
+  const isSelectedCopilotAvailable = current.providerID === "github-copilot" && copilotAccounts.length > 0;
+  const retained = !isSelectedAntigravityAvailable && !isSelectedChatGptAvailable && !isSelectedCopilotAvailable && retainedSelection && modelRefKey(retainedSelection.model) === modelRefKey(current)
     && !options.some((option) => modelRefKey(option) === modelRefKey(current) && !option.disabled) ? retainedSelection : undefined;
   const retainedCopy = retained ? retainedModelCopy(retained.reason) : null;
   const retainedName = retained ? (fixedModelTitle(retained.model, display) ?? (retained.title ? modelTitle({ ...retained.model, title: retained.title, description: retained.description }, display) : "Saved model")) : "";

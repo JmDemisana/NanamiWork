@@ -1,9 +1,52 @@
 /** @jsxImportSource react */
 import * as React from "react";
-import { Bot, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Bot, RefreshCw } from "lucide-react";
 import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
-import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
+import {
+  formatQuotaResetShort,
+  useAntigravityAccountsStore,
+} from "@/react-app/domains/models/antigravity-accounts-store";
 import { useWorkspace } from "@/react-app/shell/workspace-provider";
+
+function CopilotMonthlyQuotaBar({
+  pct,
+  resetTimeIso,
+}: {
+  pct: number;
+  resetTimeIso: string | null | undefined;
+}) {
+  const clamped = Math.min(100, Math.max(0, Math.round(pct)));
+  const resetShort = formatQuotaResetShort(resetTimeIso ?? null);
+  const barColor =
+    clamped <= 0
+      ? "bg-rose-500/70"
+      : clamped <= 20
+        ? "bg-amber-500/80"
+        : "bg-emerald-500/80";
+  const textColor =
+    clamped <= 0
+      ? "text-rose-400"
+      : clamped <= 20
+        ? "text-amber-400"
+        : "text-muted-foreground";
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between gap-1 text-[10px] leading-none">
+        <span className="truncate text-muted-foreground">Monthly Limit</span>
+        <span className={`shrink-0 tabular-nums ${textColor}`}>
+          {clamped}%{resetShort ? ` · ${resetShort}` : ""}
+        </span>
+      </div>
+      <div className="h-1 w-full overflow-hidden rounded-full bg-sidebar-border/60">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${Math.max(clamped, clamped > 0 ? 4 : 0)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function CopilotSidebarLimits() {
   const workspace = useWorkspace();
@@ -29,6 +72,7 @@ export function CopilotSidebarLimits() {
 
   const activeAccount = accounts.find((a) => a.isActive) ?? accounts[0];
   const displayedAccounts = activeAccount ? [activeAccount] : accounts;
+  const anyQuotaLoading = loading || displayedAccounts.some((a) => a.loading);
 
   return (
     <div
@@ -37,7 +81,7 @@ export function CopilotSidebarLimits() {
     >
       <div className="mb-1.5 flex items-center justify-between gap-1">
         <span className="text-[11px] font-medium tracking-tight text-sidebar-foreground/70">
-          Copilot Account
+          Account Limits
         </span>
         <div className="flex items-center gap-0.5">
           <button
@@ -45,11 +89,11 @@ export function CopilotSidebarLimits() {
             onClick={() => {
               void refreshCopilotToken(activeAccount?.username);
             }}
-            title="Refresh Copilot session token"
-            aria-label="Refresh Copilot session token"
+            title="Refresh account limits"
+            aria-label="Refresh account limits"
             className="flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground cursor-pointer"
           >
-            <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`size-3 ${anyQuotaLoading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
@@ -93,10 +137,19 @@ export function CopilotSidebarLimits() {
                 </div>
               </div>
 
-              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-                <CheckCircle2 className="size-2.5 text-emerald-500 shrink-0" />
-                <span className="truncate">Copilot Fusion Active (VS Code Bridge)</span>
-              </div>
+              {typeof acc.quotaRemainingPct === "number" ? (
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <CopilotMonthlyQuotaBar
+                    pct={acc.quotaRemainingPct}
+                    resetTimeIso={acc.quotaResetTimeIso}
+                  />
+                </div>
+              ) : acc.loading ? (
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                  <RefreshCw className="size-2.5 animate-spin" />
+                  <span>Loading limits for @{acc.username}...</span>
+                </div>
+              ) : null}
             </div>
           );
         })}

@@ -99,13 +99,58 @@ export const OpenWorkGatewayQuota = async () => ({
       const jsonFile = path.join(nanamiCfgDir, "opencode.json");
       try {
         let codexMeta: { activeEmail?: string; accounts?: Array<Record<string, unknown>> } = {};
+        let copilotMeta: { activeUsername?: string; accounts?: Array<Record<string, unknown>> } = {};
         if (fs.existsSync(jsoncFile)) {
           try {
             const jd = parseJsoncSafe(fs.readFileSync(jsoncFile, "utf8"));
             if (record(jd.x_nanami_codex)) {
               codexMeta = jd.x_nanami_codex as { activeEmail?: string; accounts?: Array<Record<string, unknown>> };
             }
+            if (record(jd.x_nanami_copilot)) {
+              copilotMeta = jd.x_nanami_copilot as { activeUsername?: string; accounts?: Array<Record<string, unknown>> };
+            }
           } catch {}
+        }
+        const copilotList = Array.isArray(copilotMeta.accounts) ? copilotMeta.accounts : [];
+        const activeCopilot =
+          copilotList.find((a) => String(a.username ?? "").toLowerCase() === String(copilotMeta.activeUsername ?? "").toLowerCase()) ??
+          copilotList[0];
+        if (activeCopilot && (activeCopilot.oauthToken || activeCopilot.copilotToken)) {
+          config.provider = {
+            ...(record(config.provider) ? config.provider : {}),
+            "github-copilot": {
+              npm: "@ai-sdk/openai-compatible",
+              name: "GitHub Copilot",
+              options: {
+                baseURL: "https://api.githubcopilot.com",
+                apiKey: String(activeCopilot.oauthToken || activeCopilot.copilotToken),
+                headers: {
+                  "User-Agent": "opencode/1.0.0",
+                  "X-GitHub-Api-Version": "2026-06-01",
+                  "Editor-Version": "vscode/1.96.2",
+                  "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                  "Copilot-Integration-Id": "vscode-chat",
+                  "Openai-Organization": "github-copilot",
+                  "Openai-Intent": "conversation-edits",
+                  "x-initiator": "user",
+                },
+              },
+              models: {
+                "gpt-4.1": {
+                  id: "gpt-4.1",
+                  name: "Auto (Copilot)",
+                  tool_call: true,
+                  attachment: true,
+                  limit: { context: 128000, output: 16384 },
+                  capabilities: {
+                    tools: true,
+                    input: ["text", "image"],
+                    output: ["text"],
+                  },
+                },
+              },
+            },
+          };
         }
         if ((!codexMeta.accounts || codexMeta.accounts.length === 0) && fs.existsSync(codexAccFile)) {
           try {

@@ -92,10 +92,18 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
       className="flex max-h-[min(calc(100dvh-2.5rem),40rem)] min-h-0 w-[33rem] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[33rem] lg:w-[33rem] lg:max-w-[33rem] lg:rounded-2xl" data-testid="all-models-picker">
       <DialogTitle className="sr-only">Models</DialogTitle>
       <ModelPickerPanel searchInputRef={searchInputRef} options={options} current={props.current} behaviorValue={behaviorValue}
-        onSelect={(option, behavior) => choice.choose(option, () => {
-          props.onSelect({ providerID: option.providerID, modelID: option.modelID });
-          if (behavior && !managesOwnBehavior(option)) props.onBehaviorChange({ providerID: option.providerID, modelID: option.modelID }, behavior.variant);
-        })}
+        onSelect={(option, behavior) => {
+          const commit = () => {
+            props.onSelect({ providerID: option.providerID, modelID: option.modelID });
+            if (behavior && !managesOwnBehavior(option)) props.onBehaviorChange({ providerID: option.providerID, modelID: option.modelID }, behavior.variant);
+            props.onClose();
+          };
+          if (option.providerID === "google" || option.providerID === "openai" || option.providerID === "github-copilot") {
+            commit();
+            return;
+          }
+          choice.choose(option, commit);
+        }}
         onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
         catalogState={catalogState} retainedSelection={retained}
         onConnectProvider={!restrictToCloud ? () => { props.onClose(); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
