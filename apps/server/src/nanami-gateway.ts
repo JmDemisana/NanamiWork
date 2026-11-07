@@ -26,7 +26,15 @@ function nanamiModelConfig(): Record<string, unknown> {
   return {
     tool_call: true,
     reasoning: true,
+    attachment: true,
     modalities: { input: ["text", "image"], output: ["text"] },
+    capabilities: {
+      tools: true,
+      attachment: true,
+      reasoning: true,
+      input: { text: true, image: true },
+      output: { text: true },
+    },
     limit: { context: 128_000, output: 16_384 },
   };
 }
@@ -172,12 +180,18 @@ export function withNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], apiK
  */
 export function nanamiLegacyProviderConfig(apiKey = nanamiApiKey(), baseUrl = nanamiGatewayBaseUrl()): Record<string, unknown> {
   const model = () => ({
+    attachment: true,
     limit: { context: 128_000, output: 16_384 },
-    capabilities: {
-      tools: true,
-      reasoning: true,
+    modalities: {
       input: ["text", "image"],
       output: ["text"],
+    },
+    capabilities: {
+      tools: true,
+      attachment: true,
+      reasoning: true,
+      input: { text: true, image: true },
+      output: { text: true },
     },
   });
   return {

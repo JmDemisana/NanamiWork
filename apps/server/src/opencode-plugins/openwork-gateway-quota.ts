@@ -41,8 +41,26 @@ export const OpenWorkGatewayQuota = async () => ({
       config.disabled_providers = ["opencode", "azure", "openwork-free", "anthropic"];
       if (config.providers) delete config.providers;
 
+      const nanamiMod = (name: string) => ({
+        name,
+        tool_call: true,
+        attachment: true,
+        limit: { context: 128000, output: 16384 },
+        modalities: { input: ["text", "image"], output: ["text"] },
+        capabilities: {
+          tools: true,
+          attachment: true,
+          reasoning: true,
+          input: { text: true, image: true },
+          output: { text: true },
+        },
+      });
       const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
       nanamiProv.name = "Nanami Router Models";
+      nanamiProv.models = {
+        "gemini-router": nanamiMod("Gemini"),
+        openrouter: nanamiMod("OpenRouter"),
+      };
       const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
 
       const cVar = {
