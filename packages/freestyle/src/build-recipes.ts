@@ -85,7 +85,8 @@ const ARCHIVE_COMPILED = `# Archive generated workspace output only; runtime dat
 node --input-type=module - <<'NODE'
 import { readdirSync, existsSync, writeFileSync } from 'node:fs';
 const paths = [];
-for (const root of ['packages', 'ee/packages', 'apps', 'ee/apps']) {
+for (const root of ['packages', 'apps']) {
+  if (!existsSync(root)) continue;
   for (const dir of readdirSync(root)) {
     const path = root + '/' + dir + '/dist';
     if (existsSync(path)) paths.push(path);
