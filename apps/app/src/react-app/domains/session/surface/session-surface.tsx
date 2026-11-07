@@ -2388,16 +2388,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   const handleComposerDraftChange = useCallback((value: string) => {
     setComposerDraft(props.sessionId, value);
-    const idsInDraft = new Set(
-      [...value.matchAll(/\[attachment ([^\]]+)\]/g)].map((match) => match[1]).filter((id): id is string => Boolean(id)),
-    );
-    const retained = attachments.filter((attachment) => idsInDraft.has(attachment.id));
-    if (retained.length === attachments.length) return;
-    for (const attachment of attachments) {
-      if (!idsInDraft.has(attachment.id)) revokeAttachmentPreview(attachment);
-    }
-    setComposerAttachments(props.sessionId, retained);
-  }, [attachments, props.sessionId, setComposerAttachments, setComposerDraft]);
+  }, [props.sessionId, setComposerDraft]);
 
   const handleCopyTranscript = async () => {
     try {
@@ -3073,20 +3064,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
       };
     });
     setComposerAttachments(props.sessionId, [...attachments, ...next]);
-    // Inline attachment chips live in the draft as Lexical tokens (same
-    // pattern as pasted-text chips), so they sit in the text flow.
-    setComposerDraft(
-      props.sessionId,
-      insertDraftToken(draft, next.map((attachment) => `[attachment ${attachment.id}]`).join(""), draftOffset),
-    );
   }, [
     attachments,
-    draft,
     props.attachmentsDisabledReason,
     props.attachmentsEnabled,
     props.sessionId,
     setComposerAttachments,
-    setComposerDraft,
   ]);
 
   const handleRemoveAttachment = useCallback((id: string) => {
@@ -3095,8 +3078,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       URL.revokeObjectURL(target.previewUrl);
     }
     setComposerAttachments(props.sessionId, attachments.filter((item) => item.id !== id));
-    setComposerDraft(props.sessionId, draft.replaceAll(`[attachment ${id}]`, ""));
-  }, [attachments, draft, props.sessionId, setComposerAttachments, setComposerDraft]);
+  }, [attachments, props.sessionId, setComposerAttachments]);
 
   const handleInsertMention = useCallback((kind: ComposerMentionKind, value: string, nextDraft?: string) => {
     // @agent mentions switch the session agent instead of inserting an agent

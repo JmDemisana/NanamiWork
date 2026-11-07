@@ -366,21 +366,10 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
   };
 
   const handleDraftChange = (value: string) => {
-    const idsInDraft = new Set(
-      [...value.matchAll(/\[attachment ([^\]]+)\]/g)].map((match) => match[1]).filter((id): id is string => Boolean(id)),
-    );
-    const currentAttachments = continuationHolderRef.current.state.attachments;
-    const retained = currentAttachments.filter((attachment) => idsInDraft.has(attachment.id));
-    if (retained.length !== currentAttachments.length) {
-      for (const attachment of currentAttachments) {
-        if (!idsInDraft.has(attachment.id)) revokeAttachmentPreview(attachment);
-      }
-      updateAttachments(retained);
-    }
     updateDraft(value);
   };
 
-  const handleAttachFiles = (files: File[], draftOffset?: number) => {
+  const handleAttachFiles = (files: File[]) => {
     if (!files.length) return;
     const next: ComposerAttachment[] = files.map((file) => {
       const metadata = resolveAttachmentFileMetadata(file);
@@ -395,14 +384,12 @@ export function NewTaskComposer(props: NewTaskComposerProps) {
       };
     });
     updateAttachments([...continuationHolderRef.current.state.attachments, ...next]);
-    updateDraft(insertDraftToken(continuationHolderRef.current.state.draft, next.map((attachment) => `[attachment ${attachment.id}]`).join(""), draftOffset));
   };
 
   const handleRemoveAttachment = (id: string) => {
     const target = continuationHolderRef.current.state.attachments.find((item) => item.id === id);
     if (target) revokeAttachmentPreview(target);
     updateAttachments(continuationHolderRef.current.state.attachments.filter((item) => item.id !== id));
-    updateDraft(continuationHolderRef.current.state.draft.replaceAll(`[attachment ${id}]`, ""));
   };
 
   const handleRunTask = async () => {

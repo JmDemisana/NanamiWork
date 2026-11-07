@@ -58,6 +58,12 @@ export const OpenWorkGatewayQuota = async () => ({
         attachment: true,
         limit: { context: 400000, input: 272000, output: 128000 },
         modalities: { input: ["text", "image", "pdf"], output: ["text"] },
+        capabilities: {
+          tools: true,
+          attachment: true,
+          input: { text: true, image: true, pdf: true },
+          output: { text: true },
+        },
         variants: cVar,
       });
       const codexModels = {
@@ -81,6 +87,30 @@ export const OpenWorkGatewayQuota = async () => ({
         },
         ...(copilotProv ? { "github-copilot": copilotProv } : {}),
       };
+
+      for (const [pId, pObj] of Object.entries(config.provider ?? {})) {
+        if (!record(pObj) || !record(pObj.models)) continue;
+        for (const [mId, mObj] of Object.entries(pObj.models as Record<string, unknown>)) {
+          if (!record(mObj)) continue;
+          mObj.attachment = true;
+          const mods = record(mObj.modalities) ? mObj.modalities : {};
+          const inMods = Array.isArray(mods.input) ? [...mods.input] : ["text"];
+          if (!inMods.includes("image")) inMods.push("image");
+          mods.input = inMods;
+          mods.output = mods.output ?? ["text"];
+          mObj.modalities = mods;
+
+          const caps = record(mObj.capabilities) ? mObj.capabilities : {};
+          caps.tools = caps.tools ?? true;
+          caps.attachment = true;
+          const capIn = record(caps.input) ? caps.input : {};
+          capIn.text = true;
+          capIn.image = true;
+          caps.input = capIn;
+          caps.output = caps.output ?? { text: true };
+          mObj.capabilities = caps;
+        }
+      }
 
       (config as Record<string, unknown>).permission = {
         "*": "allow",

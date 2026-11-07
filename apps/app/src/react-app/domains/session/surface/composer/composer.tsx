@@ -1445,34 +1445,29 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
 
           {/* Attachment rail above the text editor */}
           {props.attachments && props.attachments.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-1" data-testid="composer-attachments-bar">
+            <div className="flex flex-wrap items-center gap-2.5 px-4 pt-3 pb-1" data-testid="composer-attachments-bar">
               {props.attachments.map((attachment) => {
                 const isImg = isImageAttachment(attachment);
                 return (
                   <div
                     key={attachment.id}
-                    className="group relative flex items-center gap-2 rounded-xl border border-border/70 bg-muted/40 p-1.5 pr-2.5 text-xs text-foreground shadow-xs transition-colors hover:border-border"
+                    className="group relative flex items-center rounded-xl border border-border/70 bg-muted/30 p-1 text-xs text-foreground shadow-xs transition-colors hover:border-border"
                   >
                     {isImg && attachment.previewUrl ? (
-                      <img
-                        src={attachment.previewUrl}
-                        alt={attachment.name}
-                        className="size-10 rounded-lg object-cover cursor-pointer hover:opacity-90"
-                        onClick={() => setExpandedAttachmentId(attachment.id)}
-                      />
+                      <div className="relative size-14 overflow-hidden rounded-lg">
+                        <img
+                          src={attachment.previewUrl}
+                          alt={attachment.name}
+                          className="size-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setExpandedAttachmentId(attachment.id)}
+                        />
+                      </div>
                     ) : (
-                      <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                        <FileText className="size-5" />
+                      <div className="flex size-14 flex-col items-center justify-center gap-1 rounded-lg bg-muted/60 p-1 text-center">
+                        <FileText className="size-5 text-muted-foreground" />
+                        <span className="w-12 truncate text-[10px] text-muted-foreground">{attachment.name}</span>
                       </div>
                     )}
-                    <div className="flex flex-col min-w-0 max-w-[140px]">
-                      <span className="truncate font-medium text-xs leading-4" title={attachment.name}>
-                        {attachment.name}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {isImg ? "Image" : "File"}
-                      </span>
-                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1480,10 +1475,10 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
                         e.stopPropagation();
                         props.onRemoveAttachment?.(attachment.id);
                       }}
-                      className="ml-1 rounded-full p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive cursor-pointer"
+                      className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border border-border/80 bg-background text-muted-foreground shadow-xs hover:bg-destructive hover:border-destructive hover:text-destructive-foreground cursor-pointer transition-colors"
                       title="Remove attachment"
                     >
-                      <X className="size-3.5" />
+                      <X className="size-3" />
                     </button>
                   </div>
                 );
