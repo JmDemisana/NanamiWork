@@ -8,3 +8,12 @@ protocols:
 linux:
   executableName: openwork
 artifactName: Nanami-${version}-${os}-${arch}.${ext}
+
+appx:
+  applicationId: NanamiWork
+  identityName: MaruNanami.NanamiWork
+  publisher: CN=1C8CB4F8-C5E9-44F6-9A8D-DDDA58A3FFE7
+  publisherDisplayName: 'Maru & Nanami'
+  languages:
+    - en-US
+  showNameOnTiles: true
