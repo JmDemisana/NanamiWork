@@ -62,8 +62,9 @@ export function nanamiApiKey(env: NodeJS.ProcessEnv = process.env): string {
 function configuredGatewayKey(env: NodeJS.ProcessEnv): string {
   const home = env.USERPROFILE?.trim() || env.HOME?.trim();
   if (!home) return "";
-  for (const name of ["opencode.json", "opencode.jsonc"]) {
-    const path = join(home, ".config", "opencode", name);
+  for (const dir of ["nanamiwork", "opencode"]) {
+    for (const name of ["opencode.json", "opencode.jsonc"]) {
+      const path = join(home, ".config", dir, name);
     const parsed = readJsonc(path);
     const provider = parsed?.provider;
     if (!isRecord(provider)) continue;

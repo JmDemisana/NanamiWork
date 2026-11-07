@@ -1032,7 +1032,13 @@ function modelStatus(value: unknown): Model["status"] {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (isRecord(value)) {
+    return Object.entries(value)
+      .filter(([_, enabled]) => Boolean(enabled))
+      .map(([key]) => key);
+  }
+  return [];
 }
 
 function mapV2Model(value: unknown): Model | null {
@@ -1051,8 +1057,19 @@ function mapV2Model(value: unknown): Model | null {
       ? rawCosts
       : null;
   const rawCacheCost = readRecord(firstCost, "cache");
-  const inputCapabilities = stringArray(rawCapabilities?.input);
-  const outputCapabilities = stringArray(rawCapabilities?.output);
+  const rawModalities = readRecord(value, "modalities");
+  const inputCapabilities = [
+    ...new Set([
+      ...stringArray(rawCapabilities?.input),
+      ...stringArray(rawModalities?.input),
+    ]),
+  ];
+  const outputCapabilities = [
+    ...new Set([
+      ...stringArray(rawCapabilities?.output),
+      ...stringArray(rawModalities?.output),
+    ]),
+  ];
   const toolcall = rawCapabilities?.tools === true;
   const released = readNumber(rawTime, "released");
   // Native v2 advertises an array of named settings, while the picker consumes
@@ -1074,7 +1091,7 @@ function mapV2Model(value: unknown): Model | null {
     capabilities: {
       temperature: false,
       reasoning: outputCapabilities.includes("reasoning"),
-      attachment: inputCapabilities.some((kind) => kind !== "text"),
+      attachment: rawCapabilities?.attachment === true || inputCapabilities.some((kind) => kind !== "text"),
       toolcall,
       input: {
         text: inputCapabilities.length === 0 || inputCapabilities.includes("text"),
