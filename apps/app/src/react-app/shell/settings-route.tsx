@@ -56,6 +56,7 @@ import {
   listRouteSessions,
   mapDesktopWorkspace,
   mergeRouteWorkspaces,
+  nativeRouteSessionList,
   orderRouteWorkspaces,
   readRouteSessionsWithRetry,
   toSessionGroups,

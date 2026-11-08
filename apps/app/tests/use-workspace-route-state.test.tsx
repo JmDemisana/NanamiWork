@@ -87,10 +87,12 @@ mock.module("@/app/lib/openwork-server", () => ({
   }),
 }));
 const routeWorkspaces = await import("../src/react-app/shell/route-workspaces");
+const nativeTransport = routeWorkspaces.nativeRouteSessionList;
 const v2Transport = routeWorkspaces.v2RouteSessionList;
 mock.module("@/react-app/shell/route-workspaces", () => ({
   ...routeWorkspaces,
   listRouteSessions: (endpoint: ResolvedWorkspaceEndpoint, transport?: RouteSessionListTransport) => {
+    if (transport !== nativeTransport && transport !== v2Transport) throw new Error("Missing session list transport");
     const response = deferred<RouteSession[]>();
     requests.push({ workspaceId: endpoint.workspaceId, engine: transport === v2Transport ? "v2" : "v1", endpoint, response });
     return response.promise;
@@ -469,6 +471,22 @@ test("a workspace whose OpenCode config is invalid shows that error instead of a
   });
   expect(route().selectedWorkspaceError).toBe(message);
   // After the file is fixed, Retry lists again and the error clears.
+  let reload: Promise<void> = Promise.resolve();
+  await act(async () => { reload = route().reloadWorkspaceSessions("ws_1"); });
+  const retried = requests.filter((request) => request.workspaceId === "ws_1").at(-1);
+  expect(retried).not.toBe(selected);
+  await act(async () => { retried?.response.resolve([session("ws_1", "kept")]); await reload; });
+  expect(route().selectedWorkspaceError).toBeNull();
+  expect(route().sessionsByWorkspaceId.ws_1.map((item) => item.id)).toEqual(["kept"]);
+});
+
+test("a failed native session read shows an error and a successful retry restores the list", async () => {
+  await mount();
+  await publishRouting(false);
+  const selected = requests.find((request) => request.workspaceId === "ws_1" && request.engine === "v1");
+  if (!selected) throw new Error("Expected the native workspace inventory request");
+  await act(async () => { selected.response.reject(new Error("Session index failed")); });
+  expect(route().selectedWorkspaceError).toBe("Session index failed");
   let reload: Promise<void> = Promise.resolve();
   await act(async () => { reload = route().reloadWorkspaceSessions("ws_1"); });
   const retried = requests.filter((request) => request.workspaceId === "ws_1").at(-1);

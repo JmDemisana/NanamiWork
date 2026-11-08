@@ -202,8 +202,7 @@ export function routeWorkspaceSessionLoadScope(
   endpoint: ResolvedWorkspaceEndpoint | null,
   engineV2ChatRouting: boolean | undefined,
 ): string | null {
-  if (!endpoint) return null;
-  const routing = engineV2ChatRouting ?? false;
+  if (!endpoint || engineV2ChatRouting === undefined) return null;
   return JSON.stringify([
     workspace.workspaceType,
     workspace.path,
@@ -212,7 +211,7 @@ export function routeWorkspaceSessionLoadScope(
     endpoint.mountedBaseUrl,
     endpoint.opencodeBaseUrl,
     endpoint.token,
-    routing,
+    engineV2ChatRouting,
   ]);
 }
 

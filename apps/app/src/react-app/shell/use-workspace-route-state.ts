@@ -65,6 +65,7 @@ import {
   describeRouteError,
   listRouteSessions,
   mapDesktopWorkspace,
+  nativeRouteSessionList,
   orderRouteWorkspaces,
   refreshRouteWorkspaceListState,
   stabilizeRouteWorkspaceOrder,
@@ -526,11 +527,9 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
                 return;
               }
               invalidateSessionInventory(workspace.id);
-              // OpenCode refuses this folder until its config is fixed; show
-              // the file and field rather than an empty chat list.
-              if (error instanceof Error && "code" in error && error.code === "opencode_config_invalid") {
-                setErrorsByWorkspaceId((current) => ({ ...current, [workspace.id]: error.message }));
-              }
+              // A failed read is not an empty history. Surface the failure so
+              // the sidebar never claims there are no tasks when loading failed.
+              setErrorsByWorkspaceId((current) => ({ ...current, [workspace.id]: describeRouteError(error) }));
               setRetryingWorkspaceIds((current) =>
                 current.includes(workspace.id) ? current.filter((id) => id !== workspace.id) : current,
               );
