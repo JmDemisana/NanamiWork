@@ -91,6 +91,12 @@ pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 
 ---
 
+## ⚖️ Terms of Service & Acceptable Use
+
+NanamiWork allows you to connect multiple personal, educational, and organizational accounts to isolate environment contexts and track usage quotas. Users are responsible for adhering to the respective Terms of Service of connected providers (Google, OpenAI, GitHub). Automated account cycling or abuse of free-tier quotas is strictly discouraged.
+
+---
+
 ## 📄 License & Attribution
 
 NanamiWork is licensed under the [GNU General Public License v3.0 (GPL-3.0)](./LICENSE).  
