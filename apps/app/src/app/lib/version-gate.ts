@@ -383,9 +383,13 @@ export async function isAlphaUpdateAllowed(
 export async function isUpdateAllowed(
   updateVersion: string,
   desktopConfig: DenDesktopConfig | null | undefined,
+  options: { skipDenVersionCatalog?: boolean } = {},
 ): Promise<boolean> {
   if (!isUpdateAllowedByDesktopConfig(updateVersion, desktopConfig)) {
     return false;
   }
+  // The public NanamiWork fork publishes its own release feed, not Den's
+  // OpenWork version catalog. Explicit organization allowlists still apply.
+  if (options.skipDenVersionCatalog) return true;
   return isUpdateSupportedByDen(updateVersion);
 }

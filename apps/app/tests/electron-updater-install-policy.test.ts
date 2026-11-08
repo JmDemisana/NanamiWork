@@ -86,8 +86,7 @@ describe("install re-validates the organization's desktop version policy", () =>
     refreshes = 0;
   });
 
-  // Install first asks for a newer release (one refresh), then re-validates the
-  // policy for the build it is about to install (a second refresh).
+  // Install checks for a newer allowed release, then re-validates the staged one.
   const installRefreshes = 2;
 
   afterEach(async () => {
@@ -95,6 +94,27 @@ describe("install re-validates the organization's desktop version policy", () =>
     if (originalDev === undefined) delete process.env.DEV;
     else process.env.DEV = originalDev;
     await GlobalRegistrator.unregister();
+  });
+
+  test("public NanamiWork accepts its own release without consulting OpenWork's Den catalog", async () => {
+    let metadataCalls = 0;
+    window.__openworkReadDesktopVersionMetadataEval = () => {
+      metadataCalls += 1;
+      throw new Error("Den is offline");
+    };
+    await act(async () => { await updater.checkForUpdates("stable"); });
+    expect(updater.updateStatus).toMatchObject({ state: "ready", version: downloadedVersion });
+    expect(metadataCalls).toBe(0);
+  });
+
+  test("enterprise builds still respect the Den version catalog", async () => {
+    const electron = window.__OPENWORK_ELECTRON__;
+    if (!electron) throw new Error("Missing desktop bridge");
+    Reflect.set(electron, "meta", { distribution: { flavor: "enterprise", appName: "Enterprise", appIdentifier: "enterprise", protocolScheme: "openwork", requireSignin: true, requireActivation: true } });
+    window.__openworkReadDesktopVersionMetadataEval = () => ({ ...metadata, latestAppVersion: installedVersion });
+    await act(async () => { root.render(createElement(Harness, { desktopConfig: downloadedConfig })); });
+    await act(async () => { await updater.checkForUpdates("stable"); });
+    expect(updater.updateStatus).toMatchObject({ state: "blocked", version: downloadedVersion });
   });
 
   test("installs a downloaded version the organization still allows", async () => {
@@ -115,7 +135,7 @@ describe("install re-validates the organization's desktop version policy", () =>
     expect(updater.updateStatus).toMatchObject({
       state: "blocked",
       version: downloadedVersion,
-      message: `OpenWork ${downloadedVersion} is available, but this installation is not eligible for it yet.`,
+      message: `Nanami ${downloadedVersion} is available, but this installation is not eligible for it yet.`,
     });
     expect(statuses.some((status) => status?.state === "error")).toBe(false);
   });

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import type { DenDesktopConfig } from "../../../../app/lib/den";
+import { readDesktopDistributionInfo } from "../../../../app/lib/desktop";
 import {
   compareVersions,
   isAlphaChannelAllowedByDesktopConfig,
@@ -157,6 +158,8 @@ function updateProgress(event: unknown): { downloaded?: number; total?: number }
 }
 
 export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions) {
+  const distribution = readDesktopDistributionInfo();
+  const skipDenVersionCatalog = distribution.flavor === "public" && distribution.appIdentifier === "ai.nanami.workbench";
   const {
     releaseChannel,
     onReleaseChannelChange,
@@ -527,7 +530,7 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
                 latestDesktopConfig,
                 result.currentVersion ?? appVersion,
               )
-            : await isUpdateAllowed(result.latestVersion, latestDesktopConfig)
+            : await isUpdateAllowed(result.latestVersion, latestDesktopConfig, { skipDenVersionCatalog })
         : result.available;
       if (!isCurrentRequest()) return;
       const checkedUpdateState = resolveCheckedUpdateState({
@@ -564,7 +567,7 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
         failedAction: "check",
       });
     }
-  }, [appVersion, downloadUpdate, onReleaseChannelChange, refreshDesktopConfig, releaseChannel, resolvePolicyReleaseChannel, setError, updateAutoDownload]);
+  }, [appVersion, downloadUpdate, onReleaseChannelChange, refreshDesktopConfig, releaseChannel, resolvePolicyReleaseChannel, setError, skipDenVersionCatalog, updateAutoDownload]);
 
   // Ask the feed whether an allowed build newer than the staged one has shipped,
   // without disturbing the staged download. Resolves null once superseded.
@@ -575,6 +578,10 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
     const bridge = electronUpdaterBridge();
     if (!bridge?.check) throw new Error(t("updates.bridge_unavailable"));
     const channel = downloadedReleaseChannelRef.current ?? releaseChannel;
+    const currentDesktopConfig = channel === "stable"
+      ? await refreshDesktopConfig().catch(() => desktopConfigRef.current)
+      : desktopConfigRef.current;
+    if (!isCurrentRequest()) return null;
     let targetVersion: string | undefined;
     if (channel === "stable") {
       targetVersion = undefined;
@@ -588,8 +595,8 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
       : null;
     const allowed = result.available && result.latestVersion && comparison === 1
       ? channel === "stable"
-        ? result.latestVersion === targetVersion
-        : await isAlphaUpdateAllowed(result.latestVersion, desktopConfigRef.current, appVersion)
+        ? await isUpdateAllowed(result.latestVersion, currentDesktopConfig, { skipDenVersionCatalog })
+        : await isAlphaUpdateAllowed(result.latestVersion, currentDesktopConfig, appVersion)
       : false;
     if (!isCurrentRequest()) return null;
     return {
@@ -603,7 +610,7 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
         channel,
       } : undefined,
     };
-  }, [appVersion, refreshDesktopConfig, releaseChannel]);
+  }, [appVersion, refreshDesktopConfig, releaseChannel, skipDenVersionCatalog]);
 
   const markStagedUpdateLost = useCallback(() => {
     stagedUpdateRevisionRef.current += 1;

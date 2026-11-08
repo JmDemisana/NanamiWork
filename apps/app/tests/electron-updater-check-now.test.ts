@@ -235,7 +235,7 @@ describe("Settings staged-update discovery", () => {
     expect(button("Download").disabled).toBe(true);
     expect(button("Install & restart").disabled).toBe(true);
     await click("Check now");
-    expect(checks).toEqual([{ channel: "stable", targetVersion: stagedVersion, options: undefined }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: undefined }]);
     expect(downloads).toEqual([stagedVersion]);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: stagedVersion });
     expect(host.querySelector('[data-testid="updates-latest-version"]')?.textContent).toBe(`v${stagedVersion}`);
@@ -268,7 +268,7 @@ describe("Settings staged-update discovery", () => {
     await stage();
     const staged = stagedFields(updater.updateStatus);
     await click("Check now");
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: { preserveStaged: true } }]);
     expect(downloads).toEqual([]);
     expect(statuses.length).toBeGreaterThan(0);
     for (const status of statuses) expect(stagedFields(status)).toEqual(staged);
@@ -368,7 +368,7 @@ describe("Settings staged-update discovery", () => {
     await stage();
     autoCheck = true;
     await act(async () => { root.render(createElement(Harness)); });
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: { preserveStaged: true } }]);
     expect(downloads).toEqual([newerVersion]);
     expect(downloadedStage).toBe(newerVersion);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: newerVersion });
@@ -394,7 +394,7 @@ describe("Settings staged-update discovery", () => {
     autoCheck = true;
     autoDownload = false;
     await act(async () => { root.render(createElement(Harness)); });
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: { preserveStaged: true } }]);
     expect(downloads).toEqual([]);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: stagedVersion, candidate: { version: newerVersion } });
     expect(button("Download").disabled).toBe(false);
@@ -415,7 +415,7 @@ describe("Settings staged-update discovery", () => {
   test("native menu request shares the staged-preserving manual check", async () => {
     await stage();
     await act(async () => { useUpdateCheckRequestStore.getState().requestUpdateCheck(); });
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: { preserveStaged: true } }]);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: stagedVersion });
     expect(downloads).toEqual([]);
   });
@@ -538,7 +538,7 @@ describe("Settings staged-update discovery", () => {
       expect(downloads).toEqual([]);
       checkResult = undefined;
       await click("Check now");
-      expect(checks[2]).toEqual({ channel: "stable", targetVersion: newerVersion, options: undefined });
+      expect(checks[2]).toEqual({ channel: "stable", targetVersion: undefined, options: undefined });
       expect(updater.updateStatus).toMatchObject({ state: "available", version: newerVersion });
       expect(downloads).toEqual([]);
     });
@@ -655,7 +655,7 @@ describe("Settings staged-update discovery", () => {
   test("install fetches a release that shipped after the staged download and restarts once onto it", async () => {
     await stage();
     await click("Install & restart");
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: { preserveStaged: true } }]);
     expect(downloads).toEqual([newerVersion]);
     expect(installs).toBe(1);
     expect(installedStages).toEqual([newerVersion]);
@@ -711,7 +711,7 @@ describe("Settings staged-update discovery", () => {
   test("channel override still uses the ordinary manual path", async () => {
     await stage();
     await act(async () => { await updater.checkForUpdates("stable"); });
-    expect(checks).toEqual([{ channel: "stable", targetVersion: newerVersion, options: undefined }]);
+    expect(checks).toEqual([{ channel: "stable", targetVersion: undefined, options: undefined }]);
     expect(downloads).toEqual([newerVersion]);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: newerVersion });
   });
@@ -744,8 +744,8 @@ describe("Settings staged-update discovery", () => {
     installReason = "update-not-downloaded";
     await click("Install & restart");
     expect(checks).toEqual([
-      { channel: "stable", targetVersion: newerVersion, options: { preserveStaged: true } },
-      { channel: "stable", targetVersion: newerVersion, options: undefined },
+      { channel: "stable", targetVersion: undefined, options: { preserveStaged: true } },
+      { channel: "stable", targetVersion: undefined, options: undefined },
     ]);
     expect(downloads).toEqual([newerVersion]);
     expect(updater.updateStatus).toMatchObject({ state: "ready", version: newerVersion });

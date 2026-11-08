@@ -3,11 +3,19 @@ import {
   isAlphaChannelAllowedByDesktopConfig,
   isAlphaUpdateAllowed,
   isAlphaUpdateAllowedByVersionCeiling,
+  isUpdateAllowed,
   resolveAutomaticStableDesktopUpdate,
   resolveDesktopUpdateChannel,
   resolveFreshStableDesktopUpdate,
   selectStableDesktopUpdate,
 } from "../src/app/lib/version-gate";
+
+test("the NanamiWork feed bypass retains explicit organization allowlists", async () => {
+  const options = { skipDenVersionCatalog: true };
+  expect(await isUpdateAllowed("1.1.3", {}, options)).toBe(true);
+  expect(await isUpdateAllowed("1.1.3", { allowedDesktopVersions: ["1.1.2"] }, options)).toBe(false);
+  expect(await isUpdateAllowed("1.1.3", { allowedDesktopVersions: ["1.1.3"] }, options)).toBe(true);
+});
 
 const metadata = {
   minAppVersion: "0.11.207",
