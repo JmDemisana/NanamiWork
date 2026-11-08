@@ -134,6 +134,20 @@ test("a working shared store is left alone", async () => {
   }
 });
 
+test("a previously isolated database is reused on a healthy restart", async () => {
+  const w = await world("healthy");
+  await mkdir(w.stateDir, { recursive: true });
+  const database = join(w.stateDir, "opencode.db");
+  await writeFile(database, "existing history");
+  const server = await w.start();
+  try {
+    expect((await w.spawns()).map((spawn) => spawn.OPENCODE_DB)).toEqual([database]);
+    expect(isolatedOpencodeV1Database()).toBe(database);
+  } finally {
+    await server.close();
+  }
+});
+
 test("without private storage the collision is reported as before", async () => {
   const w = await world("v2-database");
   await expect(w.start({})).rejects.toThrow(/has no session table/);

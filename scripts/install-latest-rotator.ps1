@@ -5,7 +5,9 @@
 
 param (
     [string]$Repo = "JmDemisana/NanamiWork",
-    [switch]$SkipWatch = $false
+    [switch]$SkipWatch = $false,
+    [switch]$WatchOnly = $false,
+    [string]$RunId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,7 +17,11 @@ $tempInstaller = "$env:TEMP\NanamiWork-rotator-setup.exe"
 Write-Host "=== NanamiWork Rotator Auto-Installer ===" -ForegroundColor Cyan
 
 Write-Host "Querying latest rotator run on $Repo..." -ForegroundColor Yellow
-$latestRun = gh run list --workflow=rotator.yml -R $Repo --limit 1 --json databaseId,status,conclusion | ConvertFrom-Json
+if ($RunId) {
+    $latestRun = @(gh run view $RunId -R $Repo --json databaseId,status,conclusion | ConvertFrom-Json)
+} else {
+    $latestRun = @(gh run list --workflow=rotator.yml -R $Repo --limit 1 --json databaseId,status,conclusion | ConvertFrom-Json)
+}
 if (-not $latestRun -or -not $latestRun[0].databaseId) {
     Write-Error "No rotator workflow run found on $Repo."
 }
@@ -35,6 +41,11 @@ if (-not $SkipWatch -and $status -ne "completed") {
     Write-Host "Workflow run $latestRunId finished successfully!" -ForegroundColor Green
 } elseif ($status -eq "completed" -and $conclusion -ne "success" -and -not $SkipWatch) {
     Write-Error "Workflow run $latestRunId finished with conclusion '$conclusion'. Check GitHub Actions logs."
+}
+
+if ($WatchOnly) {
+    Write-Host "Tracking complete for run $latestRunId." -ForegroundColor Green
+    exit 0
 }
 
 Write-Host "Fetching newest installer..." -ForegroundColor Cyan

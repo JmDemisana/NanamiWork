@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { chmod, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import { homedir } from "node:os";
 import { join, relative, resolve, isAbsolute } from "node:path";
@@ -352,6 +353,13 @@ async function createManagedOpencodeServerInner(options: ManagedOpencodeServerOp
   const hostname = options.hostname ?? "127.0.0.1";
   let port = options.port ?? await findFreePort(hostname, options.excludedPorts);
   let env = options.env;
+  // Once recovery moved v1 history, keep using that database on subsequent
+  // starts even if the original shared database is accessible again.
+  const privateDatabase = options.stateDir && join(options.stateDir, "opencode.db");
+  if (privateDatabase && !mergeEnv([process.env, env]).OPENCODE_DB?.trim() && existsSync(privateDatabase)) {
+    isolatedDatabase = privateDatabase;
+    env = { ...env, OPENCODE_DB: privateDatabase };
+  }
   // Each recovery is taken at most once, independently: a machine whose v2
   // install owns both the database and the global config needs both moved, and
   // a moved engine can still lose the free-port race.
