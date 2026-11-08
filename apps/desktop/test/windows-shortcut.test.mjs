@@ -8,6 +8,13 @@ import { createWindowsShortcutScheduler, readWindowsShortcutMarker, repairWindow
 
 const details = { target: "app.exe", cwd: ".", description: "desktop", icon: "app.ico", iconIndex: 0, appUserModelId: "app.id" };
 const turn = () => new Promise(resolve => setImmediate(resolve));
+
+test("the Windows uninstaller does not touch OpenWork's shortcut marker", async () => {
+  const installer = await readFile(new URL("../build/installer.nsh", import.meta.url), "utf8");
+  assert.doesNotMatch(installer, /com\.differentai\.openwork/i);
+  assert.doesNotMatch(installer, /!macro\s+customUnInstall\b/i);
+});
+
 async function until(predicate) {
   const deadline = Date.now() + 3000;
   while (!predicate()) {

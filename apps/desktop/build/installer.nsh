@@ -1,14 +1,5 @@
-!macro customUnInstall
-  StrCpy $1 ""
-  FileOpen $0 "$APPDATA\com.differentai.openwork\windows-brand-shortcut.txt" r
-  IfErrors +3
-    FileRead $0 $1
-    FileClose $0
-  ${If} $1 != ""
-    Delete "$1"
-  ${EndIf}
-  Delete "$APPDATA\com.differentai.openwork\windows-brand-shortcut.txt"
-!macroend
+# Do not use OpenWork's shortcut marker during uninstall. NanamiWork's marker
+# is private and JSON-formatted, so the old plain-path cleanup is unsafe.
 
 # An update first runs the old uninstaller, which removes the installed files,
 # and only then extracts the new version. If Windows shuts down, restarts or
