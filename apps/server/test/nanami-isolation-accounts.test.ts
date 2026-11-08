@@ -14,7 +14,7 @@ import type { ServerConfig } from "../src/types.js";
 
 const installedPlugin = join(process.env.USERPROFILE || process.env.HOME || "", ".cache", "opencode", "packages", "opencode-antigravity-auth@latest", "node_modules", "opencode-antigravity-auth", "dist", "src", "plugin", "storage.js");
 
-test("the installed Antigravity plugin cannot migrate another app's Windows accounts", { skip: process.platform !== "win32" || !existsSync(installedPlugin) }, async () => {
+if (process.platform === "win32" && existsSync(installedPlugin)) test("the installed Antigravity plugin cannot migrate another app's Windows accounts", async () => {
   const root = await mkdtemp(join(tmpdir(), "nanami-plugin-"));
   const shared = join(root, "shared", "opencode", "antigravity-accounts.json");
   const engineHome = join(root, "engine"), config = join(root, "config");
