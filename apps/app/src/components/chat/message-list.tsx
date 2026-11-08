@@ -1496,7 +1496,7 @@ function LiveTurnReserve({ active }: { active: boolean }) {
  * of the way.
  */
 function CompletedStepRun({ label, count, children }: { label: string; count?: string | null; children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(true)
   // Text-first: "Worked for 43m 29s ›", no step count beside it.
 
   return (

@@ -159,7 +159,7 @@ export function LocalProvider({ children }: LocalProviderProps) {
     persisted.desktopNotifications = isDesktopNotificationPreference(persisted.desktopNotifications)
       ? persisted.desktopNotifications
       : DEFAULT_DESKTOP_NOTIFICATION_PREFERENCE;
-    persisted.defaultModel = { providerID: "", modelID: "" };
+    persisted.defaultModel = readStoredDefaultModel();
     return persisted;
   });
   const prefsRef = useRef(prefs);

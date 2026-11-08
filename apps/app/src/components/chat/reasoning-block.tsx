@@ -26,24 +26,21 @@ type ReasoningBlockProps = {
  * line with a chevron; the full reasoning renders as markdown only
  * when the user opens it.
  */
-export function ReasoningBlock({ text, isStreaming, className, disclosureKey, durationMs }: ReasoningBlockProps) {
-  const [open, setOpen] = useWorkbenchDisclosure(disclosureKey)
-
+export function ReasoningBlock({ text, isStreaming, className, durationMs }: ReasoningBlockProps) {
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className={cn("w-full", className)} data-reasoning-block="">
-      <CollapsibleTrigger className="group flex min-h-6.5 cursor-pointer items-center gap-2 text-sm transition-colors hover:text-foreground">
+    <div className={cn("w-full", className)} data-reasoning-block="">
+      <div className="flex min-h-6.5 items-center gap-2 text-sm">
         <TextSentenceLine verb={textThoughtLabel(durationMs, isStreaming)} tone={isStreaming ? "running" : "normal"} />
-        <TrailingChevron open={open} />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-150 ease-out data-starting-style:h-0 data-ending-style:h-0 [&[hidden]:not([hidden='until-found'])]:hidden">
+      </div>
+      <div className="mt-1 w-full min-w-0">
         <MessageContent
           markdown
           isStreaming={isStreaming}
-          className="text-muted-foreground prose mt-1 w-full min-w-0 rounded-lg bg-transparent p-0 text-sm"
+          className="text-muted-foreground prose w-full min-w-0 rounded-lg bg-transparent p-0 text-sm"
         >
           {text}
         </MessageContent>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </div>
   )
 }

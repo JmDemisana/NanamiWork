@@ -40,7 +40,19 @@ function ShowMore({ expanded, onToggle }: { expanded: boolean; onToggle: () => v
  * wrapping), then its output in lighter mono capped with "Show more", and a
  * `…` menu to copy either. It replaces a separate Technical details box.
  */
-export function TextCommandCard({ command, output, failed = false }: { command: string; output: string | null; failed?: boolean }) {
+export function TextCommandCard({
+  command,
+  output,
+  failed = false,
+  running = false,
+  onRunInBackground,
+}: {
+  command: string;
+  output: string | null;
+  failed?: boolean;
+  running?: boolean;
+  onRunInBackground?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false)
   const { program, rest } = commandProgram(command)
   const shown = output ? previewLines(output.trimEnd(), expanded) : null
@@ -57,7 +69,17 @@ export function TextCommandCard({ command, output, failed = false }: { command: 
           {shown.clipped || expanded ? <ShowMore expanded={expanded} onToggle={() => setExpanded(!expanded)} /> : null}
         </div>
       ) : null}
-      <div className="absolute end-1.5 top-1.5">
+      <div className="absolute end-1.5 top-1.5 flex items-center gap-1">
+        {running && onRunInBackground ? (
+          <button
+            type="button"
+            onClick={onRunInBackground}
+            className="inline-flex h-6 items-center rounded px-2 text-xs font-sans text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Turn into a background task"
+          >
+            Run in background
+          </button>
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -69,6 +91,11 @@ export function TextCommandCard({ command, output, failed = false }: { command: 
           <DropdownMenuContent align="end" className="min-w-40">
             <DropdownMenuItem onClick={() => void copyText(command)}>{t("text_activity.copy_command")}</DropdownMenuItem>
             {output ? <DropdownMenuItem onClick={() => void copyText(output)}>{t("text_activity.copy_output")}</DropdownMenuItem> : null}
+            {onRunInBackground ? (
+              <DropdownMenuItem onClick={onRunInBackground}>
+                Run in background
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

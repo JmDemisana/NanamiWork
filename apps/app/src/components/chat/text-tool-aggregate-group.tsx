@@ -13,6 +13,8 @@ import { getToolAggregateLifecycle, type AggregateThought, type AnyToolPart } fr
 import { isToolPartInFlight } from "@/lib/tool-activity"
 import { cn } from "@/lib/utils"
 import { useWorkbenchDisclosure } from "@/react-app/domains/session/chat/workbench-ui-state"
+import { useOptionalMessageList } from "@/components/chat/message-list-provider"
+import { addBackgroundShell, useBackgroundShellStore } from "@/react-app/domains/session/status/background-shell-store"
 
 const ROW_CAP = 8
 
@@ -75,7 +77,7 @@ function TextStepRow({ row, status, disclosureKey }: {
   disclosureKey: string | undefined
 }) {
   const part = row.part
-  const [open, setOpen] = useWorkbenchDisclosure(disclosureKey)
+  const [open, setOpen] = useWorkbenchDisclosure(disclosureKey, true)
   const sentence = textStepSentence(part, status)
   const command = commandOf(part)
   const output = outputOf(part)
@@ -84,17 +86,30 @@ function TextStepRow({ row, status, disclosureKey }: {
   const failure = status === "failed" && !command ? output : null
   const expandable = Boolean(command || (edit && (edit.added || edit.removed)) || failure)
   const tone = status === "failed" ? "failed" : status === "waiting" ? "waiting" : status === "running" ? "running" : "normal"
+  const messageContext = useOptionalMessageList()
+  const handleRunInBackground = messageContext?.workspaceId && messageContext?.sessionId && command ? () => {
+    useBackgroundShellStore.getState().update(messageContext.workspaceId, (book) =>
+      addBackgroundShell(book, {
+        id: part.toolCallId || `sh_${Date.now()}`,
+        sessionId: messageContext.sessionId,
+        command,
+        startedAt: Date.now(),
+        observedAt: Date.now(),
+      })
+    )
+  } : undefined
+
   const line = (
     <>
       <TextSentenceLine verb={sentence.verb} object={sentence.object} title={sentence.title} tone={tone} />
       {row.repeat > 1 ? <RailMeta><span data-tool-aggregate-repeat>×{row.repeat}</span></RailMeta> : null}
       {stats ? <TextDiffStats added={stats.added} removed={stats.removed} /> : null}
-      {expandable ? <TrailingChevron open={open} /> : null}
+      {!command && expandable ? <TrailingChevron open={open} /> : null}
     </>
   )
   return (
     <div data-tool-aggregate-row="" data-text-step-row={status} className="flex min-w-0 flex-col gap-1.5">
-      {expandable ? (
+      {expandable && !command ? (
         <button
           type="button"
           aria-expanded={open}
@@ -109,7 +124,15 @@ function TextStepRow({ row, status, disclosureKey }: {
       ) : (
         <div className={cn(RAIL_ROW, RAIL_LINE)}>{line}</div>
       )}
-      {open && command ? <TextCommandCard command={command} output={output} failed={status === "failed"} /> : null}
+      {command ? (
+        <TextCommandCard
+          command={command}
+          output={output}
+          failed={status === "failed"}
+          running={status === "running"}
+          onRunInBackground={handleRunInBackground}
+        />
+      ) : null}
       {open && edit ? <TextDiffCard removed={edit.removed} added={edit.added} /> : null}
       {open && failure ? <TextTechnicalDetails><pre className="whitespace-pre-wrap break-words font-mono">{failure}</pre></TextTechnicalDetails> : null}
     </div>
@@ -132,7 +155,8 @@ export function TextToolAggregateGroup({ parts, messageId, thoughts = [], classN
   const groupKey = parts[0]?.toolCallId ?? "aggregate"
   const latestToolCallId = parts.at(-1)?.toolCallId ?? groupKey
   const keyFor = (id: string, detail: string) => messageId ? JSON.stringify(["tool", messageId, id, detail]) : undefined
-  const [expanded, setExpanded] = useWorkbenchDisclosure(keyFor(groupKey, "expanded"))
+  const [expanded, setExpanded] = useWorkbenchDisclosure(keyFor(groupKey, "expanded"), true)
+  const isExpanded = running || expanded
   const [showAll, setShowAll] = useWorkbenchDisclosure(keyFor(groupKey, "show-all"))
   const resolveLifecycle = useCurrentToolLifecycleResolver()
 
@@ -196,7 +220,7 @@ export function TextToolAggregateGroup({ parts, messageId, thoughts = [], classN
         <TrailingChevron open={expanded} />
       </button>
 
-      {expanded ? (
+      {isExpanded ? (
         <div className="mt-2 flex flex-col gap-2">
           {visibleRows.map((row) => (
             <Fragment key={row.part.toolCallId}>

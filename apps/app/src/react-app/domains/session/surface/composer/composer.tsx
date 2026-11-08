@@ -1,3 +1,4 @@
+import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 /** @jsxImportSource react */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -373,6 +374,11 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
 
   // Editor submit (Enter, or Cmd/Ctrl+Enter when `queue` is set).
   const handleEditorSubmit = useCallback((options: { queue: boolean }) => {
+    if (!isModelPicked) {
+      props.onModelPickerOpenChange?.(true);
+      return;
+    }
+    if (!canSend) return;
     const current = prepareVoiceSubmission();
     const action = resolveComposerSubmit({
       hasContent: current.draft.trim().length > 0 || current.attachments.length > 0,
@@ -831,11 +837,31 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     () => [...new Set([...props.recentFiles, ...workspaceFileResults])],
     [props.recentFiles, workspaceFileResults],
   );
+  const activeAntigravityAccount = useAntigravityAccountsStore((s) => s.getActiveAccount());
+  const activeChatGptAccount = useAntigravityAccountsStore((s) => s.getActiveChatGptAccount());
+  const activeCopilotAccount = useAntigravityAccountsStore((s) => s.getActiveCopilotAccount());
+
+  const activeAntigravityItem = props.selectedModel?.providerID === "google"
+    ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, props.selectedModel.modelID)
+    : undefined;
+  const activeChatGptItem = props.selectedModel?.providerID === "openai"
+    ? activeChatGptAccount?.models.find((m) => m.modelID === props.selectedModel.modelID)
+    : undefined;
+  const activeCopilotItem = props.selectedModel?.providerID === "github-copilot"
+    ? activeCopilotAccount?.models.find((m) => m.modelID === props.selectedModel.modelID)
+    : undefined;
+
   const isModelPicked = Boolean(
     props.selectedModel?.modelID &&
     props.selectedModel?.providerID &&
     props.selectedModel.modelID !== "" &&
-    props.selectedModel.providerID !== ""
+    props.selectedModel.providerID !== "" &&
+    props.selectedModel.modelID !== "default" &&
+    props.selectedModel.modelID !== "pick-a-model" &&
+    (props.selectedModel.providerID === "nanami" ||
+      (props.selectedModel.providerID === "google" ? Boolean(activeAntigravityItem) : true) &&
+      (props.selectedModel.providerID === "openai" && activeChatGptAccount ? Boolean(activeChatGptItem) : true) &&
+      (props.selectedModel.providerID === "github-copilot" && activeCopilotAccount ? Boolean(activeCopilotItem) : true))
   );
   const canSend = isModelPicked && (props.draft.trim().length > 0 || props.attachments.length > 0);
   const diagnosticsRef = useRef<ConnectionDiagnosticSource | null>(null);
