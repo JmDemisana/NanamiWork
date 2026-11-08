@@ -100,7 +100,7 @@ async function paint() {
   });
 }
 
-function fixture(navigation = false) {
+function fixture(navigation = false, loadFullHistoryAfterOpen = false) {
   let scrollControls: ReturnType<typeof useSessionScrollController> | undefined;
   function NavigationViewport({ opening, owner, children }: { opening: ReturnType<typeof useOpeningSessionHistory>; owner: string; children: ReactNode }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -151,7 +151,7 @@ function fixture(navigation = false) {
       latestReads.push({ owner, authToken, signal, resolve, reject });
     });
     return { owner: cacheOwner, runtimeOwner, sessionId: owner, authToken, snapshotQueryKey: snapshotKey("workspace", owner), transcriptQueryKey: transcriptKey("workspace", owner),
-      metadataQueryKey: sessionMetadataKey({ workspaceId: "workspace", baseUrl: "https://history.example/opencode", openworkToken: authToken ?? "" }, owner), readSnapshot, readLatest };
+      metadataQueryKey: sessionMetadataKey({ workspaceId: "workspace", baseUrl: "https://history.example/opencode", openworkToken: authToken ?? "" }, owner), readSnapshot, readLatest, loadFullHistoryAfterOpen };
   }
   function Harness({ options, onMount, pane }: { options: ReturnType<typeof input>; onMount?: (ensure: () => Promise<OpenworkSessionHistory>) => void; pane?: string }) {
     const { sessionId: owner, owner: cacheOwner } = options;
@@ -268,6 +268,123 @@ async function demand(view: ReturnType<typeof fixture>, direction: "older" | "ne
 function visibleIds(view: ReturnType<typeof fixture>) {
   return [...view.host.querySelectorAll("[data-message-id]")].map((message) => message.getAttribute("data-message-id"));
 }
+
+describe("background-history-load", () => {
+  test("shows the recent page first, then loads the complete history in the background", async () => {
+    const view = fixture(false, true);
+    await view.render();
+    await view.resolve(0, page(["recent"], null, "older"));
+    expect(visibleIds(view)).toEqual(["recent"]);
+    expect(view.reads).toHaveLength(1);
+    await paint();
+    await paint();
+    await paint();
+    await settle();
+    expect(view.reads).toHaveLength(2);
+    expect(view.reads[1].window).toEqual({ limit: 24, before: "older" });
+    expect(visibleIds(view)).toEqual(["recent"]);
+    await view.resolve(1, page(["earlier"], "older", null));
+    expect(visibleIds(view)).toEqual(["earlier", "recent"]);
+    expect(view.host.querySelector("[data-history-complete]")?.getAttribute("data-history-complete")).toBe("true");
+  });
+
+  test("automatically loads every older page without waiting for scrolling", async () => {
+    const view = fixture(false, true);
+    await view.render();
+    await view.resolve(0, page(["latest"], null, "cursor-1"));
+    await paint(); await paint(); await paint(); await settle();
+    expect(view.reads[1].window).toEqual({ limit: 24, before: "cursor-1" });
+    await view.resolve(1, page(["middle"], "cursor-1", "cursor-2"));
+    await paint(); await settle();
+    expect(view.reads[2].window).toEqual({ limit: 24, before: "cursor-2" });
+    await view.resolve(2, page(["first"], "cursor-2", null));
+    expect(visibleIds(view)).toEqual(["first", "middle", "latest"]);
+    expect(view.pages.complete).toBe(true);
+  });
+
+  test("a saved middle position loads history in both directions", async () => {
+    const view = fixture(false, true);
+    useSessionScrollStore.getState().setManualScroll("a", 100, null, { messageId: "middle", offset: -20 });
+    useSessionScrollStore.getState().setGeometry("a", { owner: "a", scrollHeight: 1000, viewportWidth: 600,
+      before: 300, after: 300, messageIds: ["middle"], page: { before: "middle-page", limit: 24, lineage: [null, "middle-page"] } });
+    await view.render();
+    expect(view.reads[0].window).toEqual({ limit: 24, before: "middle-page" });
+    await view.resolve(0, page(["middle"], "middle-page", "older"));
+    await paint(); await paint(); await paint(); await settle();
+    expect(view.reads[1].window).toEqual({ limit: 24, before: "older" });
+    await view.resolve(1, page(["first"], "older", null));
+    await paint(); await settle();
+    expect(view.reads[2].window).toEqual({ limit: 24 });
+    await view.resolve(2, page(["latest"], null, "middle-page"));
+    expect(visibleIds(view)).toEqual(["first", "middle", "latest"]);
+    expect(view.pages.complete).toBe(true);
+  });
+
+  test("a late background read cannot replace another session", async () => {
+    const view = fixture(false, true);
+    await view.render("a");
+    await view.resolve(0, page(["old-tail"], null, "older", "a"));
+    await paint();
+    await paint();
+    await paint();
+    await settle();
+    expect(view.reads[1].window).toEqual({ limit: 24, before: "older" });
+    await view.render("b");
+    expect(view.reads[1].signal.aborted).toBe(true);
+    await view.resolve(1, page(["old-hidden"], "older", null, "a"));
+    await view.resolve(2, page(["new-tail"], null, "older", "b"));
+    expect(visibleIds(view)).toEqual(["new-tail"]);
+  });
+
+  test("background history loading keeps live tool updates made during the read", async () => {
+    const view = fixture(false, true);
+    const event = sessionEvents();
+    await view.render();
+    await view.resolve(0, { ...historyTool("old output"), pagination: { limit: 24, nextCursor: "older" } });
+    await paint();
+    await paint();
+    await paint();
+    await settle();
+    await event({ type: "message.part.updated", properties: { part: historyTool("new output", "corrected").messages[1].parts[1] } });
+    await view.resolve(1, page(["earlier"], "older", null));
+    expect(visibleIds(view)).toEqual(["earlier", "old", "active"]);
+    expect(view.host.textContent).toContain("new output");
+    expect(view.host.textContent).not.toContain("old output");
+  });
+
+  test("background loading cannot resurrect a message deleted during a page read", async () => {
+    const view = fixture(false, true);
+    const event = sessionEvents();
+    await view.render();
+    await view.resolve(0, page(["keep", "removed"], null, "older"));
+    await paint(); await paint(); await paint(); await settle();
+    await event({ type: "message.removed", properties: { sessionID: "a", messageID: "removed" } });
+    expect(view.reads[1].signal.aborted).toBe(true);
+    await view.resolve(1, page(["earlier", "removed"], "older", null));
+    await paint(); await settle();
+    expect(view.reads[2].window).toEqual({ limit: 24, before: "older" });
+    await view.resolve(2, page(["earlier", "removed"], "older", null));
+    expect(visibleIds(view)).toEqual(["earlier", "keep"]);
+  });
+
+  test("a failed background page leaves the already-loaded page available", async () => {
+    const view = fixture(false, true);
+    await view.render();
+    await view.resolve(0, page(["recent"], null, "older"));
+    await paint();
+    await paint();
+    await paint();
+    await settle();
+    await act(async () => { view.reads[1].reject(new Error("Full history unavailable")); });
+    await settle();
+    expect(visibleIds(view)).toEqual(["recent"]);
+    const older = await demand(view, "older");
+    expect(view.reads[2].window).toEqual({ limit: 24, before: "older" });
+    await view.resolve(2, page(["earlier"], "older", null));
+    await older.settled;
+    expect(visibleIds(view)).toEqual(["earlier", "recent"]);
+  });
+});
 
 describe("explicit navigation cancels saved-page recovery", () => {
   function saveAnchor(before: string | null = null, owner = "a") {

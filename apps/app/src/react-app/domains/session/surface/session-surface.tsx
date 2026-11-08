@@ -1511,7 +1511,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
     baseUrl: props.opencodeBaseUrl, openworkToken: props.openworkToken }, props.sessionId),
   [props.workspaceId, props.opencodeBaseUrl, props.openworkToken, props.sessionId]);
   const openingHistory = useOpeningSessionHistory({ owner: sessionOwner, runtimeOwner, sessionId: props.sessionId, authToken: props.openworkToken,
-    ignoreCached: !snapshotOwnerMatches, metadataQueryKey, snapshotQueryKey, transcriptQueryKey, readSnapshot, readOpening, readLatest });
+    ignoreCached: !snapshotOwnerMatches, metadataQueryKey, snapshotQueryKey, transcriptQueryKey, readSnapshot, readOpening, readLatest,
+    loadFullHistoryAfterOpen: true });
   const snapshotQuery = useQuery<OpenworkSessionHistory>({
     queryKey: snapshotQueryKey,
     queryFn: ({ signal }) => openingHistory.readFullSnapshot(signal),

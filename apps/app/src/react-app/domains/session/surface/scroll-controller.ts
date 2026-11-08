@@ -136,6 +136,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     let pendingHistoryDemand: "older" | "newer" | null = null;
     let pendingTop: ((completed: boolean) => void) | null = null;
     let topLoadReady = false;
+    let promptCursor: string | null = null;
     let pendingPromptPage: { direction: "previous" | "next"; behavior: ScrollBehavior; version: unknown } | null = null;
     let virtualPromptObserver: MutationObserver | null = null;
     let virtualPromptTimeout: number | null = null;
@@ -150,6 +151,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     const cancelTop = () => { pendingTop?.(false); pendingTop = null; };
     const cancelRestoration = () => {
       cancelVirtualPrompt();
+      promptCursor = null;
       pendingPromptPage = null;
       cancelTop();
       optionsRef.current.historyPages?.cancelRestore?.();
@@ -480,6 +482,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       if (nested && nested !== container) return;
       mobileTurnPinned = false;
       cancelVirtualPrompt();
+      promptCursor = null;
       pendingPromptPage = null;
       cancelTop();
       setMobileTurnFullyVisible(false);
@@ -653,13 +656,19 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     };
     const jumpToPrompt = (direction: "previous" | "next", behavior: ScrollBehavior) => {
       if (!active) return;
-      const target = selectPromptPosition(promptPositions(), container.scrollTop + PROMPT_SCROLL_OFFSET, direction);
+      const positions = promptPositions();
+      // Smooth scrolling may still be in flight when another button is pressed.
+      // Step from the last requested prompt, not the intermediate viewport.
+      const cursor = positions.find((position) => position.id === promptCursor);
+      const target = selectPromptPosition(positions, cursor?.top ?? container.scrollTop + PROMPT_SCROLL_OFFSET, direction);
       if (!target) {
         const pages = optionsRef.current.historyPages;
         const hasMore = direction === "previous" ? pages?.hasOlder : pages?.hasNewer;
         if (pages && hasMore) {
-          if (pages.loading || pages.failed || pagePending) return;
+          if (pages.failed) return;
+          const previousCursor = promptCursor;
           cancelRestoration();
+          promptCursor = previousCursor;
           cancelFrames();
           pendingRestore = false;
           pendingSubmittedMessageId = null;
@@ -668,6 +677,9 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
           pageAnchor = currentReadingAnchor();
           store.setManualScroll(scrollKey, container.scrollTop, latestMessageTopClippedId(container), pageAnchor);
           pendingPromptPage = { direction, behavior, version: pages.version };
+          // A background prefetch may already be loading the missing page.
+          // Resume this navigation when that page commits instead of dropping it.
+          if (pages.loading || pagePending) return;
           const pending = pendingPromptPage;
           pagePending = true;
           void pages.load(direction === "previous" ? "older" : "newer")
@@ -676,12 +688,13 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
           return;
         }
         if (direction === "previous") jumpToStart(behavior);
-        else scrollToBottom(behavior);
+        else { cancelRestoration(); scrollToBottom(behavior); }
         return;
       }
       const element = messageElementById(container, target.id);
       if (element && element.getBoundingClientRect().height > 0) {
         scrollToPrompt(element, behavior);
+        promptCursor = target.id;
         return;
       }
       // Off-screen groups are virtualized. Jump to the estimated group first,
@@ -699,6 +712,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         if (!mounted || mounted.getBoundingClientRect().height <= 0) return;
         cancelVirtualPrompt();
         scrollToPrompt(mounted, "auto");
+        promptCursor = target.id;
       };
       virtualPromptObserver = new MutationObserver(align);
       virtualPromptObserver.observe(content, { childList: true, subtree: true });
@@ -707,6 +721,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       smoothJump = false;
       container.scrollTo({ top, behavior: "auto" });
       lastKnownScrollTop = container.scrollTop;
+      promptCursor = target.id;
       align();
     };
     const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => jumpToPrompt("previous", behavior);
@@ -783,6 +798,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const nested = event.target instanceof Element ? event.target.closest("[data-scrollable], input, textarea, select, [contenteditable=true]") : null;
       if (nested && nested !== container) return;
       cancelVirtualPrompt();
+      promptCursor = null;
       pendingPromptPage = null;
       activePointerId = event.pointerId;
       pointerScrolled = false;
@@ -886,7 +902,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
 
   useLayoutEffect(() => {
     controllerRef.current?.update(options.historyReady, options.submittedMessageId);
-  }, [scrollKey, viewOwner, containerRef, contentRef, options.historyReady, options.submittedMessageId, options.renderedMessages, options.historyComplete, options.historyPages?.version]);
+  }, [scrollKey, viewOwner, containerRef, contentRef, options.historyReady, options.submittedMessageId, options.renderedMessages, options.historyComplete, options.historyPages?.version, options.historyPages?.loading]);
 
   const handleScroll = useCallback<UIEventHandler<HTMLDivElement>>((event) => {
     if (controllerRef.current?.sessionId === scrollKey) controllerRef.current.handleScroll(event);

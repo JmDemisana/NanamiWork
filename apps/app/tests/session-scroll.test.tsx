@@ -217,7 +217,7 @@ function observeStorageWrites() {
   return writes;
 }
 
-function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useSessionScrollController>[0], "historyPages" | "windowReady" | "pageForAnchor" | "historyComplete" | "ensureFullHistory" | "submittedMessageId"> = {}, renderOverlay = false) {
+function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useSessionScrollController>[0], "historyPages" | "windowReady" | "pageForAnchor" | "historyComplete" | "ensureFullHistory" | "submittedMessageId"> = {}, renderOverlay = false, stableRenderedMessages = false) {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
@@ -260,7 +260,7 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
       });
     }, []);
     const scroll = useSessionScrollController({
-      selectedSessionId: sessionId, geometryOwner, submittedMessageId, historyReady: ready, renderedMessages: [...layout.messages], containerRef, contentRef, ...pagination,
+      selectedSessionId: sessionId, geometryOwner, submittedMessageId, historyReady: ready, renderedMessages: stableRenderedMessages ? layout.messages : [...layout.messages], containerRef, contentRef, ...pagination,
     });
     controls = scroll;
     return <div ref={setContainer} onScroll={scroll.handleScroll} onWheel={(event) => scroll.markScrollGesture(event.target)}
@@ -343,6 +343,27 @@ describe("prompt navigation", () => {
     expect(view.container.scrollTop).toBe(1_528);
   });
 
+  test("rapid prompt jumps advance from the last target before smooth scrolling finishes", async () => {
+    const view = fixture();
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "first", role: "user", top: 200, height: 60 },
+      { id: "second", role: "user", top: 600, height: 60 },
+      { id: "third", role: "user", top: 1_000, height: 60 },
+      { id: "fourth", role: "user", top: 1_400, height: 60 },
+    ];
+    await view.render();
+    await act(async () => { view.scroll(1_450); });
+    const destinations: number[] = [];
+    Object.defineProperty(view.container, "scrollTo", { configurable: true, value: (options: ScrollToOptions) => { destinations.push(options.top ?? 0); } });
+    await act(async () => {
+      view.controls.jumpToPreviousPrompt("smooth");
+      view.controls.jumpToPreviousPrompt("smooth");
+      view.controls.jumpToNextPrompt("smooth");
+    });
+    expect(destinations).toEqual([1_328, 928, 1_328]);
+  });
+
   test("previous can seek an unmounted prompt and align it after virtualized content mounts", async () => {
     const view = fixture();
     view.layout.height = 2_000;
@@ -368,7 +389,7 @@ describe("prompt navigation", () => {
 
   test("previous loads older history without first scrolling to the top", async () => {
     const pages = { version: {}, hasOlder: true, hasNewer: false, loading: false, failed: false, load: mock(async () => {}) };
-    const view = fixture(undefined, { historyPages: pages, windowReady: true });
+    const view = fixture(undefined, { historyPages: pages, windowReady: true }, false, true);
     view.layout.height = 2_000;
     view.layout.messages = [
       { id: "answer", role: "assistant", top: 100, height: 1_000 },
@@ -383,6 +404,47 @@ describe("prompt navigation", () => {
     view.layout.height += 400;
     pages.version = {};
     pages.hasOlder = false;
+    await view.render();
+    await act(async () => { runFrames(); });
+    expect(view.container.scrollTop).toBe(128);
+  });
+
+  test("a prompt request waits for an already-running history prefetch", async () => {
+    const pages = { version: {}, hasOlder: true, hasNewer: false, loading: true, failed: false, load: mock(async () => {}) };
+    const view = fixture(undefined, { historyPages: pages, windowReady: true });
+    view.layout.height = 2_000;
+    view.layout.messages = [{ id: "answer", role: "assistant", top: 100, height: 1_000 }];
+    await view.render();
+    await act(async () => { view.scroll(600); view.controls.jumpToPreviousPrompt("auto"); });
+    expect(pages.load).not.toHaveBeenCalled();
+    expect(view.container.scrollTop).toBe(600);
+    view.layout.messages[0].top += 400;
+    view.layout.messages.unshift({ id: "older-prompt", role: "user", top: 200, height: 60 });
+    view.layout.height += 400;
+    pages.version = {};
+    pages.hasOlder = false;
+    pages.loading = false;
+    await view.render();
+    await act(async () => { runFrames(); });
+    expect(view.container.scrollTop).toBe(128);
+  });
+
+  test("a pending prompt request resumes when loading clears after the page version changes", async () => {
+    const pages = { version: {}, hasOlder: true, hasNewer: false, loading: true, failed: false, load: mock(async () => {}) };
+    const view = fixture(undefined, { historyPages: pages, windowReady: true }, false, true);
+    view.layout.height = 2_000;
+    view.layout.messages = [{ id: "answer", role: "assistant", top: 100, height: 1_000 }];
+    await view.render();
+    await act(async () => { view.scroll(600); view.controls.jumpToPreviousPrompt("auto"); });
+    view.layout.messages[0].top += 400;
+    view.layout.messages.unshift({ id: "older-prompt", role: "user", top: 200, height: 60 });
+    view.layout.height += 400;
+    pages.version = {};
+    pages.hasOlder = false;
+    await view.render();
+    await act(async () => { runFrames(); });
+    expect(view.container.scrollTop).toBe(1_000);
+    pages.loading = false;
     await view.render();
     await act(async () => { runFrames(); });
     expect(view.container.scrollTop).toBe(128);

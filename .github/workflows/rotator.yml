@@ -71,6 +71,10 @@ jobs:
         working-directory: apps/app
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/prompt-navigation-settings.test.tsx
 
+      - name: Verify background history loading
+        working-directory: apps/app
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/session-history.test.tsx -Filter background-history-load
+
       - name: Verify account isolation
         working-directory: apps/server
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/nanami-isolation-accounts.test.ts

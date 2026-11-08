@@ -357,6 +357,7 @@ export function useSessionPrefetchIntent(intent: boolean, prefetch: () => void |
 export function useOpeningSessionHistory(input: OpeningHistoryInput & {
   transcriptQueryKey?: readonly unknown[];
   readLatest?: (signal: AbortSignal, options?: { desktopTransport: "main" }) => Promise<Pick<OpenworkSessionHistory, "session" | "messages">>;
+  loadFullHistoryAfterOpen?: boolean;
 }) {
   const client = useQueryClient();
   const hasLegacyPosition = useSessionScrollStore((state) => Boolean(state.sessions[input.sessionId]));
@@ -599,7 +600,7 @@ export function useOpeningSessionHistory(input: OpeningHistoryInput & {
   const needsRevertHistory = Boolean((pages.snapshot ?? query.data?.snapshot)?.session.revert) && !pages.complete;
   const [backgroundOwner, setBackgroundOwner] = useState<typeof entry | null>(null);
   useEffect(() => {
-    if (!query.isSuccess || query.isFetching || hasFullSnapshot || paginated && !needsRevertHistory) return;
+    if (!query.isSuccess || query.isFetching || hasFullSnapshot || paginated && !needsRevertHistory && !input.loadFullHistoryAfterOpen) return;
     // Let the relevant messages paint before full-history JSON/React work starts.
     let second: number | undefined;
     const first = window.requestAnimationFrame(() => {
@@ -609,7 +610,18 @@ export function useOpeningSessionHistory(input: OpeningHistoryInput & {
       window.cancelAnimationFrame(first);
       if (second !== undefined) window.cancelAnimationFrame(second);
     };
-  }, [entry, query.isSuccess, query.isFetching, hasFullSnapshot, paginated, needsRevertHistory]);
+  }, [entry, query.isSuccess, query.isFetching, hasFullSnapshot, paginated, needsRevertHistory, input.loadFullHistoryAfterOpen]);
+  useEffect(() => {
+    if (!input.loadFullHistoryAfterOpen || !paginated || needsRevertHistory || hasFullSnapshot
+      || backgroundOwner !== entry || !pages.ready || pages.complete || pages.loading || pages.failed || pages.anchorPending) return;
+    const direction = pages.hasOlder ? "older" : pages.hasNewer ? "newer" : null;
+    if (!direction) return;
+    // Reuse the bounded page reconciliation so live updates, deletions, and
+    // the reader's position survive while the remaining history arrives.
+    const frame = window.requestAnimationFrame(() => { void pages.load(direction).catch(() => undefined); });
+    return () => window.cancelAnimationFrame(frame);
+  }, [input.loadFullHistoryAfterOpen, paginated, needsRevertHistory, hasFullSnapshot, backgroundOwner, entry,
+    pages.ready, pages.complete, pages.loading, pages.failed, pages.anchorPending, pages.hasOlder, pages.hasNewer, pages.version, pages.load]);
   const snapshot = hasFullSnapshot ? null : pages.snapshot ?? openingSnapshot;
   const limit = openingHistoryWindow(saved).limit;
   const recovery = useMemo(() => ({ attempted: false }), [client, hashKey(options.queryKey)]);
