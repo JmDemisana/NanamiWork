@@ -81,6 +81,9 @@ type ScrollController = {
   markScrollGesture: (target?: EventTarget | null) => void;
   scrollToBottom: (behavior?: ScrollBehavior) => void;
   scrollToTop: () => Promise<boolean>;
+  jumpToLatest?: (behavior?: ScrollBehavior) => void;
+  jumpToStart: (behavior?: ScrollBehavior) => void;
+  jumpToLastPrompt: (behavior?: ScrollBehavior) => void;
   jumpToStartOfMessage: (behavior?: ScrollBehavior) => void;
 };
 
@@ -549,6 +552,43 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       lastKnownScrollTop = container.scrollTop;
       rememberGeometry();
     };
+    const jumpToStart = (behavior: ScrollBehavior = "smooth") => {
+      if (!active) return;
+      cancelRestoration();
+      cancelFrames();
+      pendingRestore = false;
+      pendingSubmittedMessageId = null;
+      cancelledWhileLoading = false;
+      lastGestureAt = -Infinity;
+      store.setManualScroll(scrollKey, 0, undefined, undefined);
+      smoothJump = behavior === "smooth";
+      container.scrollTo({ top: 0, behavior });
+      lastKnownScrollTop = container.scrollTop;
+    };
+    const jumpToLastPrompt = (behavior: ScrollBehavior = "smooth") => {
+      if (!active) return;
+      const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
+      const latestUser = users.at(-1);
+      if (!latestUser) return;
+      const messageId = messageIdForElement(latestUser);
+      const anchor = messageId ? { messageId, offset: 0 } : undefined;
+      const top = anchor ? anchorTop(anchor) : null;
+      cancelRestoration();
+      cancelFrames();
+      pendingRestore = false;
+      pendingSubmittedMessageId = null;
+      cancelledWhileLoading = false;
+      lastGestureAt = -Infinity;
+      if (top !== null && messageId && anchor) {
+        store.setManualScroll(scrollKey, top, messageId, anchor);
+        smoothJump = behavior === "smooth";
+        container.scrollTo({ top, behavior });
+      } else {
+        smoothJump = behavior === "smooth";
+        latestUser.scrollIntoView({ behavior, block: "start" });
+      }
+      lastKnownScrollTop = container.scrollTop;
+    };
     const jumpToStartOfMessage = (behavior: ScrollBehavior = "smooth") => {
       if (!active) return;
       const messageId = readState().topClippedMessageId;
@@ -640,6 +680,9 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         scrollToBottom(behavior);
       },
       scrollToTop,
+      jumpToLatest: (behavior) => scrollToBottom(behavior),
+      jumpToStart,
+      jumpToLastPrompt,
       jumpToStartOfMessage,
     };
 
@@ -683,6 +726,18 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
   const scrollToTop = useCallback(() => controllerRef.current?.sessionId === scrollKey
     ? controllerRef.current.scrollToTop() : Promise.resolve(false), [scrollKey]);
   const jumpToLatest = useCallback((behavior: ScrollBehavior = "smooth") => scrollToBottom(behavior), [scrollToBottom]);
+  const jumpToStart = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (controllerRef.current?.sessionId === scrollKey) {
+      containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
+      controllerRef.current.jumpToStart(behavior);
+    }
+  }, [scrollKey, containerRef]);
+  const jumpToLastPrompt = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (controllerRef.current?.sessionId === scrollKey) {
+      containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
+      controllerRef.current.jumpToLastPrompt(behavior);
+    }
+  }, [scrollKey, containerRef]);
   const jumpToStartOfMessage = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (controllerRef.current?.sessionId === scrollKey) {
       containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
@@ -696,5 +751,5 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     }
   }, [scrollKey, options.historyReady, options.submittedMessageId]);
 
-  return { handleScroll, markScrollGesture, scrollToBottom, scrollToTop, jumpToLatest, jumpToStartOfMessage, refresh, mobileTurnFullyVisible };
+  return { handleScroll, markScrollGesture, scrollToBottom, scrollToTop, jumpToLatest, jumpToStart, jumpToLastPrompt, jumpToStartOfMessage, refresh, mobileTurnFullyVisible };
 }

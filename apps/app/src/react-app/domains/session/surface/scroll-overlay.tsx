@@ -19,15 +19,18 @@ function useSessionScrollOverlayState(sessionId: string) {
 }
 
 type JumpToStartButtonProps = {
-  onJumpToStartOfMessage: (behavior?: ScrollBehavior) => void;
+  onJumpToStart?: (behavior?: ScrollBehavior) => void;
+  onJumpToStartOfMessage?: (behavior?: ScrollBehavior) => void;
 };
 
 const JumpToStartButton = memo(function JumpToStartButton({
+  onJumpToStart,
   onJumpToStartOfMessage,
 }: JumpToStartButtonProps) {
   const handleClick = useCallback(() => {
-    onJumpToStartOfMessage("smooth");
-  }, [onJumpToStartOfMessage]);
+    const fn = onJumpToStart ?? onJumpToStartOfMessage;
+    fn?.("smooth");
+  }, [onJumpToStart, onJumpToStartOfMessage]);
 
   return (
     <button
@@ -36,6 +39,28 @@ const JumpToStartButton = memo(function JumpToStartButton({
       onClick={handleClick}
     >
       Jump to start
+    </button>
+  );
+});
+
+type JumpToLastPromptButtonProps = {
+  onJumpToLastPrompt: (behavior?: ScrollBehavior) => void;
+};
+
+const JumpToLastPromptButton = memo(function JumpToLastPromptButton({
+  onJumpToLastPrompt,
+}: JumpToLastPromptButtonProps) {
+  const handleClick = useCallback(() => {
+    onJumpToLastPrompt("smooth");
+  }, [onJumpToLastPrompt]);
+
+  return (
+    <button
+      type="button"
+      className="rounded-full px-3 py-1.5 text-xs text-dls-text transition-colors hover:bg-dls-hover"
+      onClick={handleClick}
+    >
+      Jump to last prompt
     </button>
   );
 });
@@ -68,7 +93,9 @@ type SessionScrollOverlayProps = {
   isStreaming: boolean;
   mobileTurnFullyVisible?: boolean;
   onJumpToLatest: (behavior?: ScrollBehavior) => void;
-  onJumpToStartOfMessage: (behavior?: ScrollBehavior) => void;
+  onJumpToStart?: (behavior?: ScrollBehavior) => void;
+  onJumpToLastPrompt?: (behavior?: ScrollBehavior) => void;
+  onJumpToStartOfMessage?: (behavior?: ScrollBehavior) => void;
 };
 
 export const SessionScrollOverlay = memo(function SessionScrollOverlay({
@@ -77,6 +104,8 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
   isStreaming,
   mobileTurnFullyVisible = false,
   onJumpToLatest,
+  onJumpToStart,
+  onJumpToLastPrompt,
   onJumpToStartOfMessage,
 }: SessionScrollOverlayProps) {
   const { isAtBottom, topClippedMessageId } = useSessionScrollOverlayState(sessionScrollKey(sessionId, owner));
@@ -106,13 +135,12 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
 
   return (
     <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 flex -translate-x-1/2 justify-center">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-dls-border bg-dls-surface/95 p-1 shadow-(--dls-card-shadow) backdrop-blur-md">
-        {showJumpToStart ? (
-          <JumpToStartButton onJumpToStartOfMessage={onJumpToStartOfMessage} />
+      <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-dls-border bg-dls-surface/95 p-1 shadow-(--dls-card-shadow) backdrop-blur-md">
+        <JumpToStartButton onJumpToStart={onJumpToStart} onJumpToStartOfMessage={onJumpToStartOfMessage} />
+        {onJumpToLastPrompt ? (
+          <JumpToLastPromptButton onJumpToLastPrompt={onJumpToLastPrompt} />
         ) : null}
-        {showJumpToLatest ? (
-          <JumpToLatestButton onJumpToLatest={onJumpToLatest} />
-        ) : null}
+        <JumpToLatestButton onJumpToLatest={onJumpToLatest} />
       </div>
     </div>
   );
