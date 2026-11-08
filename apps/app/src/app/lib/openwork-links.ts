@@ -25,7 +25,8 @@ const CHAT_DEEP_LINK_CONNECTOR_MAX_LENGTH = 80;
 
 function isSupportedDeepLinkProtocol(protocol: string): boolean {
   const normalized = protocol.toLowerCase();
-  return normalized === "openwork:"
+  return normalized === "nanamiwork:"
+    || normalized === "openwork:"
     || normalized === "openwork-dev:"
     || normalized === "https:"
     || normalized === "http:";
@@ -75,7 +76,7 @@ export function parseConnectDeepLink(rawUrl: string): ConnectDeepLink | null {
   // Unlike sibling parsers, organization connect credentials only ride the
   // dedicated desktop scheme, never ordinary web URLs.
   const protocol = url.protocol.toLowerCase();
-  if (protocol !== "openwork:" && protocol !== "openwork-dev:") {
+  if (protocol !== "nanamiwork:" && protocol !== "openwork:" && protocol !== "openwork-dev:") {
     return null;
   }
 
@@ -110,7 +111,7 @@ export function parseChatDeepLink(rawUrl: string): ChatDeepLink | null {
   // Chat seeding is a desktop handoff from Den; ordinary web URLs never
   // pre-fill the composer.
   const protocol = url.protocol.toLowerCase();
-  if (protocol !== "openwork:" && protocol !== "openwork-dev:") {
+  if (protocol !== "nanamiwork:" && protocol !== "openwork:" && protocol !== "openwork-dev:") {
     return null;
   }
 

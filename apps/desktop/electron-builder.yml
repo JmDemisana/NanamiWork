@@ -4,7 +4,6 @@ productName: NanamiWork
 protocols:
   - name: NanamiWork
     schemes:
-      - openwork
       - nanamiwork
 linux:
   executableName: nanamiwork

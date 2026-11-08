@@ -2,7 +2,7 @@ export const PUBLIC_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "public",
   appName: "NanamiWork",
   appIdentifier: "ai.nanami.workbench",
-  protocolScheme: "openwork",
+  protocolScheme: "nanamiwork",
   requireSignin: false,
   requireActivation: false,
 });
@@ -11,7 +11,7 @@ export const CLOUD_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "cloud",
   appName: "Nanami Cloud",
   appIdentifier: "ai.nanami.workbench",
-  protocolScheme: "openwork",
+  protocolScheme: "nanamiwork",
   requireSignin: true,
   requireActivation: false,
 });
@@ -20,7 +20,7 @@ export const ENTERPRISE_DESKTOP_DISTRIBUTION = Object.freeze({
   flavor: "enterprise",
   appName: "Nanami Enterprise",
   appIdentifier: "ai.nanami.workbench",
-  protocolScheme: "openwork",
+  protocolScheme: "nanamiwork",
   requireSignin: true,
   requireActivation: true,
 });

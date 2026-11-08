@@ -17,13 +17,13 @@ import path from "node:path";
 /** @typedef {import("@openwork/types/desktop-ipc").DesktopIntegrationResult} DesktopIntegrationResult */
 /** @typedef {import("@openwork/types/desktop-ipc").DesktopIntegrationStatus} DesktopIntegrationStatus */
 
-export const OPENWORK_DESKTOP_ID = "com.differentai.openwork.desktop";
-export const OPENWORK_DESKTOP_NAME = "com.differentai.openwork";
-export const OPENWORK_PROTOCOL_MIME = "x-scheme-handler/openwork";
+export const OPENWORK_DESKTOP_ID = "ai.nanami.workbench.desktop";
+export const OPENWORK_DESKTOP_NAME = "ai.nanami.workbench";
+export const OPENWORK_PROTOCOL_MIME = "x-scheme-handler/nanamiwork";
 
 const INTEGRATION_STATE_VERSION = 1;
-const OWNERSHIP_MARKER = "X-OpenWork-Managed";
-const MANAGED_VERSION_MARKER = "X-OpenWork-Version";
+const OWNERSHIP_MARKER = "X-NanamiWork-Managed";
+const MANAGED_VERSION_MARKER = "X-NanamiWork-Version";
 const ICON_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512];
 
 function defaultCommandRunner(command, args) {
@@ -185,7 +185,7 @@ export function buildOpenworkDesktopEntry({
 Type=Application
 Version=1.0
 Name=${cleanDesktopValue(appName)}
-Comment=Run agents, skills, and MCP with OpenWork
+Comment=Run agents, skills, and MCP with NanamiWork
 Exec=${quoteDesktopExec(appImagePath)} %U
 TryExec=${cleanDesktopValue(appImagePath)}
 Icon=${OPENWORK_DESKTOP_NAME}
@@ -197,8 +197,8 @@ X-AppImage-Name=${cleanDesktopValue(appName)}
 X-AppImage-Version=${cleanDesktopValue(appVersion)}
 ${OWNERSHIP_MARKER}=true
 ${MANAGED_VERSION_MARKER}=${cleanDesktopValue(appVersion)}
-X-OpenWork-Distribution=${cleanDesktopValue(distribution)}
-X-OpenWork-AppImage=${cleanDesktopValue(appImagePath)}
+X-NanamiWork-Distribution=${cleanDesktopValue(distribution)}
+X-NanamiWork-AppImage=${cleanDesktopValue(appImagePath)}
 `;
 }
 
@@ -229,7 +229,7 @@ export function createLinuxDesktopIntegration({
     size,
     path.join(resourcesPath ?? "", "icons", "linux", `${size}x${size}.png`),
   ]));
-  const statePath = path.join(configHome, "openwork", "desktop-integration.json");
+  const statePath = path.join(configHome, "nanamiwork", "desktop-integration.json");
 
   async function readState() {
     const raw = await readFile(statePath, "utf8").catch(() => null);
@@ -408,7 +408,7 @@ export function createLinuxDesktopIntegration({
       return {
         ok: false,
         status,
-        error: "The external launcher was not selected for openwork:// callbacks.",
+        error: "The external launcher was not selected for nanamiwork:// callbacks.",
       };
     }
     if (
@@ -418,7 +418,7 @@ export function createLinuxDesktopIntegration({
       return {
         ok: false,
         status: before,
-        error: "The canonical OpenWork launcher is externally managed and will not be overwritten.",
+        error: "The NanamiWork launcher is externally managed and will not be overwritten.",
       };
     }
 
@@ -444,11 +444,11 @@ export function createLinuxDesktopIntegration({
       await refreshDesktopCaches();
       const registration = await runCommand("xdg-mime", ["default", OPENWORK_DESKTOP_ID, OPENWORK_PROTOCOL_MIME]);
       if (!registration.ok) {
-        throw new Error(registration.stderr || "xdg-mime could not register openwork://.");
+        throw new Error(registration.stderr || "xdg-mime could not register nanamiwork://.");
       }
       const status = await getStatus();
       if (status.state !== "integrated") {
-        throw new Error("The desktop entry was installed, but the desktop did not select it as the openwork:// handler.");
+        throw new Error("The desktop entry was installed, but the desktop did not select it as the nanamiwork:// handler.");
       }
       return { ok: true, status };
     } catch (error) {
@@ -472,7 +472,7 @@ export function createLinuxDesktopIntegration({
         status: before,
         error: before.ownership === "external"
           ? "Remove this AppImage with the tool that manages it."
-          : "OpenWork does not own a desktop integration to remove.",
+          : "NanamiWork does not own a desktop integration to remove.",
       };
     }
 
@@ -545,9 +545,9 @@ export function createLinuxDesktopIntegration({
 
     const { response, checkboxChecked } = await dialog.showMessageBox(window, {
       type: "question",
-      title: "Add OpenWork to your applications?",
-      message: "Add OpenWork to your application launcher and register browser sign-in callbacks?",
-      detail: `The launcher will use this AppImage in its current location:\n${appImagePath}\n\nIf you move or update it later, OpenWork repairs the launcher automatically. You can change or remove this in Settings → Preferences → AppImage desktop integration.`,
+      title: "Add NanamiWork to your applications?",
+      message: "Add NanamiWork to your application launcher and register browser sign-in callbacks?",
+      detail: `The launcher will use this AppImage in its current location:\n${appImagePath}\n\nIf you move or update it later, NanamiWork repairs the launcher automatically. You can change or remove this in Settings → Preferences → AppImage desktop integration.`,
       buttons: ["Not now", "Integrate"],
       defaultId: 1,
       cancelId: 0,
@@ -565,7 +565,7 @@ export function createLinuxDesktopIntegration({
       await dialog.showMessageBox(window, {
         type: "warning",
         title: "Desktop integration failed",
-        message: "OpenWork could not complete desktop integration.",
+        message: "NanamiWork could not complete desktop integration.",
         detail: result.error ?? "Unknown error",
         buttons: ["OK"],
       });

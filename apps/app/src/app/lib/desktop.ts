@@ -704,8 +704,8 @@ export function readDesktopDistributionInfo(): DesktopDistributionInfo {
   return distribution ?? {
     flavor: "public",
     appName: "NanamiWork",
-    appIdentifier: "com.differentai.openwork",
-    protocolScheme: "openwork",
+    appIdentifier: "ai.nanami.workbench",
+    protocolScheme: "nanamiwork",
     requireSignin: false,
     requireActivation: false,
   };

@@ -144,9 +144,8 @@ function normalizeClaims(payload) {
 }
 
 /**
- * Extracts the signed token from a connect deep link. Accepts the openwork
- * and openwork-dev schemes and both authority forms (openwork://connect and
- * openwork:///connect).
+ * Extracts a signed token from NanamiWork or legacy OpenWork connect links,
+ * in either authority form (scheme://connect or scheme:///connect).
  *
  * @param {string} rawUrl
  * @returns {string | null}
@@ -159,7 +158,7 @@ export function extractConnectLinkToken(rawUrl) {
   } catch {
     return null;
   }
-  if (parsed.protocol !== "openwork:" && parsed.protocol !== "openwork-dev:") return null;
+  if (parsed.protocol !== "nanamiwork:" && parsed.protocol !== "openwork:" && parsed.protocol !== "openwork-dev:") return null;
   const route = (parsed.hostname || parsed.pathname.replace(/^\/+|\/+$/g, "")).toLowerCase();
   if (route !== CONNECT_LINK_ROUTE) return null;
   if (parsed.searchParams.has("code") || parsed.searchParams.has("apiBaseUrl")) return null;
@@ -179,7 +178,7 @@ export function extractConnectExchange(rawUrl) {
   } catch {
     return null;
   }
-  if (parsed.protocol !== "openwork:" && parsed.protocol !== "openwork-dev:") return null;
+  if (parsed.protocol !== "nanamiwork:" && parsed.protocol !== "openwork:" && parsed.protocol !== "openwork-dev:") return null;
   const route = (parsed.hostname || parsed.pathname.replace(/^\/+|\/+$/g, "")).toLowerCase();
   if (route !== CONNECT_LINK_ROUTE || parsed.searchParams.has("token")) return null;
   const code = parsed.searchParams.get("code")?.trim() ?? "";
