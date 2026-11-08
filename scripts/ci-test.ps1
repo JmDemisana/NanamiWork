@@ -19,7 +19,7 @@ $temporaryBase = Join-Path ([System.IO.Path]::GetTempPath()) ("nanami-ci-test-" 
 $stdout = "$temporaryBase.out"
 $stderr = "$temporaryBase.err"
 try {
-    $executable = (Get-Command $command -CommandType Application -ErrorAction Stop).Source
+    $executable = (Get-Command $command -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     $process = Start-Process -FilePath $executable -ArgumentList $arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $status = $process.ExitCode
     $output = @((Get-Content -LiteralPath $stdout -Encoding UTF8), (Get-Content -LiteralPath $stderr -Encoding UTF8)) | ForEach-Object { $_ }
