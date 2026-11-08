@@ -1863,8 +1863,9 @@ export function scopeWorkspaceOpencodeRequest(
   searchParams.delete("directory");
 
   if (directory) {
-    scopedHeaders.set("x-opencode-directory", buildOpencodeDirectoryHeader(directory));
-    searchParams.set("directory", directory);
+    const normalizedDir = directory.replace(/\\/g, "/");
+    scopedHeaders.set("x-opencode-directory", buildOpencodeDirectoryHeader(normalizedDir));
+    searchParams.set("directory", normalizedDir);
   }
 
   const scopedSearch = searchParams.toString();
@@ -5027,14 +5028,15 @@ export function normalizeOpencodeDirectory(
   directory: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
-  // OpenCode stores/list-filters Windows sessions by regular drive paths
-  // (`C:\Users\...`). Electron can persist local workspaces as extended-length
-  // paths (`\\?\C:\Users\...`); passing those through as the directory query
-  // makes OpenCode return an empty session list even though the sessions exist.
+  // OpenCode stores/list-filters Windows sessions by regular drive paths with forward slashes
+  // (`C:/Users/...`). Electron can persist local workspaces as extended-length
+  // paths (`\\?\C:\Users\...`) or backslash paths (`C:\Users\...`); passing backslashes
+  // makes OpenCode return an empty session list because SQLite performs an exact string comparison.
+  let cleaned = directory;
   if (platform === "win32") {
-    return directory.replace(/^\\\\\?\\/, "").replace(/^\/\/\?\//, "");
+    cleaned = cleaned.replace(/^\\\\\?\\/, "").replace(/^\/\/\?\//, "");
   }
-  return directory;
+  return cleaned.replace(/\\/g, "/");
 }
 
 function buildOpencodeReloadUrl(baseUrl: string, directory?: string | null): string {
