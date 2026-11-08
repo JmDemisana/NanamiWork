@@ -23,6 +23,12 @@ try {
     $process = Start-Process -FilePath $executable -ArgumentList $arguments -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     $status = $process.ExitCode
     $output = @((Get-Content -LiteralPath $stdout -Encoding UTF8), (Get-Content -LiteralPath $stderr -Encoding UTF8)) | ForEach-Object { $_ }
+} catch {
+    $message = $_.Exception.Message -replace 'nmn_[A-Za-z0-9_-]+', '[redacted]'
+    $message = $message -replace '(?i)(token|secret|password|api.?key)\s*[:=]\s*[^\s,}]+', '$1=[redacted]'
+    $message = $message.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+    Write-Host "::error::Test runner failed: $message"
+    exit 1
 } finally {
     Remove-Item -LiteralPath $stdout, $stderr -Force -ErrorAction SilentlyContinue
 }
@@ -30,7 +36,7 @@ foreach ($line in $output) { Write-Host "$line" }
 
 if ($status -ne 0) {
     $diagnostics = @($output | ForEach-Object { "$_" } | Where-Object {
-        $_ -match '(?i)(error:|error\]|exception:|cannot find module|\(fail\)|assertionerror|ERR_[A-Z_]+)'
+        $_ -match '(?i)(error:|error\]|exception:|cannot find module|\(fail\)|assertionerror|ERR_[A-Z_]+|not ok|test failed)'
     } | Select-Object -First 5)
     if ($diagnostics.Count -eq 0) { $diagnostics = @("Test failed; see the job log.") }
     foreach ($line in $diagnostics) {
