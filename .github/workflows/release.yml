@@ -171,7 +171,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.2' }}
-          name: "NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.2' }}"
+          name: "NanamiWork 1.1.2 Microsoft Store Compatibility and Hotfixes"
           draft: false
           prerelease: false
           files: release-assets/*
