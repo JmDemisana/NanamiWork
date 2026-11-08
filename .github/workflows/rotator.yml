@@ -49,12 +49,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Restore electron-builder download cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~\AppData\Local\electron-builder\Cache
+            ~\AppData\Local\electron\Cache
+          key: eb-cache-win-${{ github.run_id }}
+          restore-keys: |
+            eb-cache-win-
+
       - name: Package Windows installer
         shell: pwsh
         run: |
           $success = $false
-          for ($i = 1; $i -le 3; $i++) {
-            Write-Host "Packaging Windows installer (attempt $i/3)..."
+          for ($i = 1; $i -le 8; $i++) {
+            Write-Host "Packaging Windows installer (attempt $i/8)..."
             pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
             if ($LASTEXITCODE -eq 0) {
               $success = $true
@@ -70,6 +80,15 @@ jobs:
           SIGN_WINDOWS: "false"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save electron-builder download cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~\AppData\Local\electron-builder\Cache
+            ~\AppData\Local\electron\Cache
+          key: eb-cache-win-${{ github.run_id }}
 
       - name: Upload Windows test artifacts
         uses: actions/upload-artifact@v4
