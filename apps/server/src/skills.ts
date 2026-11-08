@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { globalOpencodeConfigDir } from "@openwork/paths";
 import type { SkillItem } from "./types.js";
 import { parseFrontmatter, buildFrontmatter } from "./frontmatter.js";
 import { exists } from "./utils.js";
@@ -189,7 +190,7 @@ async function listSkillsInDir(dir: string, scope: "project" | "global"): Promis
 export function globalSkillDirectories() {
   const home = homedir();
   return {
-    openwork: join(home, ".config", "opencode", "skills"),
+    openwork: join(globalOpencodeConfigDir(), "skills"),
     claude: join(home, ".claude", "skills"),
     agents: join(home, ".agents", "skills"),
     agentLegacy: join(home, ".agent", "skills"),
@@ -203,12 +204,15 @@ export async function listSkills(workspaceRoot: string, includeGlobal: boolean):
     const opencodeDir = join(root, ".opencode", "skills");
     const claudeDir = join(root, ".claude", "skills");
     dirs.push({ dir: opencodeDir, scope: "project" });
-    dirs.push({ dir: claudeDir, scope: "project" });
+    if (process.env.NANAMIWORK_ISOLATED !== "1") dirs.push({ dir: claudeDir, scope: "project" });
   }
 
   if (includeGlobal) {
     const global = globalSkillDirectories();
-    for (const dir of [global.openwork, global.claude, global.agents, global.agentLegacy]) dirs.push({ dir, scope: "global" });
+    const globalDirs = process.env.NANAMIWORK_ISOLATED === "1"
+      ? [global.openwork]
+      : [global.openwork, global.claude, global.agents, global.agentLegacy];
+    for (const dir of globalDirs) dirs.push({ dir, scope: "global" });
   }
 
   const groups = await Promise.all(dirs.map(({ dir, scope }) => listSkillsInDir(dir, scope)));

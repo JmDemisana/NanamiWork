@@ -1,6 +1,7 @@
 import { startupPhase } from "./startup-phase.js";
 import { withEngineSwitchFence } from "./engine-switch-fence.js";
 import { acquireHistoryCopyLock, historyCopyFenced, historyCopyTargetConsistent, HistoryCopyError } from "./opencode-v2-history-lock.js";
+import { hasNanamiV1SignIns } from "./nanami-v1-accounts.js";
 import { engineAutoUpgradeRetry, historyRevision, runEngineAutoUpgrade, waitForEngineIdle, type EngineAutoUpgradeRetry } from "./engine-auto-upgrade.js";
 import { createV2ContextBridge } from "./opencode-v2-context-bridge.js";
 import { createV2ProviderSessionBridge } from "./opencode-v2-provider-session.js";
@@ -1233,7 +1234,9 @@ export function createEngineV2Preview(options: {
       // The engine reads ~/.claude/skills and ~/.agents/skills itself, but its
       // config folder is OpenWork's own, so it never sees these two global
       // folders the skill picker lists, and a picked skill there can't be sent.
-      skills: [globalSkills.openwork, globalSkills.agentLegacy],
+      skills: process.env.NANAMIWORK_ISOLATED === "1"
+        ? [globalSkills.openwork]
+        : [globalSkills.openwork, globalSkills.agentLegacy],
       agentPermissions: async () => {
         const rules = agentPermissionRulesOf((await readGlobalRuntimeOpencodeConfig(config)).managedPolicy);
         if (rules.length === 0) return { rules, organizationMcp: {} };
@@ -1605,6 +1608,9 @@ export function createEngineV2Preview(options: {
     let attemptedCopy = false;
     try {
       if (autoUpgradeRetry && Date.now() < autoUpgradeRetry.retryAt) return false;
+      if (process.env.NANAMIWORK_ISOLATED === "1" && await hasNanamiV1SignIns()) {
+        throw new Error("Automatic engine upgrade is paused: existing accounts need v1. Your chats and accounts remain on v1.");
+      }
       const source = opencodeV1DatabasePath();
       // Unlike the interactive availability hint, unreadable history is not
       // evidence of an empty profile. Fail closed rather than hide its chats.

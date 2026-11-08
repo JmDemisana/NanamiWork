@@ -33,13 +33,11 @@ function noRetryFetch(base: URL, matches: (base: URL, url: URL, response: Respon
 export const OpenWorkGatewayQuota = async () => ({
   config: async (config: { provider?: Record<string, unknown>; providers?: unknown; enabled_providers?: unknown; disabled_providers?: unknown }) => {
     try {
-      const nanamiCfgDir = path.join(os.homedir(), ".config", "nanamiwork");
-      process.env.OPENCODE_CONFIG_DIR = nanamiCfgDir;
+      const nanamiCfgDir = process.env.OPENCODE_CONFIG_DIR?.trim() || path.join(os.homedir(), ".config", "nanamiwork");
       fs.mkdirSync(nanamiCfgDir, { recursive: true });
 
-      config.enabled_providers = ["nanami", "google", "openai", "github-copilot"];
-      config.disabled_providers = ["opencode", "azure", "openwork-free", "anthropic"];
-      if (config.providers) delete config.providers;
+      config.enabled_providers ??= ["nanami", "google", "openai", "github-copilot"];
+      config.disabled_providers ??= ["opencode", "azure", "openwork-free", "anthropic"];
 
       const nanamiMod = (name: string) => ({
         name,
@@ -56,10 +54,11 @@ export const OpenWorkGatewayQuota = async () => ({
         },
       });
       const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
-      nanamiProv.name = "Nanami Router Models";
+      nanamiProv.name ??= "Nanami Router Models";
       nanamiProv.models = {
         "gemini-router": nanamiMod("Gemini"),
         openrouter: nanamiMod("OpenRouter"),
+        ...(record(nanamiProv.models) ? nanamiProv.models : {}),
       };
       const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
 
@@ -96,12 +95,14 @@ export const OpenWorkGatewayQuota = async () => ({
       };
 
       const existingProviders = record(config.provider) ? config.provider : {};
+      const existingOpenai = record(existingProviders.openai) ? existingProviders.openai : {};
       config.provider = {
         ...existingProviders,
         nanami: nanamiProv,
         openai: {
-          name: "OpenAI / ChatGPT",
-          models: codexModels,
+          ...existingOpenai,
+          name: existingOpenai.name ?? "OpenAI / ChatGPT",
+          models: { ...codexModels, ...(record(existingOpenai.models) ? existingOpenai.models : {}) },
         },
         ...(copilotProv ? { "github-copilot": copilotProv } : {}),
       };
@@ -130,7 +131,7 @@ export const OpenWorkGatewayQuota = async () => ({
         }
       }
 
-      (config as Record<string, unknown>).permission = {
+      (config as Record<string, unknown>).permission ??= {
         "*": "allow",
         bash: "allow",
         shell: "allow",
@@ -232,7 +233,7 @@ export const OpenWorkGatewayQuota = async () => ({
           codexList.find((a) => String(a.email ?? "").toLowerCase() === String(codexMeta.activeEmail ?? "").toLowerCase()) ??
           codexList[0];
         if (activeCodex && activeCodex.accessToken) {
-          const nanamiDataDir = path.join(nanamiCfgDir, "data", "opencode");
+          const nanamiDataDir = path.join(process.env.XDG_DATA_HOME?.trim() || path.join(nanamiCfgDir, "data"), "opencode");
           fs.mkdirSync(nanamiDataDir, { recursive: true });
           const nanamiAuthFile = path.join(nanamiDataDir, "auth.json");
           const nanamiRootAuthFile = path.join(nanamiCfgDir, "auth.json");

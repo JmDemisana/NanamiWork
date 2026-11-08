@@ -22,6 +22,7 @@ export const BLANK_SLATE_PATH_ENV_KEYS = Object.freeze([
   "OPENWORK_DATA_DIR",
   "OPENCODE_CONFIG_DIR",
   "OPENCODE_DB",
+  "NANAMIWORK_ENGINE_HOME",
 ]);
 
 function pathApi(platform) {
@@ -66,6 +67,10 @@ export function prepareBlankSlateProfile({
     OPENWORK_DATA_DIR: paths.join(rootPath, "openwork", "data"),
     OPENCODE_CONFIG_DIR: paths.join(rootPath, "opencode", "config"),
     OPENCODE_DB: paths.join(opencodeDataPath, "opencode.db"),
+    NANAMIWORK_ISOLATED: "1",
+    NANAMIWORK_ENGINE_HOME: paths.join(rootPath, "engine-home"),
+    OPENCODE_DISABLE_CLAUDE_CODE: "1",
+    OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
   };
 
   const directories = new Set([

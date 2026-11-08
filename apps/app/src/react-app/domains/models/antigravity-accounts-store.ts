@@ -183,6 +183,10 @@ export function formatQuotaResetShort(resetTime: string | null | undefined): str
 }
 
 async function getNanamiConfigDir(): Promise<string> {
+  try {
+    const config = await readOpencodeConfig("global");
+    if (config.path) return config.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+  } catch {}
   const home = (await getCachedDesktopHomeDir()) || "";
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
@@ -301,25 +305,15 @@ const fs = require('fs');
 const path = require('path');
 const parseJ = (raw) => JSON.parse(String(raw || '').replace(/^\\uFEFF/, '').replace(/\\\\"|"(?:\\\\"|[^"])*"|(\\/\\/.*|\\/\\*[\\s\\S]*?\\*\\/)/g, (m, g) => (g ? '' : m)).replace(/,(\\s*[}\\]])/g, '$1'));
 const home = ${JSON.stringify(home)};
-const cfgDir = path.join(home, '.config', 'nanamiwork');
+const cfgDir = process.env.OPENCODE_CONFIG_DIR || path.join(home, '.config', 'nanamiwork');
 fs.mkdirSync(cfgDir, { recursive: true });
 const accFile = path.join(cfgDir, 'antigravity-accounts.json');
 const jsoncFile = path.join(cfgDir, 'opencode.jsonc');
 const jsonFile = path.join(cfgDir, 'opencode.json');
-const rcFile = path.join(home, 'AppData', 'Roaming', 'openwork', 'runtime-opencode-config.json');
 const action = ${JSON.stringify(action ?? null)};
 
-if (fs.existsSync(rcFile)) {
-  try {
-    const rc = parseJ(fs.readFileSync(rcFile, 'utf8'));
-    rc.enabled_providers = ['nanami', 'google', 'openwork-free', 'openwork', 'opencode', 'github-copilot', 'openai'];
-    rc.disabled_providers = ['azure', 'anthropic'];
-    fs.writeFileSync(rcFile, JSON.stringify(rc) + '\\n', 'utf8');
-  } catch {}
-}
-
 if (!fs.existsSync(accFile)) {
-  fs.writeFileSync(accFile, JSON.stringify({ activeIndex: 0, accounts: [] }, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(accFile, JSON.stringify({ activeIndex: 0, accounts: [] }, null, 2) + '\\n', 'utf8');
 }
 if (fs.existsSync(accFile)) {
   const data = parseJ(fs.readFileSync(accFile, 'utf8'));

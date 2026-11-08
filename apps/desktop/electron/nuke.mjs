@@ -66,6 +66,7 @@ const PROFILE_SCOPED_ENV_KEYS = [
   "XDG_STATE_HOME",
 ];
 const NUKE_WORKER_ENV_KEYS = [
+  "NANAMIWORK_ISOLATED",
   "APPDATA",
   "LOCALAPPDATA",
   "OPENWORK_DATA_DIR",
@@ -103,6 +104,7 @@ function isTruthyDevMode(env) {
 // Nuking such a profile must never reach into the default (production) profile.
 function isIsolatedProfile(env) {
   return (
+    envValue(env, "NANAMIWORK_ISOLATED") === "1" ||
     isTruthyDevMode(env) ||
     envValue(env, "OPENWORK_ELECTRON_APP_IDENTIFIER") !== "" ||
     envValue(env, "OPENWORK_ELECTRON_USERDATA") !== ""
@@ -356,9 +358,13 @@ function resolveNukePlan(input) {
     (targetPath) => !shouldSkipDeletePath(targetPath, preserveBootstrapPath, homedir, paths, platform),
   );
   const scopeToProfile = input.scopeToProfile !== false && isIsolatedProfile(input.env ?? {});
-  const sharedPaths = scopeToProfile ? defaultProfileDeletePaths(input) : [];
+  const nanamiIsolated = envValue(env, "NANAMIWORK_ISOLATED") === "1";
+  const sharedPaths = scopeToProfile && !nanamiIsolated ? defaultProfileDeletePaths(input) : [];
   const scopeDeletePaths = (candidates) =>
-    scopeToProfile
+    nanamiIsolated
+      ? candidates.filter((candidate) => [userDataPath, paths.join(homedir, ".config", "nanamiwork")]
+          .some((root) => sameOrInside(candidate, root, paths, platform)))
+      : scopeToProfile
       ? profileScopedDeletePaths(candidates, sharedPaths, userDataPath, paths, platform)
       : candidates;
   const manifest = {
@@ -379,7 +385,9 @@ function resolveNukePlan(input) {
     scopeToProfile,
     scopeDeletePaths,
     preservePaths: uniquePaths([preserveBootstrapPath, paths.join(homedir, ".opencode", "bin")], paths, platform),
-    legacyBootstrapPath: paths.resolve(legacyBootstrapPath) === paths.resolve(bootstrapPath) ? null : legacyBootstrapPath,
+    legacyBootstrapPath: nanamiIsolated || paths.resolve(legacyBootstrapPath) === paths.resolve(bootstrapPath) ? null : legacyBootstrapPath,
+    skipBootstrapSanitize: nanamiIsolated && ![userDataPath, paths.join(homedir, ".config", "nanamiwork")]
+      .some((root) => sameOrInside(bootstrapPath, root, paths, platform)),
     platform,
   };
 }
@@ -531,6 +539,7 @@ export async function sanitizeDesktopBootstrapFiles({ canonicalPath, legacyPath 
 }
 
 async function sanitizeDesktopBootstrapOnDisk(plan) {
+  if (plan.skipBootstrapSanitize) return false;
   const preservePath = plan.manifest.preserveBootstrapPath;
   if (!preservePath) return false;
   return sanitizeDesktopBootstrapFiles({

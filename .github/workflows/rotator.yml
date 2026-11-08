@@ -44,12 +44,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Verify private profile migration
+        run: node --test apps/desktop/electron/nanami-profile.test.mjs
+
+      - name: Verify account isolation
+        working-directory: apps/server
+        run: bun test test/nanami-isolation-accounts.test.ts --timeout 30000
+
+      - name: Verify plugin directory isolation
+        working-directory: apps/server
+        run: bun test test/opencode-plugin-deps.test.ts -t NanamiWork --timeout 30000
+
+      - name: Verify conversation sidebar
+        working-directory: apps/app
+        run: bun test tests/use-workspace-route-state.test.tsx --timeout 30000
+
       - name: Build Electron app
         run: pnpm --filter @openwork/desktop build:electron
         env:
           SIGN_WINDOWS: "false"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify both packaged engines across restart
+        working-directory: apps/server
+        run: bun test test/nanami-isolation-native.test.ts --timeout 90000
+        env:
+          NANAMI_TEST_V1_BIN: ${{ github.workspace }}\apps\desktop\resources\sidecars\opencode.exe
+          NANAMI_TEST_V2_BIN: ${{ github.workspace }}\apps\desktop\resources\sidecars\opencode2.exe
 
       - name: Restore electron-builder download cache
         uses: actions/cache/restore@v4

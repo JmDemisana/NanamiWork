@@ -205,6 +205,10 @@ export async function startAntigravityOAuth(
 }
 
 async function getNanamiworkConfigDir(): Promise<string> {
+  try {
+    const config = await readOpencodeConfig("global");
+    if (config.path) return config.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+  } catch {}
   const home = (await getCachedDesktopHomeDir()) || "";
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
@@ -237,6 +241,7 @@ export async function ensureAntigravityPluginInstalled(): Promise<boolean> {
         name: "Google Antigravity",
         models: {
           ...ANTIGRAVITY_GOOGLE_MODELS,
+          ...existingGoogleModels,
         },
       };
       const edits = modify(raw, ["provider", "google"], googleConfig, {

@@ -118,6 +118,22 @@ test("seeds registered workspace folders when the engine starts in a separate sc
   }
 });
 
+test("NanamiWork does not seed another app's home or workspace plugin directories", async () => {
+  const f = await fixture();
+  try {
+    const project = join(f.cwd, ".opencode");
+    const home = join(f.home, ".opencode");
+    const explicit = join(f.root, "nanami-config");
+    for (const directory of [project, home]) await mkdir(directory, { recursive: true });
+    const results = await seedManagedOpencodePluginDeps({
+      ...f, workspaceDirs: [f.cwd], env: { ...f.env, NANAMIWORK_ISOLATED: "1", OPENCODE_CONFIG_DIR: explicit },
+    });
+    assert.deepEqual(results.map((entry) => entry.configDir), [f.global, explicit]);
+    assert.equal(existsSync(join(project, "node_modules")), false);
+    assert.equal(existsSync(join(home, "node_modules")), false);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
 test("uses HOME for default global config and discovery without creating absent project state", async () => {
   const f = await fixture();
   try {

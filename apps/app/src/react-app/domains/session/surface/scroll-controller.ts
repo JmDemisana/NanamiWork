@@ -562,7 +562,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       pendingSubmittedMessageId = null;
       cancelledWhileLoading = false;
       lastGestureAt = -Infinity;
-      store.setManualScroll(scrollKey, 0, undefined, undefined);
+      store.setManualScroll(scrollKey, 0, null, undefined);
       smoothJump = behavior === "smooth";
       container.scrollTo({ top: 0, behavior });
       lastKnownScrollTop = container.scrollTop;

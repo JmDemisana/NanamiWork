@@ -273,6 +273,8 @@ export function resolveOpenworkServerConfigPath(env = process.env) {
 export function openworkInstallMarkerPaths({ userDataDir, serverConfigPath, env = process.env }) {
   const serverDir = path.dirname(serverConfigPath);
   const runtimeDb = env.OPENWORK_RUNTIME_DB?.trim() ? path.resolve(env.OPENWORK_RUNTIME_DB.trim()) : path.join(serverDir, "runtime.sqlite");
+  const engineConfig = env.OPENCODE_CONFIG_DIR?.trim();
+  const engineData = env.XDG_DATA_HOME?.trim();
   return [
     serverConfigPath,
     runtimeDb,
@@ -282,6 +284,8 @@ export function openworkInstallMarkerPaths({ userDataDir, serverConfigPath, env 
     path.join(userDataDir, "openwork-workspaces.json"),
     path.join(userDataDir, "workspace-state.json"),
     path.join(userDataDir, "app-recovery.v1.json"),
+    ...(engineConfig ? ["opencode.jsonc", "opencode.json", "codex-accounts.json", "antigravity-accounts.json"].map((name) => path.join(engineConfig, name)) : []),
+    ...(engineData ? [path.join(engineData, "opencode", "auth.json")] : []),
   ];
 }
 
@@ -1471,9 +1475,8 @@ export function createRuntimeManager({
   const userDataDir = app.getPath("userData");
   // Decided once, before this process writes any OpenWork state, so a server
   // restart in the same session does not mistake its own files for an update.
-  const freshInstallEngine = resolveFreshInstallEngine({
-    markerPaths: openworkInstallMarkerPaths({ userDataDir, serverConfigPath: resolveOpenworkServerConfigPath(process.env) }),
-  });
+  let freshInstallEngine;
+  let freshInstallEngineResolved = false;
   const sidecarDirs = [
     path.join(desktopRoot, "resources", "sidecars"),
     process.resourcesPath ? path.join(process.resourcesPath, "sidecars") : null,
@@ -1632,8 +1635,7 @@ export function createRuntimeManager({
     });
     // mergeEnv keeps one entry per Windows name, so a child never sees both a
     // saved `PATH` and the inherited `Path` and picks one by spelling.
-    const nanamiworkConfigDir = path.join(app.getPath("home"), ".config", "nanamiwork");
-    const baseEnv = mergeEnv([userEnv, process.env, { BUN_CONFIG_DNS_RESULT_ORDER: "verbatim", OPENCODE_CONFIG_DIR: nanamiworkConfigDir }]);
+    const baseEnv = mergeEnv([userEnv, process.env, { BUN_CONFIG_DNS_RESULT_ORDER: "verbatim" }]);
     const caEnv = envKey(baseEnv, "NODE_EXTRA_CA_CERTS") === undefined ? (await systemCa()).childEnv : {};
     // Bun honors Node's NODE_EXTRA_CA_CERTS, so bundled Bun sidecars inherit
     // the exported OS trust store through the same child env variable.
@@ -1654,6 +1656,10 @@ export function createRuntimeManager({
       XDG_STATE_HOME: devPaths.xdgStateHome,
       OPENCODE_CONFIG_DIR: devPaths.opencodeConfigDir,
       OPENCODE_TEST_HOME: devPaths.homeDir,
+      NANAMIWORK_ISOLATED: "1",
+      NANAMIWORK_ENGINE_HOME: path.join(devPaths.homeDir, "engine-home"),
+      OPENCODE_DISABLE_CLAUDE_CODE: "1",
+      OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
     }]);
   }
 
@@ -1940,6 +1946,12 @@ export function createRuntimeManager({
     // the server config loader will ignore server.json and lose server-created
     // workspaces after restart.
     const serverConfigPath = resolveOpenworkServerConfigPath(process.env);
+    if (!freshInstallEngineResolved) {
+      freshInstallEngine = resolveFreshInstallEngine({
+        markerPaths: openworkInstallMarkerPaths({ userDataDir, serverConfigPath }),
+      });
+      freshInstallEngineResolved = true;
+    }
     const requestedWorkspacePaths = prioritizeWorkspacePaths("", options.workspacePaths, {
       platform: workspacePlatform,
     });

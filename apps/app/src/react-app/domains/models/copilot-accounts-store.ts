@@ -10,6 +10,10 @@ import { applyEdits, modify, parse } from "jsonc-parser";
 import type { Client } from "@/app/types";
 
 async function getNanamiConfigDir(): Promise<string> {
+  try {
+    const config = await readOpencodeConfig("global");
+    if (config.path) return config.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+  } catch {}
   const home = (await getCachedDesktopHomeDir()) || "";
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }

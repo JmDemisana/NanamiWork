@@ -8,6 +8,7 @@ import { deleteEnv, mergeEnv } from "@openwork/paths";
 import { startupPhase } from "./startup-phase.js";
 import { randomUUID } from "node:crypto";
 import { appendEngineOutputTail, createEngineStartupLineReader } from "./engine-output.js";
+import { isolateNanamiEngineEnvironment } from "./nanami-engine-environment.js";
 
 export type ManagedChildProcess = {
   exitCode: number | null;
@@ -240,6 +241,7 @@ async function startManagedOpencodeServer(
     options.env,
     { OPENCODE_SERVER_USERNAME: username, OPENCODE_SERVER_PASSWORD: password },
   ]);
+  await isolateNanamiEngineEnvironment(env, options.env);
   // The managed engine needs its own provider environment, but never the key
   // that decrypts OpenWork-owned OAuth credentials, under any Windows spelling.
   deleteEnv(env, "OPENWORK_ENCRYPTION_KEY");

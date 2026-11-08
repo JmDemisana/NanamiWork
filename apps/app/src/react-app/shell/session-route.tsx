@@ -1441,7 +1441,7 @@ export function SessionRoute() {
   const organizationRemovalConfirmed = modelRemovalConfirmation.confirmed;
   const hasAntigravityAccounts = useAntigravityAccountsStore((s) => s.accounts.length > 0);
   const resolveModelAvailability = useCallback((model: ModelRef | null): ModelAvailability => {
-    if (!model) return { status: "unavailable" };
+    if (!model) return { status: "pending" };
     if (isDesktopRuntime() || model.providerID === "nanami" || model.providerID === "google" || model.providerID === "openai" || model.providerID === "github-copilot" || model.modelID.startsWith("antigravity-") || model.modelID.startsWith("copilot-") || model.modelID.startsWith("codex-")) return { status: "available" };
     if (model && model.providerID === "google" && model.modelID.startsWith("antigravity-") && (hasAntigravityAccounts || useAntigravityAccountsStore.getState().accounts.length > 0)) {
       return { status: "available" };

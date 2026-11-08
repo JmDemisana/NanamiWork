@@ -575,6 +575,8 @@ export type DesktopCommandMap = {
   // Updater / config / resets
   updaterEnvironment: { args: []; result: UpdaterEnvironment };
   readOpencodeConfig: { args: [scope: string, projectDir?: string]; result: OpencodeConfigFile };
+  readNanamiConfigFile: { args: [filename: string]; result: { exists: boolean; content: string | null } };
+  writeNanamiConfigFile: { args: [filename: string, content: string]; result: { ok: boolean; path?: string } };
   writeOpencodeConfig: {
     args: [scope: string, projectDir: string, content: string];
     result: ExecResult;

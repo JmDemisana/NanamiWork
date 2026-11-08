@@ -659,7 +659,7 @@ export function AdvancedRuntimeConfigSourcesSection(props: AdvancedRuntimeConfig
                 />
                 <RuntimeConfigSourceBlock
                   title="Global opencode config"
-                  description="User-level OpenCode config under ~/.config/opencode."
+                  description="User-level NanamiWork engine configuration."
                   path={props.configStatus.sources.globalOpencode.path}
                   exists={props.configStatus.sources.globalOpencode.exists}
                   keys={props.configStatus.sources.globalOpencode.keys}

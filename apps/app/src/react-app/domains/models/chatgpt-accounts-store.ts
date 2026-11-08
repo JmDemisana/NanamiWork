@@ -207,6 +207,10 @@ type ChatGptAccountsStore = {
 let latestClient: Client | null = null;
 
 async function getNanamiConfigDir(): Promise<string> {
+  try {
+    const config = await readOpencodeConfig("global");
+    if (config.path) return config.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+  } catch {}
   const home = (await getCachedDesktopHomeDir()) || "";
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
@@ -998,7 +1002,7 @@ const server = http.createServer(async (req, res) => {
     } catch {}
 
     // 1. Save pending OAuth to isolated ~/.config/nanamiwork/codex-pending-oauth.json
-    const cfgDir = path.join(home, '.config', 'nanamiwork');
+    const cfgDir = process.env.OPENCODE_CONFIG_DIR || path.join(home, '.config', 'nanamiwork');
     fs.mkdirSync(cfgDir, { recursive: true });
     fs.writeFileSync(path.join(cfgDir, 'codex-pending-oauth.json'), JSON.stringify({
       id_token: tokens.id_token || '',
@@ -1008,8 +1012,8 @@ const server = http.createServer(async (req, res) => {
       saved_at: Date.now(),
     }, null, 2), 'utf8');
 
-    // 2. Save to ~/.local/share/opencode/auth.json for managed opencode engine
-    const ocShareDir = path.join(home, '.local', 'share', 'opencode');
+    // The managed engine uses NanamiWork's private XDG data directory.
+    const ocShareDir = path.join(process.env.XDG_DATA_HOME || path.join(cfgDir, 'data'), 'opencode');
     fs.mkdirSync(ocShareDir, { recursive: true });
     const ocAuthFile = path.join(ocShareDir, 'auth.json');
     let ocAuth = {};
@@ -1097,10 +1101,10 @@ export async function syncCodexDiskAccountsViaTerminal(action?: {
 const fs=require('fs'),path=require('path');
 const parseJ=(r)=>JSON.parse(String(r||'').replace(/^\\uFEFF/,'').replace(/\\\\"|"(?:\\\\"|[^"])*"|(\\/\\/.*|\\/\\*[\\s\\S]*?\\*\\/)/g,(m,g)=>(g?'':m)).replace(/,(\\s*[}\\]])/g,'$1'));
 const home=${JSON.stringify(home)},action=${JSON.stringify(action ?? null)};
-const cfgDir=path.join(home,'.config','nanamiwork');
+const cfgDir=process.env.OPENCODE_CONFIG_DIR||path.join(home,'.config','nanamiwork');
 fs.mkdirSync(cfgDir,{recursive:true});
 const codexAccFile=path.join(cfgDir,'codex-accounts.json'),pendingFile=path.join(cfgDir,'codex-pending-oauth.json'),jsoncFile=path.join(cfgDir,'opencode.jsonc'),jsonFile=path.join(cfgDir,'opencode.json');
-const ocShareAuthFile=path.join(home,'.local','share','opencode','auth.json'),rcFile=path.join(home,'AppData','Roaming','openwork','runtime-opencode-config.json');
+const ocShareAuthFile=path.join(process.env.XDG_DATA_HOME||path.join(cfgDir,'data'),'opencode','auth.json');
 const decode=(t)=>{try{const p=JSON.parse(Buffer.from(String(t||'').split('.')[1],'base64').toString('utf8')),pr=p['https://api.openai.com/profile']||{},au=p['https://api.openai.com/auth']||{};return{email:p.email||pr.email||'',planType:au.chatgpt_plan_type||p.chatgpt_plan_type||'free',accountId:au.chatgpt_account_id||p.chatgpt_account_id||''};}catch{return{};}};
 let meta={activeEmail:'',deletedAtByEmail:{},accounts:[]};
 for(const f of[codexAccFile,jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const d=parseJ(fs.readFileSync(f,'utf8')),cx=d.x_nanami_codex||d;if(cx.deletedAtByEmail)meta.deletedAtByEmail={...meta.deletedAtByEmail,...cx.deletedAtByEmail};if(Array.isArray(cx.accounts)){for(const a of cx.accounts){if(a&&a.email&&(a.accessToken||a.apiKey)&&!meta.accounts.some(e=>e.email.toLowerCase()===a.email.toLowerCase()))meta.accounts.push(a);}}if(!meta.activeEmail&&cx.activeEmail)meta.activeEmail=cx.activeEmail;}catch{}}}
@@ -1114,7 +1118,6 @@ fs.writeFileSync(codexAccFile,JSON.stringify(meta,null,2)+'\\n','utf8');
 const mDef=(n)=>({name:n,limit:{context:400000,output:128000},modalities:{input:['text','image'],output:['text']}});
 const codexModels={'gpt-6.1-sol':mDef('GPT-6.1 Sol'),'gpt-6-astra':mDef('GPT-6 Astra'),'gpt-6.1-terra':mDef('GPT-6.1 Terra'),'gpt-6-sol':mDef('GPT-6 Sol'),'gpt-6-luna':mDef('GPT-6 Luna'),'gpt-5.6-sol':mDef('GPT-5.6 Sol'),'gpt-5.6-terra':mDef('GPT-5.6 Terra'),'gpt-5.6-luna':mDef('GPT-5.6 Luna')};
 for(const f of[jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const cfg=parseJ(fs.readFileSync(f,'utf8'));cfg.x_nanami_codex=meta;if(!Array.isArray(cfg.enabled_providers))cfg.enabled_providers=['nanami','google','openai','github-copilot'];else if(!cfg.enabled_providers.includes('openai'))cfg.enabled_providers.push('openai');if(!cfg.provider)cfg.provider={};if(!cfg.provider.openai||!cfg.provider.openai.options||!cfg.provider.openai.options.apiKey)cfg.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(f,JSON.stringify(cfg,null,2)+'\\n','utf8');}catch{}}}
-if(fs.existsSync(rcFile)){try{const rc=parseJ(fs.readFileSync(rcFile,'utf8'));rc.enabled_providers=['nanami','google','openwork-free','openwork','opencode','github-copilot','openai'];rc.disabled_providers=['azure','anthropic'];if(!rc.provider)rc.provider={};if(!rc.provider.openai||!rc.provider.openai.options||!rc.provider.openai.options.apiKey)rc.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(rcFile,JSON.stringify(rc)+'\\n','utf8');}catch{}}
 `.trim();
 
     const b64 = btoa(script);

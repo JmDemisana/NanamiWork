@@ -14,11 +14,11 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { appendEngineOutputTail, createEngineStartupLineReader } from "./engine-output.js";
 import { acquireEngineHistoryLease } from "./opencode-v2-history-lock.js";
 import { providerCredentialBrokerSource } from "./opencode-v2-provider-channel.js";
 import { NANAMI_PROVIDER_ID, enforceNanamiGateway, nanamiOnlyEnabled, withNanamiGateway } from "./nanami-gateway.js";
+import { isolateNanamiEngineEnvironment } from "./nanami-engine-environment.js";
 
 export { installOpencodeV2Binary } from "./opencode-v2-binary.js";
 
@@ -366,6 +366,9 @@ const ENGINE_INHERITED_ENV = [
   "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TMP", "TEMP",
   "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TERM", "CI",
   "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR",
+  "NANAMIWORK_ISOLATED", "NANAMIWORK_ENGINE_HOME",
+  "OPENCODE_DISABLE_CLAUDE_CODE", "OPENCODE_DISABLE_EXTERNAL_SKILLS",
+  "OPENWORK_UI_CONTROL_DISCOVERY",
   "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
   "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR",
 ];
@@ -426,6 +429,7 @@ async function createManagedOpencodeV2ServerInner(
   let agentPermissionsPluginWritten = false;
   const opencodeModelsUrl = (options.env?.OPENCODE_MODELS_URL ?? process.env.OPENCODE_MODELS_URL)?.replace(/\/+$/, "");
   const inherited = inheritedEngineEnv(options.env);
+  await isolateNanamiEngineEnvironment(inherited, options.env);
   // A caller may deliberately provide a config file; never inherit the server's
   // OPENCODE_CONFIG or OPENCODE_PURE settings implicitly.
   if (options.env?.OPENCODE_CONFIG) inherited.OPENCODE_CONFIG = options.env.OPENCODE_CONFIG;
@@ -485,8 +489,7 @@ async function createManagedOpencodeV2ServerInner(
       ...(options.providerSession ? { OPENWORK_PROVIDER_SESSION_FD: "3", OPENWORK_PROVIDER_SESSION_BROKER: providerCredentialBrokerPath } : {}),
       OPENCODE_PASSWORD: password,
       OPENCODE_DB: join(options.rootDir, "opencode.db"),
-      OPENCODE_CONFIG_DIR: join(homedir(), ".config", "nanamiwork"),
-      XDG_DATA_HOME: join(homedir(), ".config", "nanamiwork", "data"),
+      OPENCODE_CONFIG_DIR: configDir,
       ...(opencodeModelsUrl === undefined ? {} : { OPENCODE_MODELS_URL: opencodeModelsUrl }),
     },
     stdio: ["ignore", "pipe", "pipe", options.providerSession ? "pipe" : "ignore"],

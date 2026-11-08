@@ -55,16 +55,15 @@ export function nanamiApiKey(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /**
- * Personal-fork convenience: reuse the Nanami key the person already has in the
- * OpenCode CLI config, so the desktop app works without a second copy of the
- * secret. The repo never contains a key.
+ * Read only NanamiWork's selected config. Another app's credentials are not
+ * an implicit source for this installation.
  */
 function configuredGatewayKey(env: NodeJS.ProcessEnv): string {
   const home = env.USERPROFILE?.trim() || env.HOME?.trim();
-  if (!home) return "";
-  for (const dir of ["nanamiwork", "opencode"]) {
-    for (const name of ["opencode.json", "opencode.jsonc"]) {
-      const path = join(home, ".config", dir, name);
+  const dir = env.OPENCODE_CONFIG_DIR?.trim() || (home ? join(home, ".config", "nanamiwork") : "");
+  if (!dir) return "";
+  for (const name of ["opencode.json", "opencode.jsonc"]) {
+    const path = join(dir, name);
     const parsed = readJsonc(path);
     const provider = parsed?.provider;
     if (!isRecord(provider)) continue;
@@ -72,7 +71,6 @@ function configuredGatewayKey(env: NodeJS.ProcessEnv): string {
     if (!isRecord(nanami) || !isRecord(nanami.options)) continue;
     const apiKey = nanami.options.apiKey;
     if (typeof apiKey === "string" && apiKey.trim()) return apiKey.trim();
-  }
   }
   return "";
 }

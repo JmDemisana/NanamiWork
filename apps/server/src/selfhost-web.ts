@@ -365,9 +365,11 @@ export async function seedManagedOpencodePluginDeps(input: {
   ]);
   const explicit = input.env.OPENCODE_CONFIG_DIR;
   if (explicit) configDirs.add(resolve(input.cwd, explicit));
-  for (const directory of [input.cwd, ...(input.workspaceDirs ?? []), discoveryHome]) {
-    const configDir = resolve(input.cwd, directory, ".opencode");
-    if (await isDirectory(configDir)) configDirs.add(configDir);
+  if (input.env.NANAMIWORK_ISOLATED !== "1") {
+    for (const directory of [input.cwd, ...(input.workspaceDirs ?? []), discoveryHome]) {
+      const configDir = resolve(input.cwd, directory, ".opencode");
+      if (await isDirectory(configDir)) configDirs.add(configDir);
+    }
   }
   const results: Array<{ configDir: string; result: PluginDepsSeedResult }> = [];
   for (const configDir of configDirs) {

@@ -19,7 +19,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { globalOpencodeConfigDir, workspaceOpencodeConfigCandidates } from "@openwork/paths";
+import { envKey, globalOpencodeConfigDir, workspaceOpencodeConfigCandidates } from "@openwork/paths";
 
 import { configureFakeMediaForTests, installMediaPermissionHandlers } from "./media-permissions.mjs";
 import { registerMigrationIpc } from "./migration.mjs";
@@ -107,6 +107,7 @@ import { createKeepAwake } from "./keep-awake.mjs";
 import { attachFloatingViewWindow, floatingViewWindowOptions } from "./floating-view-window.mjs";
 import { createStartupLog, startupPhase, withStartupPhase } from "./startup-log.mjs";
 import { createWindowStateStore } from "./window-state.mjs";
+import { legacyNanamiProfile, migrateLegacyNanamiProfile, nanamiProfileEnvironment } from "./nanami-profile.mjs";
 
 // Startup milestones (epoch ms) for the renderer's one-per-launch startup
 // report to Den. The OS process creation time includes module loading; the
@@ -438,6 +439,16 @@ const userDataPath = BLANK_SLATE_LAUNCH.userDataPath ?? resolveUserDataPath({
   userDataOverride: process.env.OPENWORK_ELECTRON_USERDATA,
 });
 app.setPath("userData", userDataPath);
+const originalProfileEnv = { ...process.env };
+const privateProfile = !isDevMode && !BLANK_SLATE_LAUNCH.enabled
+  ? nanamiProfileEnvironment({ env: originalProfileEnv, home: app.getPath("home"), userDataDir: userDataPath })
+  : null;
+const explicitRuntime = ["OPENWORK_SERVER_CONFIG", "OPENWORK_RUNTIME_DB", "OPENCODE_DB"]
+  .some((key) => String(originalProfileEnv[envKey(originalProfileEnv, key) ?? key] ?? "").trim());
+const legacyProfile = privateProfile && !explicitRuntime
+  ? legacyNanamiProfile({ env: originalProfileEnv, home: app.getPath("home"), userDataDir: userDataPath, runtimeDir: privateProfile.runtimeDir })
+  : null;
+if (privateProfile) Object.assign(process.env, privateProfile.env);
 const desktopStartupLog = createStartupLog({ directory: path.join(userDataPath, "logs") });
 const endAppReady = startupPhase("app.ready");
 app.once("quit", () => desktopStartupLog.close());
@@ -1845,7 +1856,7 @@ async function collectProjectSkillRoots(projectDir) {
 
     if (await isDirectory(opencodeSkills)) roots.push(opencodeSkills);
     if (await isDirectory(legacySkills)) roots.push(legacySkills);
-    if (await isDirectory(claudeSkills)) roots.push(claudeSkills);
+    if (process.env.NANAMIWORK_ISOLATED !== "1" && await isDirectory(claudeSkills)) roots.push(claudeSkills);
 
     if (await pathExists(path.join(current, ".git"))) {
       break;
@@ -1863,9 +1874,11 @@ async function collectGlobalSkillRoots() {
   const roots = [];
   const candidates = [
     path.join(globalOpencodeRoot(), "skills"),
-    path.join(os.homedir(), ".claude", "skills"),
-    path.join(os.homedir(), ".agents", "skills"),
-    path.join(os.homedir(), ".agent", "skills"),
+    ...(process.env.NANAMIWORK_ISOLATED === "1" ? [] : [
+      path.join(os.homedir(), ".claude", "skills"),
+      path.join(os.homedir(), ".agents", "skills"),
+      path.join(os.homedir(), ".agent", "skills"),
+    ]),
   ];
 
   for (const candidate of candidates) {
@@ -2483,24 +2496,18 @@ const desktopCommandHandlers = {
   },
   "readNanamiConfigFile": async (event, ...args) => {
       const filename = String(args[0] ?? "").trim();
-      const home = app.getPath("home");
-      const target = path.join(home, ".config", "nanamiwork", filename);
+      if (!/^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(filename)) throw new Error("Invalid NanamiWork config filename");
+      const target = path.join(globalOpencodeRoot(), filename);
       if (!existsSync(target)) return { exists: false, content: null };
       return { exists: true, content: await readFile(target, "utf8") };
   },
   "writeNanamiConfigFile": async (event, ...args) => {
       const filename = String(args[0] ?? "").trim();
+      if (!/^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(filename)) throw new Error("Invalid NanamiWork config filename");
       const content = String(args[1] ?? "");
-      const home = app.getPath("home");
-      const target = path.join(home, ".config", "nanamiwork", filename);
+      const target = path.join(globalOpencodeRoot(), filename);
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, content, "utf8");
-      try {
-        const opencodeTarget = path.join(home, ".config", "opencode", filename);
-        if (existsSync(path.dirname(opencodeTarget))) {
-          await writeFile(opencodeTarget, content, "utf8");
-        }
-      } catch {}
       return { ok: true, path: target };
   },
   "resetOpenworkState": async (event, ...args) => {
@@ -3234,6 +3241,43 @@ or use: pnpm dev:worktree`);
 
   app.whenReady().then(() => withStartupPhase("bootstrap.apply", async () => {
     endAppReady();
+    if (legacyProfile && privateProfile) {
+      const choice = await dialog.showMessageBox({
+        type: "question",
+        message: "Move your NanamiWork history into a private profile?",
+        detail: `Earlier files were found in ${legacyProfile.legacyDir}. This location can also belong to OpenWork. Import it only if it is your NanamiWork data: it can contain chats, workspace settings and saved connection credentials. The original files will be retained.\n\nClose any other app using these files before importing. OpenCode's separate auth.json will not be imported.`,
+        buttons: ["Quit", "Import NanamiWork data", "Skip import"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (choice.response === 0) { app.quit(); return; }
+      if (choice.response === 1) {
+        try {
+          const legacyV1 = path.join(legacyProfile.legacyDir, "opencode-v1", "state", "opencode.db");
+          let v1Source;
+          if (!existsSync(legacyV1) && existsSync(legacyProfile.privateV1)) {
+            v1Source = legacyProfile.privateV1;
+          } else if (!existsSync(legacyV1) && existsSync(legacyProfile.sharedV1)) {
+            const historyChoice = await dialog.showMessageBox({
+              type: "question", message: "Copy shared OpenCode history?",
+              detail: `The earlier v1 history may be in ${legacyProfile.sharedV1}. It can include conversations from OpenCode or other apps. Import it only if you want those conversations in NanamiWork. The original and its auth.json will not be changed.`,
+              buttons: ["Quit", "Copy this history", "Continue without it"], defaultId: 0, cancelId: 0, noLink: true,
+            });
+            if (historyChoice.response === 0) { app.quit(); return; }
+            if (historyChoice.response === 1) v1Source = legacyProfile.sharedV1;
+          }
+          await migrateLegacyNanamiProfile({ ...legacyProfile, runtimeDir: privateProfile.runtimeDir, v1Source });
+        } catch (error) {
+          dialog.showErrorBox("NanamiWork data was not moved", `${error instanceof Error ? error.message : String(error)}\n\nYour original files are unchanged. Close other apps using them and retry.`);
+          app.quit();
+          return;
+        }
+      }
+    }
+    if (privateProfile && !String(originalProfileEnv[envKey(originalProfileEnv, "OPENCODE_DB") ?? "OPENCODE_DB"] ?? "").trim()) {
+      await mkdir(path.dirname(process.env.OPENCODE_DB), { recursive: true });
+    }
     holdSpellcheckerUntilActivation(workspaceStore.readDesktopBootstrapConfigSync());
     const systemCaCertificates = await runtimeManager.systemCaCertificates();
     session.defaultSession.setCertificateVerifyProc(createSystemCaCertificateVerifyProc(systemCaCertificates));

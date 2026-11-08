@@ -17,6 +17,7 @@ function userAppDataDir(): string {
 function uiControlDiscoveryPaths(): string[] {
   const explicit = process.env.OPENWORK_UI_CONTROL_DISCOVERY?.trim();
   if (explicit) return [explicit];
+  if (process.env.NANAMIWORK_ISOLATED === "1") return [];
   return [
     join(userAppDataDir(), "com.differentai.openwork", "openwork-ui-control.json"),
     join(userAppDataDir(), "com.differentai.openwork.dev", "openwork-ui-control.json"),
