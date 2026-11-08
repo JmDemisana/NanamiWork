@@ -58,19 +58,19 @@ jobs:
       # build:electron. A clean runner has no pre-existing local build artifacts.
       - name: Verify account isolation
         working-directory: apps/server
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-bun-test.ps1 -TestFile test/nanami-isolation-accounts.test.ts
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/nanami-isolation-accounts.test.ts
 
       - name: Verify plugin directory isolation
         working-directory: apps/server
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-bun-test.ps1 -TestFile test/opencode-plugin-deps.test.ts -Filter NanamiWork
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/opencode-plugin-deps.test.ts -Filter NanamiWork
 
       - name: Verify conversation sidebar
         working-directory: apps/app
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-bun-test.ps1 -TestFile tests/use-workspace-route-state.test.tsx
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/use-workspace-route-state.test.tsx
 
       - name: Verify both packaged engines across restart
         working-directory: apps/server
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-bun-test.ps1 -TestFile test/nanami-isolation-native.test.ts -TimeoutMs 90000
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/nanami-isolation-native.test.ts -UseNode
         env:
           NANAMI_TEST_V1_BIN: ${{ github.workspace }}\apps\desktop\resources\sidecars\opencode.exe
           NANAMI_TEST_V2_BIN: ${{ github.workspace }}\apps\desktop\resources\sidecars\opencode2.exe
