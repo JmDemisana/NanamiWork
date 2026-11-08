@@ -344,7 +344,7 @@ export const createDesktopFetch = (auth?: OpencodeAuth, finiteFetch: typeof glob
   };
 };
 
-export function unwrap<T>(result: FieldsResult<T>): NonNullable<T> {
+export function unwrap<T>(result: { data: T; error?: undefined } | { data?: undefined; error: unknown }): NonNullable<T> {
   if (result.data !== undefined) {
     return result.data as NonNullable<T>;
   }

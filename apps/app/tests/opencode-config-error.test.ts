@@ -45,3 +45,22 @@ test("the OpenWork server's config error keeps its message", () => {
   expect(presentation.kind).toBe("config-invalid");
   expect(presentation.description).toBe(expected);
 });
+
+test("a timed-out session request with no HTTP response remains retryable", async () => {
+  const transport: RouteSessionListTransport = async () => ({
+    error: new Error("Request timed out."),
+    request: new Request("http://127.0.0.1/session"),
+  });
+  const endpoint: ResolvedWorkspaceEndpoint = Object.create(null);
+  let thrown: unknown;
+  try { await listRouteSessions(endpoint, transport); } catch (error) { thrown = error; }
+  expect(thrown).toBeInstanceOf(Error);
+  expect(thrown instanceof Error ? thrown.message : null).toBe("Request timed out.");
+  expect(classifyRouteSessionReadError(thrown)).toBe("retryable");
+});
+
+test("an unreachable engine retries without masking config and authorization errors", () => {
+  expect(classifyRouteSessionReadError(Object.assign(new Error("unavailable"), { code: "opencode_unreachable" }))).toBe("retryable");
+  expect(classifyRouteSessionReadError(Object.assign(new Error("connection config invalid"), { code: "opencode_config_invalid" }))).toBe("error");
+  expect(classifyRouteSessionReadError(Object.assign(new Error("connection refused"), { status: 403 }))).toBe("error");
+});

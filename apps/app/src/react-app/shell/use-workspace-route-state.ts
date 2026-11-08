@@ -444,8 +444,10 @@ export function useWorkspaceRouteState(input: UseWorkspaceRouteStateInput) {
   }), [workspaces, sessionsByWorkspaceId, sessionReferenceRevision, loading, connectionPending, routeError, client, errorsByWorkspaceId, workspaceConnectionOverrides, baseUrl, token, engineRoutingByServer, isSessionReferenceWorkspaceCurrent]);
   const loadWorkspaceSessionsInBackground = useCallback(
     async (workspaces: RouteWorkspace[]) => {
-      const MAX_ATTEMPTS = 6;
-      const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 4_000);
+      // A fresh isolated engine can spend several minutes installing plugins.
+      // Keep retries bounded, but allow that first startup to finish.
+      const MAX_ATTEMPTS = 18;
+      const backoffMs = (attempt: number) => Math.min(1_000 * Math.pow(2, attempt), 10_000);
 
       const loadWorkspace = async (requestedWorkspace: RouteWorkspace, initialAttempt = 0): Promise<void> => {
         const workspace = workspacesRef.current.find((item) => item.id === requestedWorkspace.id);

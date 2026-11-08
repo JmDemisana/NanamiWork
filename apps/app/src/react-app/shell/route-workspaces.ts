@@ -37,7 +37,7 @@ export type RouteSession = Session & {
 // Absent for v1 prefix reads; null means an exhausted v2 cursor traversal.
 type RouteSessionListResult = { nextCursor?: string | null } & (
   | { data: RouteSession[]; error?: undefined; request: Request; response: Response }
-  | { data?: undefined; error: unknown; request: Request; response: Response });
+  | { data?: undefined; error: unknown; request: Request; response?: Response });
 export type RouteSessionListTransport = (input: {
   endpoint: ResolvedWorkspaceEndpoint,
   limit: number;
@@ -141,7 +141,7 @@ export async function listRouteSessions(
         ? Object.assign(new Error(configMessage), { code: "opencode_config_invalid" })
         : thrown;
       if (error instanceof Error) {
-        Object.assign(error, { status: result.response.status });
+        if (result.response) Object.assign(error, { status: result.response.status });
         if (!configMessage && result.error && typeof result.error === "object" && "code" in result.error && typeof result.error.code === "string") {
           Object.assign(error, { code: result.error.code });
         }
@@ -219,9 +219,11 @@ export function classifyRouteSessionReadError(error: unknown): "not-found" | "re
     ? error.code
     : "";
   if (code === "session_not_found") return "not-found";
+  if (code === "opencode_config_invalid" || status === 401 || status === 403) return "error";
   if (
     code === "opencode_unconfigured" ||
     code === "opencode_engine_unreachable" ||
+    code === "opencode_unreachable" ||
     status === 502 ||
     status === 503 ||
     status === 504 ||

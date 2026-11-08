@@ -56,6 +56,9 @@ jobs:
 
       # These tests import workspace packages whose dist exports are produced by
       # build:electron. A clean runner has no pre-existing local build artifacts.
+      - name: Verify app types
+        run: pnpm --dir apps/app exec tsc -p tsconfig.json --noEmit
+
       - name: Verify account isolation
         working-directory: apps/server
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/nanami-isolation-accounts.test.ts
@@ -67,6 +70,10 @@ jobs:
       - name: Verify conversation sidebar
         working-directory: apps/app
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/use-workspace-route-state.test.tsx
+
+      - name: Verify session timeout handling
+        working-directory: apps/app
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/opencode-config-error.test.ts
 
       - name: Verify both packaged engines across restart
         working-directory: apps/server

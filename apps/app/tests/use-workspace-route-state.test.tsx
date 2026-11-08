@@ -496,6 +496,33 @@ test("a failed native session read shows an error and a successful retry restore
   expect(route().sessionsByWorkspaceId.ws_1.map((item) => item.id)).toEqual(["kept"]);
 });
 
+test("a cold engine can time out more than six times and still restore the sidebar", async () => {
+  const originalSetTimeout = window.setTimeout;
+  const retryDelays = new Set([1_000, 2_000, 4_000, 8_000, 10_000]);
+  window.setTimeout = (handler, timeout, ...args) =>
+    originalSetTimeout.call(window, handler, timeout !== undefined && retryDelays.has(timeout) ? 0 : timeout, ...args);
+  try {
+    await mount();
+    await publishRouting(false);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const selected = requests.filter((request) => request.workspaceId === "ws_1").at(-1);
+      if (!selected) throw new Error(`Missing attempt ${attempt + 1}`);
+      await act(async () => {
+        selected.response.reject(new Error("Request timed out."));
+        await new Promise<void>((resolve) => originalSetTimeout.call(window, resolve, 10));
+      });
+    }
+    const selectedRequests = requests.filter((request) => request.workspaceId === "ws_1");
+    expect(selectedRequests).toHaveLength(9);
+    expect(route().selectedWorkspaceError).toBeNull();
+    await act(async () => { selectedRequests.at(-1)?.response.resolve([session("ws_1", "kept")]); });
+    expect(route().sessionsByWorkspaceId.ws_1.map((item) => item.id)).toEqual(["kept"]);
+    expect(route().retryingWorkspaceIds).not.toContain("ws_1");
+  } finally {
+    window.setTimeout = originalSetTimeout;
+  }
+});
+
 test("offline recovery reloads cleared inventories even when the unselected scope is unchanged", async () => {
   await mount();
   await publishRouting(false);
