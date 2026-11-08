@@ -59,6 +59,18 @@ jobs:
       - name: Verify app types
         run: pnpm --dir apps/app exec tsc -p tsconfig.json --noEmit
 
+      - name: Verify prompt navigation positions
+        working-directory: apps/app
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/prompt-navigation.test.ts
+
+      - name: Verify prompt navigation controls
+        working-directory: apps/app
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/session-scroll.test.tsx -Filter prompt
+
+      - name: Verify prompt navigation preference
+        working-directory: apps/app
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/prompt-navigation-settings.test.tsx
+
       - name: Verify account isolation
         working-directory: apps/server
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile test/nanami-isolation-accounts.test.ts

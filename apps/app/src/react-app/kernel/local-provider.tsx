@@ -32,6 +32,7 @@ export type LocalUIState = {
 
 export type LocalPreferences = {
   showThinking: boolean;
+  showPromptNavigation: boolean;
   /** Legacy marker kept so saved preferences still parse. */
   showThinkingResetToOff: boolean;
   modelVariant: string | null;
@@ -89,6 +90,7 @@ export { DEFAULT_SHOW_THINKING };
 const INITIAL_UI: LocalUIState = { view: "settings", tab: "general" };
 const INITIAL_PREFS: LocalPreferences = {
   showThinking: DEFAULT_SHOW_THINKING,
+  showPromptNavigation: true,
   showThinkingResetToOff: true,
   modelVariant: null,
   defaultModel: null,
@@ -140,6 +142,7 @@ export function LocalProvider({ children }: LocalProviderProps) {
     // NanamiWork keeps model reasoning on and anonymous usage sharing off;
     // both controls are removed from Preferences.
     persisted.showThinking = true;
+    persisted.showPromptNavigation = persisted.showPromptNavigation !== false;
     persisted.analyticsEnabled = false;
     persisted.showThinkingResetToOff = true;
     persisted.askBeforeOpeningLinks = persisted.askBeforeOpeningLinks !== false;

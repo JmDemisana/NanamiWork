@@ -377,6 +377,10 @@ export function KeyboardShortcutsView(props: KeyboardShortcutsViewProps) {
     { label: "Next saved model", keys: os === "macos" ? "⌃⇧M" : favoriteModelShortcutLabel },
     { label: "Cycle reasoning", keys: thinkingModeShortcutLabel(thinkingOs) },
     { label: "Toggle Fast", keys: fastModeShortcutLabel(thinkingOs) },
+    { label: "Previous prompt", keys: "Page Up" },
+    { label: "Next prompt", keys: "Page Down" },
+    { label: "Top of conversation", keys: "Home" },
+    { label: "Latest message", keys: "End" },
   ];
 
   return (

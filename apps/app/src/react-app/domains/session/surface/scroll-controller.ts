@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState, type RefObject, type UI
 
 import { flushSessionScrollState, getSessionScrollState, sessionScrollKey, useSessionScrollStore, type SessionScrollAnchor, type SessionHistoryPagePosition } from "./scroll-store";
 import { mobileTurnSpace } from "./mobile-turn-space";
+import { PROMPT_POSITIONS_EVENT, PROMPT_REVEAL_EVENT, selectPromptPosition, type PromptPositionsRequest } from "@/components/chat/prompt-navigation";
 
 const EXACT_BOTTOM_GAP_PX = 1;
 const SCROLL_GESTURE_WINDOW_MS = 600;
@@ -135,8 +136,21 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     let pendingHistoryDemand: "older" | "newer" | null = null;
     let pendingTop: ((completed: boolean) => void) | null = null;
     let topLoadReady = false;
+    let pendingPromptPage: { direction: "previous" | "next"; behavior: ScrollBehavior; version: unknown } | null = null;
+    let virtualPromptObserver: MutationObserver | null = null;
+    let virtualPromptTimeout: number | null = null;
+    const cancelVirtualPrompt = () => {
+      const wasSeeking = Boolean(virtualPromptObserver || virtualPromptTimeout !== null);
+      virtualPromptObserver?.disconnect();
+      virtualPromptObserver = null;
+      if (virtualPromptTimeout !== null) window.clearTimeout(virtualPromptTimeout);
+      virtualPromptTimeout = null;
+      if (wasSeeking) container.dispatchEvent(new CustomEvent(PROMPT_REVEAL_EVENT, { detail: null }));
+    };
     const cancelTop = () => { pendingTop?.(false); pendingTop = null; };
     const cancelRestoration = () => {
+      cancelVirtualPrompt();
+      pendingPromptPage = null;
       cancelTop();
       optionsRef.current.historyPages?.cancelRestore?.();
       pageAnchor = undefined;
@@ -465,6 +479,8 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const nested = target instanceof Element ? target.closest("[data-scrollable]") : null;
       if (nested && nested !== container) return;
       mobileTurnPinned = false;
+      cancelVirtualPrompt();
+      pendingPromptPage = null;
       cancelTop();
       setMobileTurnFullyVisible(false);
       container.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
@@ -594,29 +610,25 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
       lastKnownScrollTop = container.scrollTop;
     };
-    // Prompt navigation anchors to the prompt nearest the reading line, then
-    // steps strictly before/after it. A raw "top < N" filter used to re-select
-    // the current prompt, so the buttons sometimes looked like plain scrolling.
-    const PROMPT_SNAP_TOLERANCE = 24;
     const promptElements = () =>
       [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
-    const promptTop = (element: HTMLElement) =>
-      element.getBoundingClientRect().top - container.getBoundingClientRect().top;
-    const currentPrompt = (users: HTMLElement[]) => {
-      if (users.length === 0) return { index: -1, belowLine: false };
-      let index = 0;
-      let distance = Infinity;
-      for (let position = 0; position < users.length; position += 1) {
-        const candidate = Math.abs(promptTop(users[position]) - PROMPT_SCROLL_OFFSET);
-        if (candidate < distance) {
-          distance = candidate;
-          index = position;
-        }
+    const promptPositions = () => {
+      const ids = Array.isArray(optionsRef.current.renderedMessages)
+        ? optionsRef.current.renderedMessages.flatMap((message: unknown) => {
+          if (!message || typeof message !== "object") return [];
+          const id = Reflect.get(message, "id");
+          return Reflect.get(message, "role") === "user" && typeof id === "string" ? [id] : [];
+        }) : [];
+      const request: PromptPositionsRequest = { ids, positions: [] };
+      container.dispatchEvent(new CustomEvent(PROMPT_POSITIONS_EVENT, { detail: request }));
+      const found = new Set(request.positions.map((position) => position.id));
+      const viewportTop = container.getBoundingClientRect().top;
+      for (const element of promptElements()) {
+        const id = messageIdForElement(element);
+        const rect = element.getBoundingClientRect();
+        if (id && rect.height > 0 && !found.has(id)) request.positions.push({ id, top: container.scrollTop + rect.top - viewportTop });
       }
-      return {
-        index,
-        belowLine: promptTop(users[index]) > PROMPT_SCROLL_OFFSET + PROMPT_SNAP_TOLERANCE,
-      };
+      return request.positions;
     };
     const scrollToPrompt = (targetUser: HTMLElement, behavior: ScrollBehavior) => {
       const messageId = messageIdForElement(targetUser);
@@ -639,33 +651,66 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
       lastKnownScrollTop = container.scrollTop;
     };
-    const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => {
+    const jumpToPrompt = (direction: "previous" | "next", behavior: ScrollBehavior) => {
       if (!active) return;
-      const users = promptElements();
-      const { index } = currentPrompt(users);
-      if (index <= 0) {
-        jumpToStart(behavior);
+      const target = selectPromptPosition(promptPositions(), container.scrollTop + PROMPT_SCROLL_OFFSET, direction);
+      if (!target) {
+        const pages = optionsRef.current.historyPages;
+        const hasMore = direction === "previous" ? pages?.hasOlder : pages?.hasNewer;
+        if (pages && hasMore) {
+          if (pages.loading || pages.failed || pagePending) return;
+          cancelRestoration();
+          cancelFrames();
+          pendingRestore = false;
+          pendingSubmittedMessageId = null;
+          cancelledWhileLoading = false;
+          lastGestureAt = -Infinity;
+          pageAnchor = currentReadingAnchor();
+          store.setManualScroll(scrollKey, container.scrollTop, latestMessageTopClippedId(container), pageAnchor);
+          pendingPromptPage = { direction, behavior, version: pages.version };
+          const pending = pendingPromptPage;
+          pagePending = true;
+          void pages.load(direction === "previous" ? "older" : "newer")
+            .catch(() => { if (pendingPromptPage === pending) pendingPromptPage = null; })
+            .finally(() => { pagePending = false; if (active) scheduleFrame(reconcile); });
+          return;
+        }
+        if (direction === "previous") jumpToStart(behavior);
+        else scrollToBottom(behavior);
         return;
       }
-      scrollToPrompt(users[index - 1], behavior);
+      const element = messageElementById(container, target.id);
+      if (element && element.getBoundingClientRect().height > 0) {
+        scrollToPrompt(element, behavior);
+        return;
+      }
+      // Off-screen groups are virtualized. Jump to the estimated group first,
+      // then align the real message as soon as React mounts it.
+      cancelRestoration();
+      cancelFrames();
+      pendingRestore = false;
+      pendingSubmittedMessageId = null;
+      cancelledWhileLoading = false;
+      lastGestureAt = -Infinity;
+      const top = Math.max(0, target.top - PROMPT_SCROLL_OFFSET);
+      store.setManualScroll(scrollKey, top, target.id, { messageId: target.id, offset: PROMPT_SCROLL_OFFSET });
+      const align = () => {
+        const mounted = messageElementById(container, target.id);
+        if (!mounted || mounted.getBoundingClientRect().height <= 0) return;
+        cancelVirtualPrompt();
+        scrollToPrompt(mounted, "auto");
+      };
+      virtualPromptObserver = new MutationObserver(align);
+      virtualPromptObserver.observe(content, { childList: true, subtree: true });
+      virtualPromptTimeout = window.setTimeout(cancelVirtualPrompt, 3000);
+      container.dispatchEvent(new CustomEvent(PROMPT_REVEAL_EVENT, { detail: target.id }));
+      smoothJump = false;
+      container.scrollTo({ top, behavior: "auto" });
+      lastKnownScrollTop = container.scrollTop;
+      align();
     };
-    const jumpToNextPrompt = (behavior: ScrollBehavior = "smooth") => {
-      if (!active) return;
-      const users = promptElements();
-      const { index, belowLine } = currentPrompt(users);
-      if (index < 0) {
-        scrollToBottom(behavior);
-        return;
-      }
-      // A prompt still below the reading line is the next one to align; only
-      // then advance to the prompt after it.
-      const nextUser = users[belowLine ? index : index + 1];
-      if (!nextUser) {
-        scrollToBottom(behavior);
-        return;
-      }
-      scrollToPrompt(nextUser, behavior);
-    };
+    const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => jumpToPrompt("previous", behavior);
+    const jumpToNextPrompt = (behavior: ScrollBehavior = "smooth") => jumpToPrompt("next", behavior);
     const jumpToStartOfMessage = (behavior: ScrollBehavior = "smooth") => {
       if (!active) return;
       const messageId = readState().topClippedMessageId;
@@ -691,11 +736,14 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       const target = event.target instanceof Element ? event.target : null;
       // Only the pane that owns focus (or the sole visible pane) answers the
       // shortcuts, so split view never scrolls both transcripts at once.
-      const pane = container.closest("[data-session-pane]");
+      const pane = container.closest("[data-workbench-pane]") ?? container.closest("[data-session-pane]");
       const focusedElement = document.activeElement instanceof Element ? document.activeElement : null;
-      const focusedPane = focusedElement?.closest("[data-session-pane]") ?? null;
+      const focusedPane = focusedElement?.closest("[data-workbench-pane]") ?? focusedElement?.closest("[data-session-pane]") ?? null;
       if (focusedPane && focusedPane !== pane) return;
-      if (!focusedPane && document.querySelectorAll("[data-session-pane]").length > 1) return;
+      const activePane = document.querySelector('[data-workbench-pane-focused="true"]');
+      if (!focusedPane && activePane && activePane !== pane) return;
+      if (!focusedPane && !activePane && (document.querySelectorAll("[data-workbench-pane]").length > 1
+        || document.querySelectorAll("[data-session-pane]").length > 1)) return;
       // Leave dialogs, menus, the sidebar, and other scroll regions alone.
       if (target?.closest("[role=dialog], [role=menu], [role=listbox], [data-sidebar]")) return;
       const nestedScroll = target?.closest("[data-scrollable]");
@@ -734,6 +782,8 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       if (!event.isPrimary || event.button !== 0 || activePointerId !== null) return;
       const nested = event.target instanceof Element ? event.target.closest("[data-scrollable], input, textarea, select, [contenteditable=true]") : null;
       if (nested && nested !== container) return;
+      cancelVirtualPrompt();
+      pendingPromptPage = null;
       activePointerId = event.pointerId;
       pointerScrolled = false;
       gestureBeforePointer = lastGestureAt;
@@ -786,6 +836,12 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
           }
         }
         reconcile();
+        const pending = pendingPromptPage;
+        const pages = optionsRef.current.historyPages;
+        if (pending && (pages ? pages.version !== pending.version && !pages.loading : optionsRef.current.historyComplete)) {
+          pendingPromptPage = null;
+          scheduleFrame(() => jumpToPrompt(pending.direction, pending.behavior));
+        }
       },
       handleScroll,
       markScrollGesture,
@@ -807,6 +863,8 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
 
     return () => {
       active = false;
+      cancelVirtualPrompt();
+      pendingPromptPage = null;
       setMobileTurnFullyVisible(false);
       cancelTop();
       cancelFrames();

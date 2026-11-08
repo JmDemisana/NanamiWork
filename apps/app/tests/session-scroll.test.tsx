@@ -5,6 +5,7 @@ import { act, Fragment, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { SESSION_SCROLL_NAVIGATION_EVENT, useSessionScrollController } from "../src/react-app/domains/session/surface/scroll-controller";
 import { SessionScrollOverlay } from "../src/react-app/domains/session/surface/scroll-overlay";
+import { PROMPT_POSITIONS_EVENT, PROMPT_REVEAL_EVENT, type PromptPositionsRequest } from "../src/components/chat/prompt-navigation";
 import { flushSessionScrollState, getSessionScrollState, readPersistedSessionScrollState, sessionScrollKey, useSessionScrollStore } from "../src/react-app/domains/session/surface/scroll-store";
 
 const ownedDom = typeof window === "undefined";
@@ -227,13 +228,14 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
     virtualized: false,
     transcriptHidden: false,
     transcriptCommitted: true,
+    showPromptNavigation: true,
     fallback: false,
     placeholders: [] as { id: string; before: string; top: number; height: number }[],
     messages: [
       { id: "first", top: 0, height: 300 },
       { id: "reading", top: 300, height: 300 },
       { id: "latest", top: 600, height: 400 },
-    ] as { id: string; top: number; height: number; role?: string }[],
+    ] as { id: string; top: number; height: number; role?: string; mounted?: boolean }[],
   };
   let scrollTop = 0;
   const scrollWrites: number[] = [];
@@ -271,7 +273,7 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
         {layout.transcriptCommitted ? <div data-thread-history-complete={layout.complete} ref={(node) => {
           if (node) node.getBoundingClientRect = () => layout.transcriptHidden ? new DOMRect() : new DOMRect(0, 40 - scrollTop, 500, layout.height);
         }}>
-        {layout.messages.map((message) => <Fragment key={message.id}>
+        {layout.messages.filter((message) => message.mounted !== false).map((message) => <Fragment key={message.id}>
           {layout.placeholders.filter((placeholder) => placeholder.before === message.id).map((placeholder) =>
             <div key={placeholder.id} data-thread-placeholder={placeholder.id} ref={(node) => {
               if (node) node.getBoundingClientRect = () => new DOMRect(0, 40 + placeholder.top - scrollTop, 500, placeholder.height);
@@ -286,8 +288,10 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
         <div data-scrollable>Nested scroll area</div>
       </div>
       {renderOverlay ? <SessionScrollOverlay sessionId={sessionId} owner={geometryOwner} isStreaming={false}
+        showPromptNavigation={layout.showPromptNavigation}
         mobileTurnFullyVisible={scroll.mobileTurnFullyVisible}
-        onJumpToLatest={scroll.jumpToLatest} onJumpToStartOfMessage={scroll.jumpToStartOfMessage} /> : null}
+        onJumpToLatest={scroll.jumpToLatest} onJumpToStartOfMessage={scroll.jumpToStartOfMessage}
+        onJumpToPreviousPrompt={scroll.jumpToPreviousPrompt} onJumpToNextPrompt={scroll.jumpToNextPrompt} /> : null}
     </div>;
   }
   const unmount = async () => {
@@ -322,6 +326,134 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
     resize() { for (const callback of observers) callback(); },
   };
 }
+
+describe("prompt navigation", () => {
+  test("previous finds the prompt above a long answer rather than the top of the conversation", async () => {
+    const view = fixture();
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "first", role: "user", top: 200, height: 60 },
+      { id: "answer", role: "assistant", top: 300, height: 1_200 },
+      { id: "second", role: "user", top: 1_600, height: 60 },
+    ];
+    await view.render();
+    await act(async () => { view.scroll(600); view.controls.jumpToPreviousPrompt("auto"); });
+    expect(view.container.scrollTop).toBe(128);
+    await act(async () => { view.controls.jumpToNextPrompt("auto"); });
+    expect(view.container.scrollTop).toBe(1_528);
+  });
+
+  test("previous can seek an unmounted prompt and align it after virtualized content mounts", async () => {
+    const view = fixture();
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "hidden-prompt", role: "user", top: 470, height: 60, mounted: false },
+      { id: "answer", role: "assistant", top: 600, height: 900 },
+    ];
+    await view.render();
+    const reveals: (string | null)[] = [];
+    view.container.addEventListener(PROMPT_REVEAL_EVENT, (event) => { reveals.push((event as CustomEvent<string | null>).detail); });
+    view.container.addEventListener(PROMPT_POSITIONS_EVENT, (event) => {
+      const request = (event as CustomEvent<PromptPositionsRequest>).detail;
+      if (request.ids.includes("hidden-prompt")) request.positions.push({ id: "hidden-prompt", top: 400 });
+    });
+    await act(async () => { view.scroll(900); view.controls.jumpToPreviousPrompt("auto"); });
+    expect(view.container.scrollTop).toBe(328);
+    view.layout.messages[0].mounted = true;
+    await view.render();
+    await act(async () => { await Promise.resolve(); });
+    expect(view.container.scrollTop).toBe(398);
+    expect(reveals).toEqual(["hidden-prompt", null]);
+  });
+
+  test("previous loads older history without first scrolling to the top", async () => {
+    const pages = { version: {}, hasOlder: true, hasNewer: false, loading: false, failed: false, load: mock(async () => {}) };
+    const view = fixture(undefined, { historyPages: pages, windowReady: true });
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "answer", role: "assistant", top: 100, height: 1_000 },
+      { id: "next", role: "user", top: 1_500, height: 60 },
+    ];
+    await view.render();
+    await act(async () => { view.scroll(600); view.controls.jumpToPreviousPrompt("auto"); });
+    expect(pages.load).toHaveBeenCalledWith("older");
+    expect(view.container.scrollTop).toBe(600);
+    for (const message of view.layout.messages) message.top += 400;
+    view.layout.messages.unshift({ id: "older-prompt", role: "user", top: 200, height: 60 });
+    view.layout.height += 400;
+    pages.version = {};
+    pages.hasOlder = false;
+    await view.render();
+    await act(async () => { runFrames(); });
+    expect(view.container.scrollTop).toBe(128);
+  });
+
+  test("hiding the prompt bar leaves PageUp navigation available", async () => {
+    const view = fixture(undefined, {}, true);
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "first", role: "user", top: 200, height: 60 },
+      { id: "answer", role: "assistant", top: 300, height: 1_200 },
+      { id: "second", role: "user", top: 1_600, height: 60 },
+    ];
+    await view.render();
+    await act(async () => { view.wheel(600); });
+    expect(view.container.textContent).toContain("Previous Prompt");
+    view.layout.showPromptNavigation = false;
+    await view.render();
+    expect(view.container.textContent).not.toContain("Previous Prompt");
+    await act(async () => { view.container.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true })); });
+    expect(view.container.scrollTop).toBe(128);
+  });
+
+  test("manual scrolling cancels a pending history navigation", async () => {
+    let finish = () => {};
+    const pages = { version: {}, hasOlder: true, hasNewer: false, loading: false, failed: false,
+      load: mock(() => new Promise<void>((resolve) => { finish = resolve; })) };
+    const view = fixture(undefined, { historyPages: pages, windowReady: true });
+    view.layout.height = 2_000;
+    view.layout.messages = [{ id: "answer", role: "assistant", top: 100, height: 1_000 }];
+    await view.render();
+    await act(async () => { view.scroll(600); view.controls.jumpToPreviousPrompt("auto"); });
+    await act(async () => { view.wheel(700); });
+    view.layout.messages.unshift({ id: "older-prompt", role: "user", top: 200, height: 60 });
+    pages.version = {};
+    pages.hasOlder = false;
+    await act(async () => { finish(); });
+    await view.render();
+    await act(async () => { runFrames(); });
+    expect(view.container.scrollTop).toBe(700);
+  });
+
+  test("PageUp only navigates the focused split pane", async () => {
+    const primary = fixture();
+    const secondary = fixture();
+    for (const view of [primary, secondary]) {
+      view.layout.height = 2_000;
+      view.layout.messages = [
+        { id: "first", role: "user", top: 200, height: 60 },
+        { id: "answer", role: "assistant", top: 300, height: 1_200 },
+        { id: "second", role: "user", top: 1_600, height: 60 },
+      ];
+    }
+    await primary.render("primary");
+    await secondary.render("secondary");
+    const primaryPane = primary.container.parentElement!;
+    const secondaryPane = secondary.container.parentElement!;
+    primaryPane.setAttribute("data-workbench-pane", "primary");
+    secondaryPane.setAttribute("data-workbench-pane", "secondary");
+    const button = document.createElement("button");
+    secondaryPane.append(button);
+    await act(async () => {
+      primary.scroll(600);
+      secondary.scroll(600);
+      button.focus();
+      button.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }));
+    });
+    expect(primary.container.scrollTop).toBe(600);
+    expect(secondary.container.scrollTop).toBe(128);
+  });
+});
 
 describe("session reading position", () => {
   test("start-of-message supersedes pending top navigation even when its history completes late", async () => {

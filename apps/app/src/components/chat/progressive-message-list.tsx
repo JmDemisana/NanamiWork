@@ -1,5 +1,6 @@
 import * as React from "react"
 import { defaultRangeExtractor, observeElementOffset, observeElementRect, useVirtualizer, type Range, type Rect, type Virtualizer } from "@tanstack/react-virtual"
+import { collectVirtualPromptPositions, PROMPT_POSITIONS_EVENT, PROMPT_REVEAL_EVENT, type PromptPositionsRequest } from "./prompt-navigation"
 
 export interface MessageListViewport {
   sessionKey: string
@@ -74,6 +75,10 @@ function VirtualGroups<T>(props: ProgressiveMessageListProps<T>) {
   const priorityIndex = React.useMemo(() => props.priorityMessageId
     ? groups.findIndex((group) => getMessageIds(group).includes(props.priorityMessageId!)) : -1,
   [groups, getMessageIds, props.priorityMessageId])
+  const [navigationMessageId, setNavigationMessageId] = React.useState<string | null>(null)
+  const navigationIndex = React.useMemo(() => navigationMessageId
+    ? groups.findIndex((group) => getMessageIds(group).includes(navigationMessageId)) : -1,
+  [groups, getMessageIds, navigationMessageId])
   const bridge = React.useRef<MeasuredGroups<T>>(null)
   const [revision, refresh] = React.useReducer((value: number) => value + 1, 0)
   const [width, setWidth] = React.useState(viewport?.viewportWidth ?? 0)
@@ -148,9 +153,10 @@ function VirtualGroups<T>(props: ProgressiveMessageListProps<T>) {
     }
     if (range.count) indexes.add(range.count - 1)
     if (priorityIndex >= 0) indexes.add(priorityIndex)
+    if (navigationIndex >= 0) indexes.add(navigationIndex)
     if (anchorIndex >= 0 && (!bridge.current || bridge.current.waitingForAnchor)) indexes.add(anchorIndex)
     return [...indexes].sort((a, b) => a - b)
-  }, [identityKeys, priorityIndex, anchorIndex, viewport?.revealAll, Boolean(viewport), revision])
+  }, [identityKeys, priorityIndex, navigationIndex, anchorIndex, viewport?.revealAll, Boolean(viewport), revision])
   const measureElement = React.useCallback((node: HTMLDivElement, entry: ResizeObserverEntry | undefined, instance: ThreadVirtualizer) => {
     const index = instance.indexFromElement(node)
     if (!viewport?.scrollRef.current?.clientHeight || !viewport.scrollRef.current.clientWidth || !node.parentElement?.getBoundingClientRect().width) {
@@ -191,6 +197,28 @@ function VirtualGroups<T>(props: ProgressiveMessageListProps<T>) {
     initialOffset,
     useFlushSync: false,
   })
+  React.useLayoutEffect(() => {
+    const container = viewport?.scrollRef.current
+    if (!container) return
+    const collect = (event: Event) => {
+      const request = (event as CustomEvent<PromptPositionsRequest>).detail
+      if (!request) return
+      const bounds = container.getBoundingClientRect()
+      const mounted = new Map<string, number>()
+      for (const node of container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')) {
+        const rect = node.getBoundingClientRect()
+        if (node.dataset.messageId && rect.height > 0) mounted.set(node.dataset.messageId, container.scrollTop + rect.top - bounds.top)
+      }
+      request.positions.push(...collectVirtualPromptPositions(groups, getMessageIds, virtualizer.measurementsCache, request.ids, mounted))
+    }
+    const reveal = (event: Event) => setNavigationMessageId((event as CustomEvent<string | null>).detail)
+    container.addEventListener(PROMPT_POSITIONS_EVENT, collect)
+    container.addEventListener(PROMPT_REVEAL_EVENT, reveal)
+    return () => {
+      container.removeEventListener(PROMPT_POSITIONS_EVENT, collect)
+      container.removeEventListener(PROMPT_REVEAL_EVENT, reveal)
+    }
+  }, [groups, getMessageIds, viewport?.scrollRef, virtualizer])
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false
   React.useLayoutEffect(() => {
     const offset = bridge.current?.contentOffset()

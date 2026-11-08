@@ -3959,6 +3959,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
           sessionId={props.sessionId}
           owner={sessionOwner}
           isStreaming={chatStreaming}
+          showPromptNavigation={local.prefs.showPromptNavigation}
           onJumpToLatest={sessionScroll.jumpToLatest}
           mobileTurnFullyVisible={sessionScroll.mobileTurnFullyVisible}
           onJumpToStart={sessionScroll.jumpToStart}
