@@ -1,8 +1,9 @@
 /** @jsxImportSource react */
 import type { Language } from "@/i18n";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { PromptNavigationVisibility } from "@/react-app/kernel/local-preferences-storage";
 import { ThemeSection } from "../appearance/theme-section";
-import { LayoutSection, LayoutSectionHeader, LayoutSectionItem, LayoutSectionItemDescription, LayoutSectionItemHeader, LayoutSectionItemHeaderActions, LayoutSectionItemTitle, LayoutSectionTitle, LayoutStack } from "../settings-layout";
+import { LayoutSection, LayoutSectionHeader, LayoutSectionItem, LayoutSectionItemHeader, LayoutSectionItemHeaderActions, LayoutSectionItemTitle, LayoutSectionTitle, LayoutStack } from "../settings-layout";
 
 export type AppearanceViewProps = {
   busy: boolean;
@@ -12,8 +13,8 @@ export type AppearanceViewProps = {
   setLanguage: (value: Language) => void;
   hideTitlebar: boolean;
   toggleHideTitlebar: () => void;
-  showPromptNavigation: boolean;
-  setShowPromptNavigation: (value: boolean) => void;
+  promptNavigation: PromptNavigationVisibility;
+  setPromptNavigation: (key: keyof PromptNavigationVisibility, value: boolean) => void;
 };
 
 export function AppearanceView(props: AppearanceViewProps) {
@@ -21,16 +22,22 @@ export function AppearanceView(props: AppearanceViewProps) {
     <LayoutStack>
       <ThemeSection {...props} />
       <LayoutSection>
-        <LayoutSectionHeader><LayoutSectionTitle>Chat display</LayoutSectionTitle></LayoutSectionHeader>
-        <LayoutSectionItem>
-          <LayoutSectionItemHeader>
-            <LayoutSectionItemTitle>Prompt Navigation</LayoutSectionItemTitle>
-            <LayoutSectionItemDescription>Show the prompt navigation bar. Keyboard shortcuts remain available.</LayoutSectionItemDescription>
-            <LayoutSectionItemHeaderActions>
-              <Checkbox aria-label="Prompt Navigation" checked={props.showPromptNavigation} disabled={props.busy} onCheckedChange={props.setShowPromptNavigation} />
-            </LayoutSectionItemHeaderActions>
-          </LayoutSectionItemHeader>
-        </LayoutSectionItem>
+        <LayoutSectionHeader><LayoutSectionTitle>Prompt Navigation</LayoutSectionTitle></LayoutSectionHeader>
+        {([
+          ["top", "Top"],
+          ["previous", "Previous Prompt"],
+          ["next", "Next Prompt"],
+          ["latest", "Latest"],
+        ] as const).map(([key, label]) => (
+          <LayoutSectionItem key={key}>
+            <LayoutSectionItemHeader>
+              <LayoutSectionItemTitle>{label}</LayoutSectionItemTitle>
+              <LayoutSectionItemHeaderActions>
+                <Checkbox aria-label={label} checked={props.promptNavigation[key]} disabled={props.busy} onCheckedChange={(value) => props.setPromptNavigation(key, value)} />
+              </LayoutSectionItemHeaderActions>
+            </LayoutSectionItemHeader>
+          </LayoutSectionItem>
+        ))}
       </LayoutSection>
     </LayoutStack>
   );

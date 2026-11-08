@@ -18,7 +18,7 @@ import {
   isDesktopNotificationPreference,
   type DesktopNotificationPreference,
 } from "./desktop-notification-preferences";
-import { DEFAULT_SHOW_THINKING, isLinkOpenDestination, LOCAL_PREFERENCES_KEY, type LinkOpenDestination } from "./local-preferences-storage";
+import { DEFAULT_SHOW_THINKING, isLinkOpenDestination, LOCAL_PREFERENCES_KEY, resolvePromptNavigationVisibility, type LinkOpenDestination, type PromptNavigationVisibility } from "./local-preferences-storage";
 import {
   readStoredDefaultModel,
   storedDefaultModelChangedEvent,
@@ -32,7 +32,9 @@ export type LocalUIState = {
 
 export type LocalPreferences = {
   showThinking: boolean;
+  /** Legacy master setting, retained to migrate existing preferences. */
   showPromptNavigation: boolean;
+  promptNavigation: PromptNavigationVisibility;
   /** Legacy marker kept so saved preferences still parse. */
   showThinkingResetToOff: boolean;
   modelVariant: string | null;
@@ -91,6 +93,7 @@ const INITIAL_UI: LocalUIState = { view: "settings", tab: "general" };
 const INITIAL_PREFS: LocalPreferences = {
   showThinking: DEFAULT_SHOW_THINKING,
   showPromptNavigation: true,
+  promptNavigation: resolvePromptNavigationVisibility(undefined),
   showThinkingResetToOff: true,
   modelVariant: null,
   defaultModel: null,
@@ -143,6 +146,8 @@ export function LocalProvider({ children }: LocalProviderProps) {
     // both controls are removed from Preferences.
     persisted.showThinking = true;
     persisted.showPromptNavigation = persisted.showPromptNavigation !== false;
+    const stored = readPersisted<{ promptNavigation?: unknown }>(LOCAL_PREFERENCES_KEY, {});
+    persisted.promptNavigation = resolvePromptNavigationVisibility(stored.promptNavigation, persisted.showPromptNavigation);
     persisted.analyticsEnabled = false;
     persisted.showThinkingResetToOff = true;
     persisted.askBeforeOpeningLinks = persisted.askBeforeOpeningLinks !== false;

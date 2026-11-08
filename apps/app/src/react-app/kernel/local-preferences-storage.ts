@@ -1,6 +1,21 @@
 export const LOCAL_PREFERENCES_KEY = "openwork.preferences";
 export const DEFAULT_SHOW_THINKING = true;
 
+export type PromptNavigationVisibility = {
+  top: boolean;
+  previous: boolean;
+  next: boolean;
+  latest: boolean;
+};
+
+export function resolvePromptNavigationVisibility(value: unknown, legacyEnabled = true): PromptNavigationVisibility {
+  const get = (key: keyof PromptNavigationVisibility) => {
+    const stored = value && typeof value === "object" ? Reflect.get(value, key) : undefined;
+    return typeof stored === "boolean" ? stored : legacyEnabled;
+  };
+  return { top: get("top"), previous: get("previous"), next: get("next"), latest: get("latest") };
+}
+
 export type LinkOpenDestination = "openwork" | "external";
 
 export function isLinkOpenDestination(value: unknown): value is LinkOpenDestination {

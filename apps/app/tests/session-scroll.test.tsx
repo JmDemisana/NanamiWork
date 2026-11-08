@@ -228,7 +228,7 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
     virtualized: false,
     transcriptHidden: false,
     transcriptCommitted: true,
-    showPromptNavigation: true,
+    promptNavigation: { top: true, previous: true, next: true, latest: true },
     fallback: false,
     placeholders: [] as { id: string; before: string; top: number; height: number }[],
     messages: [
@@ -288,7 +288,7 @@ function fixture(geometryOwner?: string, pagination: Pick<Parameters<typeof useS
         <div data-scrollable>Nested scroll area</div>
       </div>
       {renderOverlay ? <SessionScrollOverlay sessionId={sessionId} owner={geometryOwner} isStreaming={false}
-        showPromptNavigation={layout.showPromptNavigation}
+        promptNavigation={layout.promptNavigation}
         mobileTurnFullyVisible={scroll.mobileTurnFullyVisible}
         onJumpToLatest={scroll.jumpToLatest} onJumpToStartOfMessage={scroll.jumpToStartOfMessage}
         onJumpToPreviousPrompt={scroll.jumpToPreviousPrompt} onJumpToNextPrompt={scroll.jumpToNextPrompt} /> : null}
@@ -399,11 +399,29 @@ describe("prompt navigation", () => {
     await view.render();
     await act(async () => { view.wheel(600); });
     expect(view.container.textContent).toContain("Previous Prompt");
-    view.layout.showPromptNavigation = false;
+    view.layout.promptNavigation = { top: false, previous: false, next: false, latest: false };
     await view.render();
     expect(view.container.textContent).not.toContain("Previous Prompt");
     await act(async () => { view.container.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true })); });
     expect(view.container.scrollTop).toBe(128);
+  });
+
+  test("each prompt navigation control can be shown independently", async () => {
+    const view = fixture(undefined, {}, true);
+    await view.render();
+    await act(async () => { view.wheel(100); });
+    const controls = [
+      ["top", "Top (Home)"], ["previous", "Previous Prompt (PgUp)"],
+      ["next", "Next Prompt (PgDn)"], ["latest", "Latest (End)"],
+    ] as const;
+    for (const [key, title] of controls) {
+      view.layout.promptNavigation = { top: false, previous: false, next: false, latest: false, [key]: true };
+      await view.render();
+      for (const [otherKey, otherTitle] of controls) {
+        expect(Boolean(view.container.querySelector(`button[title="${otherTitle}"]`))).toBe(otherKey === key);
+      }
+      expect(view.container.querySelector(`button[title="${title}"]`)?.parentElement?.textContent).not.toContain("|");
+    }
   });
 
   test("manual scrolling cancels a pending history navigation", async () => {

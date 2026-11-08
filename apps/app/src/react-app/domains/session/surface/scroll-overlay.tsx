@@ -1,8 +1,9 @@
-import { memo, useCallback } from "react";
+import { Fragment, memo, useCallback } from "react";
 import { ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isDesktopRuntime } from "@/app/lib/runtime-env";
+import { resolvePromptNavigationVisibility, type PromptNavigationVisibility } from "@/react-app/kernel/local-preferences-storage";
 
 import {
   selectSessionIsStickyBottom,
@@ -22,7 +23,7 @@ type SessionScrollOverlayProps = {
   sessionId: string;
   owner?: string;
   isStreaming: boolean;
-  showPromptNavigation?: boolean;
+  promptNavigation?: PromptNavigationVisibility;
   mobileTurnFullyVisible?: boolean;
   onJumpToLatest: (behavior?: ScrollBehavior) => void;
   onJumpToStart?: (behavior?: ScrollBehavior) => void;
@@ -36,7 +37,7 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
   sessionId,
   owner,
   isStreaming,
-  showPromptNavigation = true,
+  promptNavigation = resolvePromptNavigationVisibility(undefined),
   mobileTurnFullyVisible = false,
   onJumpToLatest,
   onJumpToStart,
@@ -83,59 +84,32 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
     );
   }
 
-  if (!showPromptNavigation) return null;
-
   const showJumpToStart = !isStreaming && Boolean(topClippedMessageId);
   const showJumpToLatest = !isAtBottom && !mobileTurnFullyVisible;
+  const actions = [
+    { key: "top", label: "Top", title: "Top (Home)", enabled: promptNavigation.top, onClick: handleTop },
+    { key: "previous", label: "Previous Prompt", title: "Previous Prompt (PgUp)", enabled: promptNavigation.previous, onClick: handlePreviousPrompt },
+    { key: "next", label: "Next Prompt", title: "Next Prompt (PgDn)", enabled: promptNavigation.next, onClick: handleNextPrompt },
+    { key: "latest", label: "Latest", title: "Latest (End)", enabled: promptNavigation.latest, onClick: handleLatest },
+  ].filter((action) => action.enabled);
 
-  if (!showJumpToStart && !showJumpToLatest) {
+  if (actions.length === 0 || (!showJumpToStart && !showJumpToLatest)) {
     return null;
   }
 
   return (
     <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 flex -translate-x-1/2 justify-center">
       <div className="pointer-events-auto flex items-center rounded-full border border-dls-border bg-dls-surface/95 px-2 py-1 shadow-(--dls-card-shadow) backdrop-blur-md">
-        <button
-          type="button"
-          title="Top (Home)"
-          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
-          onClick={handleTop}
-        >
-          Top
-        </button>
-        <span className="select-none text-xs text-dls-border" aria-hidden>
-          |
-        </span>
-        <button
-          type="button"
-          title="Previous Prompt (PgUp)"
-          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
-          onClick={handlePreviousPrompt}
-        >
-          Previous Prompt
-        </button>
-        <span className="select-none text-xs text-dls-border" aria-hidden>
-          |
-        </span>
-        <button
-          type="button"
-          title="Next Prompt (PgDn)"
-          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
-          onClick={handleNextPrompt}
-        >
-          Next Prompt
-        </button>
-        <span className="select-none text-xs text-dls-border" aria-hidden>
-          |
-        </span>
-        <button
-          type="button"
-          title="Latest (End)"
-          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
-          onClick={handleLatest}
-        >
-          Latest
-        </button>
+        {actions.map((action, index) => (
+          <Fragment key={action.key}>
+            {index > 0 ? <span className="select-none text-xs text-dls-border" aria-hidden>|</span> : null}
+            <button type="button" title={action.title}
+              className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
+              onClick={action.onClick}>
+              {action.label}
+            </button>
+          </Fragment>
+        ))}
       </div>
     </div>
   );

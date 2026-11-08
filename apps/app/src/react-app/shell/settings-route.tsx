@@ -2490,8 +2490,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             setLanguage={setLocale}
             hideTitlebar={hideTitlebar}
             toggleHideTitlebar={() => setHideTitlebar((current) => !current)}
-            showPromptNavigation={local.prefs.showPromptNavigation}
-            setShowPromptNavigation={(showPromptNavigation) => local.setPrefs((previous) => ({ ...previous, showPromptNavigation }))}
+            promptNavigation={local.prefs.promptNavigation}
+            setPromptNavigation={(key, value) => local.setPrefs((previous) => ({ ...previous, promptNavigation: { ...previous.promptNavigation, [key]: value } }))}
           />
         );
       case "shortcuts":
