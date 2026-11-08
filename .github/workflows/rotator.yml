@@ -43,6 +43,8 @@ jobs:
         run: pnpm --filter @openwork/desktop build:electron
         env:
           SIGN_WINDOWS: "false"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package Windows installer
         run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never

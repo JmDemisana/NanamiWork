@@ -264,31 +264,66 @@ if (shouldDownloadOpencode) {
 
   mkdirSync(extractDir, { recursive: true });
 
+  let downloaded = false;
+  try {
+    const ghTargetDir = join(tmpdir(), `gh-opencode-${stamp}`);
+    mkdirSync(ghTargetDir, { recursive: true });
+    console.log(`Attempting OpenCode download via gh CLI: v${normalizedOpencodeVersion} (${opencodeAsset})...`);
+    const ghRes = spawnSync("gh", [
+      "release", "download", `v${normalizedOpencodeVersion}`,
+      "-R", opencodeGithubRepo,
+      "-p", opencodeAsset,
+      "-D", ghTargetDir,
+      "--clobber",
+    ], { stdio: "inherit" });
+    const ghFile = join(ghTargetDir, opencodeAsset);
+    if (ghRes.status === 0 && existsSync(ghFile)) {
+      copyFileSync(ghFile, archivePath);
+      downloaded = true;
+      console.log("OpenCode archive downloaded successfully via gh CLI.");
+    }
+  } catch (err) {
+    console.warn("gh CLI download attempt failed; falling back to direct web download.", err);
+  }
+
+  if (!downloaded) {
+    if (process.platform === "win32") {
+      const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
+      const psScript = [
+        "$ErrorActionPreference = 'Stop'",
+        `for ($i = 1; $i -le 5; $i++) { try { Write-Host \"Downloading OpenCode (attempt $i/5)...\"; curl.exe -fL --retry 3 --retry-delay 3 -o ${psQuote(archivePath)} ${psQuote(opencodeUrl)}; if ($LASTEXITCODE -eq 0 -and (Test-Path ${psQuote(archivePath)})) { break }; throw \"curl exited with code $LASTEXITCODE\" } catch { if ($i -eq 5) { throw }; Write-Warning \"Download failed with $($_.Exception.Message). Retrying in 4s...\"; Start-Sleep -Seconds 4 } }`,
+      ].join("; ");
+
+      const result = spawnSync("powershell", ["-NoProfile", "-Command", psScript], {
+        stdio: "inherit",
+      });
+
+      if (result.status !== 0) {
+        process.exit(result.status ?? 1);
+      }
+    } else {
+      const downloadResult = spawnSync("curl", ["-fsSL", "--retry", "3", "--retry-delay", "3", "-o", archivePath, opencodeUrl], {
+        stdio: "inherit",
+      });
+      if (downloadResult.status !== 0) {
+        process.exit(downloadResult.status ?? 1);
+      }
+    }
+  }
+
   if (process.platform === "win32") {
     const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
-    const psScript = [
+    const extractScript = [
       "$ErrorActionPreference = 'Stop'",
-      `for ($i = 1; $i -le 5; $i++) { try { Write-Host \"Downloading OpenCode (attempt $i/5)...\"; Invoke-WebRequest -Uri ${psQuote(opencodeUrl)} -OutFile ${psQuote(archivePath)}; break } catch { if ($i -eq 5) { throw }; Write-Warning \"Download failed with $($_.Exception.Message). Retrying in 4s...\"; Start-Sleep -Seconds 4 } }`,
       `Expand-Archive -Path ${psQuote(archivePath)} -DestinationPath ${psQuote(extractDir)} -Force`,
     ].join("; ");
-
-    const result = spawnSync("powershell", ["-NoProfile", "-Command", psScript], {
+    const extractRes = spawnSync("powershell", ["-NoProfile", "-Command", extractScript], {
       stdio: "inherit",
     });
-
-    if (result.status !== 0) {
-      process.exit(result.status ?? 1);
+    if (extractRes.status !== 0) {
+      process.exit(extractRes.status ?? 1);
     }
   } else {
-    const downloadResult = spawnSync("curl", ["-fsSL", "-o", archivePath, opencodeUrl], {
-      stdio: "inherit",
-    });
-    if (downloadResult.status !== 0) {
-      process.exit(downloadResult.status ?? 1);
-    }
-
-    mkdirSync(extractDir, { recursive: true });
-
     if (opencodeAsset.endsWith(".zip")) {
       const unzipResult = spawnSync("unzip", ["-q", archivePath, "-d", extractDir], {
         stdio: "inherit",
