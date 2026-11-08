@@ -91,9 +91,9 @@ pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 
 ---
 
-## ⚖️ Terms of Service & Acceptable Use
+## ⚖️ Provider Terms & Compliance
 
-NanamiWork allows you to connect multiple personal, educational, and organizational accounts to isolate environment contexts and track usage quotas. Users are responsible for adhering to the respective Terms of Service of connected providers (Google, OpenAI, GitHub). Automated account cycling or abuse of free-tier quotas is strictly discouraged.
+NanamiWork provides multi-account profile switching to help developers organize personal, educational, and workplace credentials across distinct workspace contexts. All API interactions and authentication flows occur directly between the user's client and the upstream services (Google, OpenAI, GitHub). Users are solely responsible for complying with the Terms of Service, Acceptable Use Policies, and rate limits of each respective provider. NanamiWork does not alter, bypass, or circumvent provider access controls.
 
 ---
 
