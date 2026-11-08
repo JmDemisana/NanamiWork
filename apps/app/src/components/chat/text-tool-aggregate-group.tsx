@@ -156,7 +156,6 @@ export function TextToolAggregateGroup({ parts, messageId, thoughts = [], classN
   const latestToolCallId = parts.at(-1)?.toolCallId ?? groupKey
   const keyFor = (id: string, detail: string) => messageId ? JSON.stringify(["tool", messageId, id, detail]) : undefined
   const [expanded, setExpanded] = useWorkbenchDisclosure(keyFor(groupKey, "expanded"), true)
-  const isExpanded = running || expanded
   const [showAll, setShowAll] = useWorkbenchDisclosure(keyFor(groupKey, "show-all"))
   const resolveLifecycle = useCurrentToolLifecycleResolver()
 
@@ -164,6 +163,7 @@ export function TextToolAggregateGroup({ parts, messageId, thoughts = [], classN
   const currentLifecycle = resolveLifecycle(inFlightPart?.toolCallId ?? "", Boolean(inFlightPart))
   const lifecycle = getToolAggregateLifecycle(parts, currentLifecycle)
   const running = lifecycle === "running"
+  const isExpanded = running || expanded
   const rowStatus = (part: AnyToolPart): TextStepStatus => {
     if (!isToolPartInFlight(part)) return settledStatus(part)
     const own = resolveLifecycle(part.toolCallId, true)
