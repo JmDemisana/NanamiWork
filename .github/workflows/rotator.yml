@@ -19,6 +19,9 @@ jobs:
     name: Build Windows (NSIS)
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,9 +50,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package Windows installer
-        run: pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+        shell: pwsh
+        run: |
+          $success = $false
+          for ($i = 1; $i -le 3; $i++) {
+            Write-Host "Packaging Windows installer (attempt $i/3)..."
+            pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml --win nsis --publish never
+            if ($LASTEXITCODE -eq 0) {
+              $success = $true
+              break
+            }
+            Write-Warning "electron-builder failed with exit code $LASTEXITCODE. Retrying in 10s..."
+            Start-Sleep -Seconds 10
+          }
+          if (-not $success) {
+            exit 1
+          }
         env:
           SIGN_WINDOWS: "false"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows test artifacts
         uses: actions/upload-artifact@v4
