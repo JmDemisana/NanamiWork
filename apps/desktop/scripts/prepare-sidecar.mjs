@@ -268,7 +268,7 @@ if (shouldDownloadOpencode) {
     const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
     const psScript = [
       "$ErrorActionPreference = 'Stop'",
-      `Invoke-WebRequest -Uri ${psQuote(opencodeUrl)} -OutFile ${psQuote(archivePath)}`,
+      `for ($i = 1; $i -le 5; $i++) { try { Write-Host \"Downloading OpenCode (attempt $i/5)...\"; Invoke-WebRequest -Uri ${psQuote(opencodeUrl)} -OutFile ${psQuote(archivePath)}; break } catch { if ($i -eq 5) { throw }; Write-Warning \"Download failed with $($_.Exception.Message). Retrying in 4s...\"; Start-Sleep -Seconds 4 } }`,
       `Expand-Archive -Path ${psQuote(archivePath)} -DestinationPath ${psQuote(extractDir)} -Force`,
     ].join("; ");
 
