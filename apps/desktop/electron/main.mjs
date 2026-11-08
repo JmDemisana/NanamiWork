@@ -107,7 +107,7 @@ import { createKeepAwake } from "./keep-awake.mjs";
 import { attachFloatingViewWindow, floatingViewWindowOptions } from "./floating-view-window.mjs";
 import { createStartupLog, startupPhase, withStartupPhase } from "./startup-log.mjs";
 import { createWindowStateStore } from "./window-state.mjs";
-import { legacyNanamiProfile, migrateLegacyNanamiProfile, nanamiProfileEnvironment } from "./nanami-profile.mjs";
+import { legacyNanamiProfile, migrateLegacyNanamiProfile, nanamiProfileEnvironment, nanamiTerminalEnvironment } from "./nanami-profile.mjs";
 
 // Startup milestones (epoch ms) for the renderer's one-per-launch startup
 // report to Den. The OS process creation time includes module loading; the
@@ -3131,12 +3131,12 @@ ipcMain.handle("openwork:terminal:create", async (event, options = {}) => {
     cols,
     rows,
     cwd,
-    env: {
+    env: await nanamiTerminalEnvironment({
       ...process.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
       OPENWORK_TERMINAL: "1",
-    },
+    }, { home: app.getPath("home") }),
   });
 
   terminalProcesses.set(terminalId, { process: child, webContentsId: event.sender.id });

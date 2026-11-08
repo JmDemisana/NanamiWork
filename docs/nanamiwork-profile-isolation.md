@@ -6,6 +6,6 @@ On the first launch after upgrading, NanamiWork asks before copying earlier file
 
 Close any other application using the old runtime before importing. SQLite databases are snapshotted using SQLite's backup API, including committed WAL data. An interrupted v1-to-v2 copy is retained with a rewritten private checkpoint, or the import fails without replacing either profile. Workspace lists, desktop preferences and NanamiWork's existing account files stay in their existing private locations.
 
-The managed engines use a private home to avoid plugins discovering or moving another agent's state. On Windows their `APPDATA` and `LOCALAPPDATA` are private too. Shells launched by the managed engines can use `NANAMIWORK_REAL_HOME` to refer to the original home directory. The desktop's normal home and user-data paths do not change.
+Managed engines and desktop terminals use a private home to avoid plugins discovering or moving another agent's state. On Windows their `APPDATA` and `LOCALAPPDATA` are private too. Their shells can use `NANAMIWORK_REAL_HOME` to refer to the original home directory. The desktop's normal home and user-data paths do not change.
 
 The v2 engine cannot yet mirror v1 OAuth sign-ins automatically. NanamiWork therefore pauses automatic v2 routing when v1 sign-ins are present instead of silently disconnecting those accounts. An explicit engine selection remains available.

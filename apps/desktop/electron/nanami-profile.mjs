@@ -2,7 +2,7 @@ import { constants, createReadStream, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { envKey, openworkServerConfigPath, desktopBootstrapPath, legacyDesktopBootstrapPath } from "@openwork/paths";
+import { envKey, setEnv, openworkServerConfigPath, desktopBootstrapPath, legacyDesktopBootstrapPath } from "@openwork/paths";
 
 // Only defaults are redirected. Explicitly selected storage remains the caller's choice.
 export function nanamiProfileEnvironment({ env, home, userDataDir }) {
@@ -44,6 +44,25 @@ export function nanamiProfileEnvironment({ env, home, userDataDir }) {
   if ((!selectedV1 || !env[selectedV1]?.trim()) && runtimeRoot !== runtimeDir) result.OPENCODE_DB = path.join(runtimeRoot, "opencode-v1", "state", "opencode.db");
   result.NANAMIWORK_ISOLATED = "1";
   return { env: result, runtimeDir, configDir };
+}
+
+/** A desktop terminal can itself launch an engine or plugin, so it needs the same boundary. */
+export async function nanamiTerminalEnvironment(env, { home, platform = process.platform }) {
+  const result = { ...env };
+  const opts = { platform };
+  const get = (key) => result[envKey(result, key, opts) ?? key];
+  if (get("NANAMIWORK_ISOLATED") !== "1") return result;
+  const engineHome = String(get("NANAMIWORK_ENGINE_HOME") ?? "").trim();
+  if (!engineHome) throw new Error("NanamiWork's private engine home is not configured.");
+  setEnv(result, "NANAMIWORK_REAL_HOME", home, opts);
+  const directories = platform === "win32"
+    ? { HOME: engineHome, USERPROFILE: engineHome, APPDATA: path.join(engineHome, "AppData", "Roaming"), LOCALAPPDATA: path.join(engineHome, "AppData", "Local") }
+    : { HOME: engineHome };
+  for (const [key, directory] of Object.entries(directories)) {
+    await mkdir(directory, { recursive: true });
+    setEnv(result, key, directory, opts);
+  }
+  return result;
 }
 
 const legacyFiles = [

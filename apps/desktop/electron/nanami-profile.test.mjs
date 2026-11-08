@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { legacyNanamiProfile, migrateLegacyNanamiProfile, nanamiProfileEnvironment } from "./nanami-profile.mjs";
+import { legacyNanamiProfile, migrateLegacyNanamiProfile, nanamiProfileEnvironment, nanamiTerminalEnvironment } from "./nanami-profile.mjs";
 import { buildNukeManifest } from "./nuke.mjs";
 import { openworkInstallMarkerPaths } from "./runtime.mjs";
 
@@ -21,6 +21,17 @@ test("private defaults preserve explicit overrides", () => {
   assert.equal(result.env.XDG_DATA_HOME, path.join("/home/test", ".config", "nanamiwork", "data"));
   assert.equal(result.env.OPENWORK_RUNTIME_DB, path.join("/profile", "nanamiwork-runtime", "runtime.sqlite"));
 });
+
+test("desktop terminals cannot accidentally launch plugins against another app's home", async () => fixture(async (root) => {
+  const originalHome = path.join(root, "other-app-home");
+  const engineHome = path.join(root, "nanami-engine");
+  const source = { NANAMIWORK_ISOLATED: "1", NANAMIWORK_ENGINE_HOME: engineHome, HOME: originalHome, APPDATA: path.join(root, "shared") };
+  const env = await nanamiTerminalEnvironment(source, { home: originalHome, platform: "win32" });
+  assert.equal(env.USERPROFILE, engineHome);
+  assert.equal(env.APPDATA, path.join(engineHome, "AppData", "Roaming"));
+  assert.equal(env.NANAMIWORK_REAL_HOME, originalHome);
+  assert.equal(source.APPDATA, path.join(root, "shared"));
+}));
 
 test("existing private accounts are recognized as an install rather than forcing fresh v2 routing", () => {
   const env = { OPENCODE_CONFIG_DIR: path.resolve("private-config"), XDG_DATA_HOME: path.resolve("private-data") };
