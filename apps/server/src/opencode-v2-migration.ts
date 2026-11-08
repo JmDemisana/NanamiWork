@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { access, chmod, mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
@@ -121,7 +121,12 @@ export function opencodeV1DatabasePath(env: NodeJS.ProcessEnv = process.env): st
   if (env.OPENCODE_DB?.trim()) return resolve(env.OPENCODE_DB);
   // Engine v1 moved off a shared database a standalone OpenCode v2 owns.
   const isolated = isolatedOpencodeV1Database();
-  if (isolated) return isolated;
+  if (isolated && existsSync(isolated)) return isolated;
+  const configHome = env.OPENWORK_CONFIG_DIR?.trim() || env.XDG_CONFIG_HOME?.trim() || join(env.HOME || homedir(), ".config", "openwork");
+  const persistedIsolated = join(configHome, "opencode-v1", "state", "opencode.db");
+  const winAppData = process.platform === "win32" ? join(env.APPDATA || join(env.USERPROFILE || homedir(), "AppData", "Roaming"), "openwork", "opencode-v1", "state", "opencode.db") : null;
+  if (winAppData && existsSync(winAppData)) return winAppData;
+  if (existsSync(persistedIsolated)) return persistedIsolated;
   return join(env.XDG_DATA_HOME || join(env.HOME || homedir(), ".local", "share"), "opencode", "opencode.db");
 }
 

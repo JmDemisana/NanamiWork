@@ -18,75 +18,6 @@ function useSessionScrollOverlayState(sessionId: string) {
   return { isAtBottom, topClippedMessageId };
 }
 
-type JumpToStartButtonProps = {
-  onJumpToStart?: (behavior?: ScrollBehavior) => void;
-  onJumpToStartOfMessage?: (behavior?: ScrollBehavior) => void;
-};
-
-const JumpToStartButton = memo(function JumpToStartButton({
-  onJumpToStart,
-  onJumpToStartOfMessage,
-}: JumpToStartButtonProps) {
-  const handleClick = useCallback(() => {
-    const fn = onJumpToStart ?? onJumpToStartOfMessage;
-    fn?.("smooth");
-  }, [onJumpToStart, onJumpToStartOfMessage]);
-
-  return (
-    <button
-      type="button"
-      className="rounded-full px-3 py-1.5 text-xs text-dls-text transition-colors hover:bg-dls-hover"
-      onClick={handleClick}
-    >
-      Jump to start
-    </button>
-  );
-});
-
-type JumpToLastPromptButtonProps = {
-  onJumpToLastPrompt: (behavior?: ScrollBehavior) => void;
-};
-
-const JumpToLastPromptButton = memo(function JumpToLastPromptButton({
-  onJumpToLastPrompt,
-}: JumpToLastPromptButtonProps) {
-  const handleClick = useCallback(() => {
-    onJumpToLastPrompt("smooth");
-  }, [onJumpToLastPrompt]);
-
-  return (
-    <button
-      type="button"
-      className="rounded-full px-3 py-1.5 text-xs text-dls-text transition-colors hover:bg-dls-hover"
-      onClick={handleClick}
-    >
-      Jump to last prompt
-    </button>
-  );
-});
-
-type JumpToLatestButtonProps = {
-  onJumpToLatest: (behavior?: ScrollBehavior) => void;
-};
-
-const JumpToLatestButton = memo(function JumpToLatestButton({
-  onJumpToLatest,
-}: JumpToLatestButtonProps) {
-  const handleClick = useCallback(() => {
-    onJumpToLatest("smooth");
-  }, [onJumpToLatest]);
-
-  return (
-    <button
-      type="button"
-      className="rounded-full px-3 py-1.5 text-xs text-dls-text transition-colors hover:bg-dls-hover"
-      onClick={handleClick}
-    >
-      Jump to latest
-    </button>
-  );
-});
-
 type SessionScrollOverlayProps = {
   sessionId: string;
   owner?: string;
@@ -94,6 +25,8 @@ type SessionScrollOverlayProps = {
   mobileTurnFullyVisible?: boolean;
   onJumpToLatest: (behavior?: ScrollBehavior) => void;
   onJumpToStart?: (behavior?: ScrollBehavior) => void;
+  onJumpToPreviousPrompt?: (behavior?: ScrollBehavior) => void;
+  onJumpToNextPrompt?: (behavior?: ScrollBehavior) => void;
   onJumpToLastPrompt?: (behavior?: ScrollBehavior) => void;
   onJumpToStartOfMessage?: (behavior?: ScrollBehavior) => void;
 };
@@ -105,11 +38,32 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
   mobileTurnFullyVisible = false,
   onJumpToLatest,
   onJumpToStart,
+  onJumpToPreviousPrompt,
+  onJumpToNextPrompt,
   onJumpToLastPrompt,
   onJumpToStartOfMessage,
 }: SessionScrollOverlayProps) {
   const { isAtBottom, topClippedMessageId } = useSessionScrollOverlayState(sessionScrollKey(sessionId, owner));
   const isMobile = useIsMobile();
+
+  const handleTop = useCallback(() => {
+    const fn = onJumpToStart ?? onJumpToStartOfMessage;
+    fn?.("smooth");
+  }, [onJumpToStart, onJumpToStartOfMessage]);
+
+  const handlePreviousPrompt = useCallback(() => {
+    const fn = onJumpToPreviousPrompt ?? onJumpToLastPrompt;
+    fn?.("smooth");
+  }, [onJumpToPreviousPrompt, onJumpToLastPrompt]);
+
+  const handleNextPrompt = useCallback(() => {
+    onJumpToNextPrompt?.("smooth");
+  }, [onJumpToNextPrompt]);
+
+  const handleLatest = useCallback(() => {
+    onJumpToLatest("smooth");
+  }, [onJumpToLatest]);
+
   if (isMobile && !isDesktopRuntime()) {
     if (isAtBottom || mobileTurnFullyVisible) return null;
     return (
@@ -126,6 +80,7 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
       </div>
     );
   }
+
   const showJumpToStart = !isStreaming && Boolean(topClippedMessageId);
   const showJumpToLatest = !isAtBottom && !mobileTurnFullyVisible;
 
@@ -135,12 +90,48 @@ export const SessionScrollOverlay = memo(function SessionScrollOverlay({
 
   return (
     <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 flex -translate-x-1/2 justify-center">
-      <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-dls-border bg-dls-surface/95 p-1 shadow-(--dls-card-shadow) backdrop-blur-md">
-        <JumpToStartButton onJumpToStart={onJumpToStart} onJumpToStartOfMessage={onJumpToStartOfMessage} />
-        {onJumpToLastPrompt ? (
-          <JumpToLastPromptButton onJumpToLastPrompt={onJumpToLastPrompt} />
-        ) : null}
-        <JumpToLatestButton onJumpToLatest={onJumpToLatest} />
+      <div className="pointer-events-auto flex items-center rounded-full border border-dls-border bg-dls-surface/95 px-2 py-1 shadow-(--dls-card-shadow) backdrop-blur-md">
+        <button
+          type="button"
+          title="Top (Home)"
+          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
+          onClick={handleTop}
+        >
+          Top
+        </button>
+        <span className="select-none text-xs text-dls-border" aria-hidden>
+          |
+        </span>
+        <button
+          type="button"
+          title="Previous Prompt (PgUp)"
+          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
+          onClick={handlePreviousPrompt}
+        >
+          Previous Prompt
+        </button>
+        <span className="select-none text-xs text-dls-border" aria-hidden>
+          |
+        </span>
+        <button
+          type="button"
+          title="Next Prompt (PgDn)"
+          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
+          onClick={handleNextPrompt}
+        >
+          Next Prompt
+        </button>
+        <span className="select-none text-xs text-dls-border" aria-hidden>
+          |
+        </span>
+        <button
+          type="button"
+          title="Latest (End)"
+          className="rounded-full px-2.5 py-1 text-xs text-dls-text transition-colors hover:bg-dls-hover hover:text-dls-text"
+          onClick={handleLatest}
+        >
+          Latest
+        </button>
       </div>
     </div>
   );

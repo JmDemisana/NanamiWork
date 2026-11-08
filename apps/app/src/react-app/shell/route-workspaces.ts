@@ -46,17 +46,35 @@ export type RouteSessionListTransport = (input: {
 }) => Promise<RouteSessionListResult>;
 
 export const nativeRouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, directory }) => {
-  const client = createClient(endpoint.opencodeBaseUrl, directory, {
+  const normalizedDirectory = directory ? directory.replace(/\\/g, "/") : undefined;
+  const client = createClient(endpoint.opencodeBaseUrl, normalizedDirectory, {
     mode: "openwork",
     token: endpoint.token,
   });
-  return client.session.list({ limit, directory } as any);
+  const res = await client.session.list({ limit, directory: normalizedDirectory } as any);
+  if (res && "data" in res && Array.isArray(res.data) && res.data.length === 0 && normalizedDirectory) {
+    const fallbackRes = await client.session.list({ limit } as any);
+    if (fallbackRes && "data" in fallbackRes && Array.isArray(fallbackRes.data) && fallbackRes.data.length > 0) {
+      return fallbackRes;
+    }
+  }
+  return res;
 };
 
-export const v2RouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, cursor, directory }) =>
-  createClientV2(`${endpoint.mountedBaseUrl}/opencode2`, directory, {
+export const v2RouteSessionList: RouteSessionListTransport = async ({ endpoint, limit, cursor, directory }) => {
+  const normalizedDirectory = directory ? directory.replace(/\\/g, "/") : undefined;
+  const client = createClientV2(`${endpoint.mountedBaseUrl}/opencode2`, normalizedDirectory, {
     token: endpoint.token,
-  }).listSessionsPage({ limit, cursor });
+  });
+  const res = await client.listSessionsPage({ limit, cursor, directory: normalizedDirectory } as any);
+  if (res && "data" in res && Array.isArray(res.data) && res.data.length === 0 && normalizedDirectory && !cursor) {
+    const fallbackRes = await client.listSessionsPage({ limit } as any);
+    if (fallbackRes && "data" in fallbackRes && Array.isArray(fallbackRes.data) && fallbackRes.data.length > 0) {
+      return fallbackRes;
+    }
+  }
+  return res;
+};
 
 /** Resolve the owning server's engine even when this workspace isn't selected. */
 export async function routeSessionEndpoint(endpoint: ResolvedWorkspaceEndpoint): Promise<ResolvedWorkspaceEndpoint> {

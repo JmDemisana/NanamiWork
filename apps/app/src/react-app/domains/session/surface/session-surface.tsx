@@ -3962,8 +3962,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
           onJumpToLatest={sessionScroll.jumpToLatest}
           mobileTurnFullyVisible={sessionScroll.mobileTurnFullyVisible}
           onJumpToStart={sessionScroll.jumpToStart}
-          onJumpToLastPrompt={sessionScroll.jumpToLastPrompt}
-          onJumpToStartOfMessage={sessionScroll.jumpToStart}
+          onJumpToPreviousPrompt={sessionScroll.jumpToPreviousPrompt}
+          onJumpToNextPrompt={sessionScroll.jumpToNextPrompt}
         />
         <SessionFindBar
           key={sessionOwner}

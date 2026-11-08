@@ -359,6 +359,7 @@ export function unwrap<T>(result: FieldsResult<T>): NonNullable<T> {
 }
 
 export function createClient(baseUrl: string, directory?: string, auth?: OpencodeAuth, options?: { desktopTransport: "main" }) {
+  const normalizedDirectory = directory ? directory.replace(/\\/g, "/") : undefined;
   const headers: Record<string, string> = {};
   if (!isDesktopRuntime()) {
     const authHeader = resolveAuthHeader(auth);
@@ -375,7 +376,7 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
       };
   const client = createOpencodeClient({
     baseUrl,
-    directory,
+    directory: normalizedDirectory,
     headers: Object.keys(headers).length ? headers : undefined,
     fetch: fetchImpl,
   });

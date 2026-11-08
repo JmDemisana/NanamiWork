@@ -83,6 +83,8 @@ type ScrollController = {
   scrollToTop: () => Promise<boolean>;
   jumpToLatest?: (behavior?: ScrollBehavior) => void;
   jumpToStart: (behavior?: ScrollBehavior) => void;
+  jumpToPreviousPrompt: (behavior?: ScrollBehavior) => void;
+  jumpToNextPrompt: (behavior?: ScrollBehavior) => void;
   jumpToLastPrompt: (behavior?: ScrollBehavior) => void;
   jumpToStartOfMessage: (behavior?: ScrollBehavior) => void;
 };
@@ -565,13 +567,15 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       container.scrollTo({ top: 0, behavior });
       lastKnownScrollTop = container.scrollTop;
     };
+    const PROMPT_SCROLL_OFFSET = 72;
+
     const jumpToLastPrompt = (behavior: ScrollBehavior = "smooth") => {
       if (!active) return;
       const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
       const latestUser = users.at(-1);
       if (!latestUser) return;
       const messageId = messageIdForElement(latestUser);
-      const anchor = messageId ? { messageId, offset: 0 } : undefined;
+      const anchor = messageId ? { messageId, offset: PROMPT_SCROLL_OFFSET } : undefined;
       const top = anchor ? anchorTop(anchor) : null;
       cancelRestoration();
       cancelFrames();
@@ -580,12 +584,86 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       cancelledWhileLoading = false;
       lastGestureAt = -Infinity;
       if (top !== null && messageId && anchor) {
-        store.setManualScroll(scrollKey, top, messageId, anchor);
+        const targetTop = Math.max(0, top);
+        store.setManualScroll(scrollKey, targetTop, messageId, anchor);
         smoothJump = behavior === "smooth";
-        container.scrollTo({ top, behavior });
+        container.scrollTo({ top: targetTop, behavior });
       } else {
         smoothJump = behavior === "smooth";
-        latestUser.scrollIntoView({ behavior, block: "start" });
+        latestUser.scrollIntoView({ behavior, block: "center" });
+      }
+      lastKnownScrollTop = container.scrollTop;
+    };
+    const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => {
+      if (!active) return;
+      const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
+      if (users.length === 0) {
+        jumpToStart(behavior);
+        return;
+      }
+      const containerTop = container.getBoundingClientRect().top;
+      const prevUsers = users.filter((el) => {
+        const top = el.getBoundingClientRect().top - containerTop;
+        return top < 50;
+      });
+      const targetUser = prevUsers.at(-1);
+      if (!targetUser) {
+        jumpToStart(behavior);
+        return;
+      }
+      const messageId = messageIdForElement(targetUser);
+      const anchor = messageId ? { messageId, offset: PROMPT_SCROLL_OFFSET } : undefined;
+      const top = anchor ? anchorTop(anchor) : null;
+      cancelRestoration();
+      cancelFrames();
+      pendingRestore = false;
+      pendingSubmittedMessageId = null;
+      cancelledWhileLoading = false;
+      lastGestureAt = -Infinity;
+      if (top !== null && messageId && anchor) {
+        const targetTop = Math.max(0, top);
+        store.setManualScroll(scrollKey, targetTop, messageId, anchor);
+        smoothJump = behavior === "smooth";
+        container.scrollTo({ top: targetTop, behavior });
+      } else {
+        smoothJump = behavior === "smooth";
+        targetUser.scrollIntoView({ behavior, block: "center" });
+      }
+      lastKnownScrollTop = container.scrollTop;
+    };
+    const jumpToNextPrompt = (behavior: ScrollBehavior = "smooth") => {
+      if (!active) return;
+      const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
+      if (users.length === 0) {
+        scrollToBottom(behavior);
+        return;
+      }
+      const containerTop = container.getBoundingClientRect().top;
+      const nextUser = users.find((el) => {
+        const top = el.getBoundingClientRect().top - containerTop;
+        return top > 90;
+      });
+      if (!nextUser) {
+        scrollToBottom(behavior);
+        return;
+      }
+      const messageId = messageIdForElement(nextUser);
+      const anchor = messageId ? { messageId, offset: PROMPT_SCROLL_OFFSET } : undefined;
+      const top = anchor ? anchorTop(anchor) : null;
+      cancelRestoration();
+      cancelFrames();
+      pendingRestore = false;
+      pendingSubmittedMessageId = null;
+      cancelledWhileLoading = false;
+      lastGestureAt = -Infinity;
+      if (top !== null && messageId && anchor) {
+        const targetTop = Math.max(0, top);
+        store.setManualScroll(scrollKey, targetTop, messageId, anchor);
+        smoothJump = behavior === "smooth";
+        container.scrollTo({ top: targetTop, behavior });
+      } else {
+        smoothJump = behavior === "smooth";
+        nextUser.scrollIntoView({ behavior, block: "center" });
       }
       lastKnownScrollTop = container.scrollTop;
     };
@@ -611,7 +689,27 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable=true]")) return;
-      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) markScrollGesture(event.target);
+      if (event.key === "Home") {
+        event.preventDefault();
+        jumpToStart("smooth");
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        scrollToBottom("smooth");
+        return;
+      }
+      if (event.key === "PageUp") {
+        event.preventDefault();
+        jumpToPreviousPrompt("smooth");
+        return;
+      }
+      if (event.key === "PageDown") {
+        event.preventDefault();
+        jumpToNextPrompt("smooth");
+        return;
+      }
+      if (["ArrowUp", "ArrowDown", " "].includes(event.key)) markScrollGesture(event.target);
     };
     const handlePointerDown = (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0 || activePointerId !== null) return;
@@ -682,6 +780,8 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       scrollToTop,
       jumpToLatest: (behavior) => scrollToBottom(behavior),
       jumpToStart,
+      jumpToPreviousPrompt,
+      jumpToNextPrompt,
       jumpToLastPrompt,
       jumpToStartOfMessage,
     };
@@ -732,6 +832,18 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       controllerRef.current.jumpToStart(behavior);
     }
   }, [scrollKey, containerRef]);
+  const jumpToPreviousPrompt = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (controllerRef.current?.sessionId === scrollKey) {
+      containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
+      controllerRef.current.jumpToPreviousPrompt(behavior);
+    }
+  }, [scrollKey, containerRef]);
+  const jumpToNextPrompt = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (controllerRef.current?.sessionId === scrollKey) {
+      containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
+      controllerRef.current.jumpToNextPrompt(behavior);
+    }
+  }, [scrollKey, containerRef]);
   const jumpToLastPrompt = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (controllerRef.current?.sessionId === scrollKey) {
       containerRef.current?.dispatchEvent(new Event(SESSION_SCROLL_NAVIGATION_EVENT));
@@ -751,5 +863,5 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     }
   }, [scrollKey, options.historyReady, options.submittedMessageId]);
 
-  return { handleScroll, markScrollGesture, scrollToBottom, scrollToTop, jumpToLatest, jumpToStart, jumpToLastPrompt, jumpToStartOfMessage, refresh, mobileTurnFullyVisible };
+  return { handleScroll, markScrollGesture, scrollToBottom, scrollToTop, jumpToLatest, jumpToStart, jumpToPreviousPrompt, jumpToNextPrompt, jumpToLastPrompt, jumpToStartOfMessage, refresh, mobileTurnFullyVisible };
 }

@@ -2305,9 +2305,10 @@ export function createClientV2(
   directory: string | undefined,
   auth: { token?: string },
 ) {
+  const normalizedDirectory = directory ? directory.replace(/\\/g, "/") : undefined;
   const baseUrl = opencode2BaseUrl.replace(/\/+$/, "");
   const fetchImpl = createV2Fetch(auth);
-  const compatibilityClient = createClient(baseUrl, directory, { mode: "openwork", token: auth.token });
+  const compatibilityClient = createClient(baseUrl, normalizedDirectory, { mode: "openwork", token: auth.token });
   const taskSessions = taskSessionAssociations(baseUrl);
   const permissionSessionByRequestID = new Map<string, string>();
   const questionFormsByID = new Map<string, NonNullable<ReturnType<typeof mapV2Question>>>();
