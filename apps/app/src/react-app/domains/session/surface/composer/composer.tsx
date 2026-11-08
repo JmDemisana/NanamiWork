@@ -1,4 +1,3 @@
-import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 /** @jsxImportSource react */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
@@ -837,35 +836,13 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     () => [...new Set([...props.recentFiles, ...workspaceFileResults])],
     [props.recentFiles, workspaceFileResults],
   );
-  const antigravityAccounts = useAntigravityAccountsStore((s) => s.accounts);
-  const chatGptAccounts = useAntigravityAccountsStore((s) => s.chatGptAccounts);
-  const copilotAccounts = useAntigravityAccountsStore((s) => s.copilotAccounts);
-
-  const activeAntigravityAccount = antigravityAccounts.find((a) => a.isActive);
-  const activeChatGptAccount = chatGptAccounts.find((a) => a.isActive);
-  const activeCopilotAccount = copilotAccounts.find((a) => a.isActive);
-
-  const activeAntigravityItem = props.selectedModel?.providerID === "google"
-    ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, props.selectedModel.modelID)
-    : undefined;
-  const activeChatGptItem = props.selectedModel?.providerID === "openai"
-    ? activeChatGptAccount?.models.find((m) => m.modelID === props.selectedModel.modelID)
-    : undefined;
-  const activeCopilotItem = props.selectedModel?.providerID === "github-copilot"
-    ? activeCopilotAccount?.models.find((m) => m.modelID === props.selectedModel.modelID)
-    : undefined;
-
   const isModelPicked = Boolean(
     props.selectedModel?.modelID &&
     props.selectedModel?.providerID &&
-    props.selectedModel.modelID !== "" &&
-    props.selectedModel.providerID !== "" &&
+    props.selectedModel.modelID.trim() !== "" &&
+    props.selectedModel.providerID.trim() !== "" &&
     props.selectedModel.modelID !== "default" &&
-    props.selectedModel.modelID !== "pick-a-model" &&
-    (props.selectedModel.providerID === "nanami" ||
-      (props.selectedModel.providerID === "google" ? Boolean(activeAntigravityItem) : true) &&
-      (props.selectedModel.providerID === "openai" && activeChatGptAccount ? Boolean(activeChatGptItem) : true) &&
-      (props.selectedModel.providerID === "github-copilot" && activeCopilotAccount ? Boolean(activeCopilotItem) : true))
+    props.selectedModel.modelID !== "pick-a-model"
   );
   const canSend = isModelPicked && (props.draft.trim().length > 0 || props.attachments.length > 0);
   const diagnosticsRef = useRef<ConnectionDiagnosticSource | null>(null);
