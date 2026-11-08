@@ -837,9 +837,13 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
     () => [...new Set([...props.recentFiles, ...workspaceFileResults])],
     [props.recentFiles, workspaceFileResults],
   );
-  const activeAntigravityAccount = useAntigravityAccountsStore((s) => s.getActiveAccount());
-  const activeChatGptAccount = useAntigravityAccountsStore((s) => s.getActiveChatGptAccount());
-  const activeCopilotAccount = useAntigravityAccountsStore((s) => s.getActiveCopilotAccount());
+  const antigravityAccounts = useAntigravityAccountsStore((s) => s.accounts);
+  const chatGptAccounts = useAntigravityAccountsStore((s) => s.chatGptAccounts);
+  const copilotAccounts = useAntigravityAccountsStore((s) => s.copilotAccounts);
+
+  const activeAntigravityAccount = antigravityAccounts.find((a) => a.isActive);
+  const activeChatGptAccount = chatGptAccounts.find((a) => a.isActive);
+  const activeCopilotAccount = copilotAccounts.find((a) => a.isActive);
 
   const activeAntigravityItem = props.selectedModel?.providerID === "google"
     ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, props.selectedModel.modelID)
