@@ -364,6 +364,40 @@ describe("prompt navigation", () => {
     expect(destinations).toEqual([1_328, 928, 1_328]);
   });
 
+  test("a prompt remains aligned when virtualized history remeasures after the jump", async () => {
+    const view = fixture();
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "target", role: "user", top: 200, height: 60 },
+      { id: "answer", role: "assistant", top: 300, height: 1_200 },
+    ];
+    await view.render();
+    await act(async () => { view.scroll(900); view.controls.jumpToPreviousPrompt("auto"); });
+    expect(view.container.scrollTop).toBe(128);
+    view.layout.messages[0].top += 300;
+    view.layout.messages[1].top += 300;
+    view.layout.height += 300;
+    await act(async () => { view.resize(); runFrames(); });
+    expect(view.container.scrollTop).toBe(428);
+  });
+
+  test("manual scrolling cancels prompt realignment", async () => {
+    const view = fixture();
+    view.layout.height = 2_000;
+    view.layout.messages = [
+      { id: "target", role: "user", top: 200, height: 60 },
+      { id: "answer", role: "assistant", top: 300, height: 1_200 },
+    ];
+    await view.render();
+    await act(async () => { view.scroll(900); view.controls.jumpToPreviousPrompt("auto"); });
+    await act(async () => { view.wheel(300); });
+    view.layout.messages[0].top += 300;
+    view.layout.messages[1].top += 300;
+    view.layout.height += 300;
+    await act(async () => { view.resize(); runFrames(); });
+    expect(view.container.scrollTop).toBe(300);
+  });
+
   test("previous can seek an unmounted prompt and align it after virtualized content mounts", async () => {
     const view = fixture();
     view.layout.height = 2_000;
@@ -382,8 +416,9 @@ describe("prompt navigation", () => {
     expect(view.container.scrollTop).toBe(328);
     view.layout.messages[0].mounted = true;
     await view.render();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); runFrames(); });
     expect(view.container.scrollTop).toBe(398);
+    await act(async () => { view.controls.markScrollGesture(); });
     expect(reveals).toEqual(["hidden-prompt", null]);
   });
 

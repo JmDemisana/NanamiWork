@@ -139,13 +139,25 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     let promptCursor: string | null = null;
     let pendingPromptPage: { direction: "previous" | "next"; behavior: ScrollBehavior; version: unknown } | null = null;
     let virtualPromptObserver: MutationObserver | null = null;
+    let virtualPromptResize: ResizeObserver | null = null;
     let virtualPromptTimeout: number | null = null;
+    let virtualPromptDelay: number | null = null;
+    let virtualPromptFrame: number | null = null;
+    let virtualPromptScrollEnd: (() => void) | null = null;
     const cancelVirtualPrompt = () => {
       const wasSeeking = Boolean(virtualPromptObserver || virtualPromptTimeout !== null);
       virtualPromptObserver?.disconnect();
       virtualPromptObserver = null;
+      virtualPromptResize?.disconnect();
+      virtualPromptResize = null;
       if (virtualPromptTimeout !== null) window.clearTimeout(virtualPromptTimeout);
       virtualPromptTimeout = null;
+      if (virtualPromptDelay !== null) window.clearTimeout(virtualPromptDelay);
+      virtualPromptDelay = null;
+      if (virtualPromptFrame !== null) window.cancelAnimationFrame(virtualPromptFrame);
+      virtualPromptFrame = null;
+      if (virtualPromptScrollEnd) container.removeEventListener("scrollend", virtualPromptScrollEnd);
+      virtualPromptScrollEnd = null;
       if (wasSeeking) container.dispatchEvent(new CustomEvent(PROMPT_REVEAL_EVENT, { detail: null }));
     };
     const cancelTop = () => { pendingTop?.(false); pendingTop = null; };
@@ -654,6 +666,49 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
       lastKnownScrollTop = container.scrollTop;
     };
+    const watchPromptAlignment = (messageId: string, smooth: boolean) => {
+      let correctionEnabled = !smooth;
+      let observedGroup: Element | null = null;
+      const anchor = { messageId, offset: PROMPT_SCROLL_OFFSET };
+      const align = () => {
+        virtualPromptFrame = null;
+        if (!active || virtualPromptObserver !== observer || promptCursor !== messageId || !correctionEnabled) return;
+        const element = messageElementById(container, messageId);
+        if (!element || element.getBoundingClientRect().height <= 0) return;
+        const group = element.closest("[data-thread-group]") ?? element;
+        if (group !== observedGroup) {
+          if (observedGroup) virtualPromptResize?.unobserve(observedGroup);
+          observedGroup = group;
+          virtualPromptResize?.observe(group);
+        }
+        const measured = anchorTop(anchor);
+        if (measured === null) return;
+        const top = Math.min(Math.max(0, container.scrollHeight - container.clientHeight), Math.max(0, measured));
+        if (Math.abs(container.scrollTop - top) <= 1) return;
+        store.setManualScroll(scrollKey, top, messageId, anchor);
+        smoothJump = false;
+        container.scrollTo({ top, behavior: "auto" });
+        lastKnownScrollTop = container.scrollTop;
+      };
+      const schedule = () => {
+        if (!active || virtualPromptObserver !== observer || virtualPromptFrame !== null) return;
+        virtualPromptFrame = window.requestAnimationFrame(align);
+      };
+      const enableCorrection = () => { correctionEnabled = true; schedule(); };
+      const observer = new MutationObserver(schedule);
+      virtualPromptObserver = observer;
+      observer.observe(content, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
+      virtualPromptResize = new ResizeObserver(schedule);
+      virtualPromptResize.observe(content);
+      virtualPromptTimeout = window.setTimeout(cancelVirtualPrompt, 3000);
+      if (smooth) {
+        virtualPromptScrollEnd = enableCorrection;
+        container.addEventListener("scrollend", enableCorrection);
+        virtualPromptDelay = window.setTimeout(enableCorrection, 700);
+      }
+      container.dispatchEvent(new CustomEvent(PROMPT_REVEAL_EVENT, { detail: messageId }));
+      schedule();
+    };
     const jumpToPrompt = (direction: "previous" | "next", behavior: ScrollBehavior) => {
       if (!active) return;
       const positions = promptPositions();
@@ -695,6 +750,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       if (element && element.getBoundingClientRect().height > 0) {
         scrollToPrompt(element, behavior);
         promptCursor = target.id;
+        watchPromptAlignment(target.id, behavior === "smooth");
         return;
       }
       // Off-screen groups are virtualized. Jump to the estimated group first,
@@ -707,22 +763,11 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       lastGestureAt = -Infinity;
       const top = Math.max(0, target.top - PROMPT_SCROLL_OFFSET);
       store.setManualScroll(scrollKey, top, target.id, { messageId: target.id, offset: PROMPT_SCROLL_OFFSET });
-      const align = () => {
-        const mounted = messageElementById(container, target.id);
-        if (!mounted || mounted.getBoundingClientRect().height <= 0) return;
-        cancelVirtualPrompt();
-        scrollToPrompt(mounted, "auto");
-        promptCursor = target.id;
-      };
-      virtualPromptObserver = new MutationObserver(align);
-      virtualPromptObserver.observe(content, { childList: true, subtree: true });
-      virtualPromptTimeout = window.setTimeout(cancelVirtualPrompt, 3000);
-      container.dispatchEvent(new CustomEvent(PROMPT_REVEAL_EVENT, { detail: target.id }));
+      promptCursor = target.id;
+      watchPromptAlignment(target.id, false);
       smoothJump = false;
       container.scrollTo({ top, behavior: "auto" });
       lastKnownScrollTop = container.scrollTop;
-      promptCursor = target.id;
-      align();
     };
     const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => jumpToPrompt("previous", behavior);
     const jumpToNextPrompt = (behavior: ScrollBehavior = "smooth") => jumpToPrompt("next", behavior);
