@@ -5,6 +5,7 @@
 // consumed by the preload bridge.
 import { BrowserWindow, Menu, shell } from "electron";
 import { runDetachedTask } from "./process-resilience.mjs";
+import { isStoreBuild } from "./updater.mjs";
 
 const NATIVE_MENU_OPEN_SETTINGS_EVENT = "openwork:native-menu:open-settings";
 const NATIVE_MENU_TOGGLE_SIDEBAR_EVENT = "openwork:native-menu:toggle-sidebar";
