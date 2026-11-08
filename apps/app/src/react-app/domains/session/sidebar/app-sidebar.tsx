@@ -14,11 +14,9 @@ import {
   Archive,
   ArchiveRestore,
   CheckCheck,
-  Folder,
   ChevronRight,
   Columns2,
   FolderPlus,
-  ListFilter,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -121,7 +119,6 @@ import {
 } from "../../../shell/session-number-shortcuts";
 import type { SidebarContextValue } from "./app-sidebar-provider";
 import {
-  MAX_SESSIONS_PREVIEW,
   buildGlobalArchivedSessions,
   buildGlobalPinnedSessions,
   flattenSessionRows,
@@ -137,22 +134,14 @@ import {
 } from "./utils";
 import type { FlattenedSessionRow, GlobalArchivedSessionEntry, GlobalPinnedSessionEntry, SessionListItem } from "./utils";
 import {
-  DEFAULT_FEED_GROUP_BY,
-  DEFAULT_FEED_SORT_BY,
-  FEED_GROUP_BY_OPTIONS,
-  FEED_SORT_BY_OPTIONS,
   useSessionManagementStore,
   usePinnedSessionIds,
   useUnreadSessionIds,
   useSessionOrder,
   useWorkspaceGroups,
-  type FeedGroupBy,
-  type FeedSortBy,
   type SessionGroupDefinition,
-  type SidebarView,
 } from "./session-management-store";
 import { filterSettledSessions, useSessionSettleState, useSettleNow, type SessionSettleState } from "./session-settle";
-import { buildSessionFeed, type FeedEntry, type FeedSection, type SessionFeed } from "./session-feed";
 import { cn } from "@/lib/utils";
 import { getSessionActivityStatusLabel, useSessionActivityStore, type SessionActivityStatus, type SessionWaitingKind } from "../status/session-activity-store";
 import { SessionDotMatrixLoader } from "./session-dot-matrix-loader";
@@ -298,27 +287,6 @@ interface SessionStatusIndicatorProps {
   /** Names the delegated child asking, e.g. "Needs permission: Audit four open PRs". */
   attentionLabel?: string;
   attentionSource?: "child" | "descendant";
-}
-
-function ShowMoreSessionsButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton
-        className="h-8 text-[13px] text-muted-foreground"
-        style={{ paddingInlineStart: sidebarRowPaddingInlineStart(0) }}
-        onClick={onClick}
-      >
-        <SidebarGlyphSlot />
-        <span className="truncate">{label}</span>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
-  );
 }
 
 /** Activity and outcomes share the fixed glyph slot before the session title. */
@@ -672,8 +640,6 @@ export type AppSidebarProps = {
   showSessionActions?: boolean;
   sessionStatusById?: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
-  /** Shows the Workspaces · Feed switch (ships with `settledSessions`). */
-  feedEnabled?: boolean;
   sessionAttentionLabelById?: Record<string, string>;
   sessionAttentionSourceById?: Record<string, "child" | "descendant">;
   sessionAttentionKindById?: Record<string, SessionWaitingKind>;
@@ -729,7 +695,6 @@ export function AppSidebar(props: AppSidebarProps) {
     () => new Set(expandedWorkspaceIdList),
     [expandedWorkspaceIdList],
   );
-  const [previewCountByWorkspaceId, setPreviewCountByWorkspaceId] = React.useState<Record<string, number>>({});
   const previousSessionStatusRef = React.useRef<Record<string, string>>({});
   const sessionNumberShortcutByTarget = React.useMemo(
     () => new Map(props.sessionNumberShortcuts.targets.map((target) => [
@@ -769,16 +734,8 @@ export function AppSidebar(props: AppSidebarProps) {
     expandWorkspace(id);
   }, [props.selectedWorkspaceId, expandWorkspace]);
 
-  const previewCount = (workspaceId: string) =>
-    previewCountByWorkspaceId[workspaceId] ?? MAX_SESSIONS_PREVIEW;
-
-  const showMoreSessions = (workspaceId: string, totalRoots: number) => {
-    expandWorkspace(workspaceId);
-    setPreviewCountByWorkspaceId((current) => ({
-      ...current,
-      [workspaceId]: Math.min((current[workspaceId] ?? MAX_SESSIONS_PREVIEW) + MAX_SESSIONS_PREVIEW, totalRoots),
-    }));
-  };
+  // Every session stays visible: no "Show N more" pagination in the tree.
+  const previewCount = (_workspaceId?: string) => Number.MAX_SAFE_INTEGER;
 
   const contextValue: SidebarContextValue = {
     draftScope: props.draftScope,
@@ -788,7 +745,7 @@ export function AppSidebar(props: AppSidebarProps) {
     showSessionActions: props.showSessionActions,
     sessionStatusById: props.sessionStatusById,
     settleWorkspaceIds: props.settleWorkspaceIds,
-    feedEnabled: props.feedEnabled,
+    feedEnabled: false,
     sessionAttentionLabelById: props.sessionAttentionLabelById,
     sessionAttentionSourceById: props.sessionAttentionSourceById,
     sessionAttentionKindById: props.sessionAttentionKindById,
@@ -826,14 +783,6 @@ export function AppSidebar(props: AppSidebarProps) {
     () => buildGlobalArchivedSessions(props.workspaceSessionGroups),
     [props.workspaceSessionGroups],
   );
-  const sidebarView = useSessionManagementStore((state) => state.sidebarView);
-  const feed = useSessionFeed(props.workspaceSessionGroups, {
-    enabled: props.feedEnabled === true && sidebarView === "feed",
-    statusById: props.sessionStatusById,
-    settleWorkspaceIds: props.settleWorkspaceIds,
-  });
-  const feedView = feed !== null;
-
   return (
     <SidebarContext.Provider value={contextValue}>
       <Sidebar
@@ -880,6 +829,21 @@ export function AppSidebar(props: AppSidebarProps) {
                 </kbd>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            {canCreateWorkspaces() ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  type="button"
+                  data-sidebar-create-workspace
+                  className="text-sidebar-foreground/70"
+                  aria-label={t("workspace.create_workspace")}
+                  tooltip={t("workspace.create_workspace")}
+                  onClick={props.onOpenCreateWorkspace}
+                >
+                  <Plus className="size-4" />
+                  <span className="flex-1 truncate">{t("workspace.create_workspace")}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
             {props.mobileChatActions}
           </SidebarMenu>
         </SidebarHeader>
@@ -898,44 +862,11 @@ export function AppSidebar(props: AppSidebarProps) {
             {/* A flex item of the scrolling list: without shrink-0 it collapses to its
                 button's height once the list overflows, shifting every row up. */}
             <div className={cn("group/workspaces-header flex h-6 shrink-0 items-center mt-4", SIDEBAR_SECTION_LANE)}>
-              {props.feedEnabled ? (
-                <SidebarViewSwitch
-                  view={feedView ? "feed" : "workspaces"}
-                  onChange={(view) => useSessionManagementStore.getState().setSidebarView(view)}
-                />
-              ) : (
-                <span className={SIDEBAR_SECTION_LABEL}>
-                  {t("workspace_list.title")}
-                </span>
-              )}
-              {feedView ? (
-                <div className="ml-auto flex items-center gap-0.5">
-                  <FeedOrderMenu />
-                  <button
-                    type="button"
-                    data-sidebar-feed-new-task
-                    className={SIDEBAR_HEADER_ICON_BUTTON}
-                    disabled={props.newTaskDisabled}
-                    onClick={() => props.onCreateTaskInWorkspace(props.selectedWorkspaceId)}
-                    aria-label={t("session.new_task")}
-                    title={t("session.new_task")}
-                  >
-                    <Plus className="size-3.5" />
-                  </button>
-                </div>
-              ) : canCreateWorkspaces() ? (
-                <button
-                  type="button"
-                  className={cn("ml-auto", SIDEBAR_HEADER_ICON_BUTTON)}
-                  onClick={props.onOpenCreateWorkspace}
-                  aria-label={t("workspace_list.add_workspace")}
-                  title={t("workspace_list.add_workspace")}
-                >
-                  <Plus className="size-3.5" />
-                </button>
-              ) : null}
+              <span className={SIDEBAR_SECTION_LABEL}>
+                {t("workspace_list.title")}
+              </span>
             </div>
-            {feed ? <SessionFeedList feed={feed} /> : <Reorder.Group
+            <Reorder.Group
               as="div"
               axis="y"
               values={props.workspaceSessionGroups.map((group) => group.workspace.id)}
@@ -948,15 +879,13 @@ export function AppSidebar(props: AppSidebarProps) {
                   group={group}
                   className={cn(index === 0 && "mac:pt-0")}
                   previewCount={previewCount(group.workspace.id)}
-                  showMoreSessions={showMoreSessions}
                 />
               ))}
-            </Reorder.Group>}
-            {!feed && archivedSessions.length > 0 ? (
+            </Reorder.Group>
+            {archivedSessions.length > 0 ? (
               <GlobalArchivedSessions entries={archivedSessions} />
             ) : null}
           </m.div>
-          {feed ? <FeedShelfDock feed={feed} archived={archivedSessions} groups={props.workspaceSessionGroups} /> : null}
         </SidebarReorderScope>
 
         <AntigravitySidebarLimits />
@@ -1002,346 +931,6 @@ function GlobalPinnedSessions({ entries }: { entries: GlobalPinnedSessionEntry[]
             </SidebarMenuSub>
           </SidebarMenuItem>
         </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-}
-
-const SIDEBAR_VIEWS: SidebarView[] = ["workspaces", "feed"];
-
-const SIDEBAR_HEADER_ICON_BUTTON = "flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-sidebar-accent data-popup-open:text-foreground";
-
-/** Replaces the Workspaces label: the tree, or every workspace's sessions in one feed. */
-function SidebarViewSwitch({ view, onChange }: { view: SidebarView; onChange: (view: SidebarView) => void }) {
-  return (
-    <div role="tablist" aria-label={t("workspace_list.sidebar_view")} className="-ms-1.5 flex items-center gap-0.5">
-      {SIDEBAR_VIEWS.map((option) => (
-        <button
-          key={option}
-          type="button"
-          role="tab"
-          aria-selected={view === option}
-          data-sidebar-view={option}
-          className={cn(
-            "rounded-md px-1.5 py-0.5 text-[11px] transition-colors",
-            view === option
-              ? "bg-sidebar-accent font-medium text-sidebar-foreground"
-              : "font-light text-muted-foreground hover:text-sidebar-foreground",
-          )}
-          onClick={() => onChange(option)}
-        >
-          {option === "feed" ? t("workspace_list.feed") : t("workspace_list.title")}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const FEED_SECTION_LABEL: Record<Exclude<FeedSection, "all">, () => string> = {
-  today: () => t("workspace_list.feed_today"),
-  yesterday: () => t("workspace_list.feed_yesterday"),
-  earlier: () => t("workspace_list.feed_earlier"),
-  active: () => t("workspace_list.feed_active"),
-  inactive: () => t("workspace_list.feed_inactive"),
-};
-
-const FEED_GROUP_BY_LABEL: Record<FeedGroupBy, () => string> = {
-  day: () => t("workspace_list.feed_group_day"),
-  activity: () => t("workspace_list.feed_group_activity"),
-  none: () => t("workspace_list.feed_group_none"),
-};
-
-const FEED_SORT_BY_LABEL: Record<FeedSortBy, () => string> = {
-  activity: () => t("workspace_list.feed_sort_activity"),
-  created: () => t("workspace_list.feed_sort_created"),
-};
-
-/** How the Feed groups and orders its sessions, remembered on the device. */
-function FeedOrderMenu() {
-  const groupBy = useSessionManagementStore((state) => state.feedGroupBy);
-  const sortBy = useSessionManagementStore((state) => state.feedSortBy);
-  const isDefault = groupBy === DEFAULT_FEED_GROUP_BY && sortBy === DEFAULT_FEED_SORT_BY;
-  const choice = (label: string, value: string) => (
-    <>
-      <span className="flex-1">{label}</span>
-      <span className="font-normal text-muted-foreground">{value}</span>
-    </>
-  );
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            data-sidebar-feed-order
-            className={cn(SIDEBAR_HEADER_ICON_BUTTON, !isDefault && "text-foreground")}
-            aria-label={t("workspace_list.feed_group_and_sort")}
-            title={t("workspace_list.feed_group_and_sort")}
-          >
-            <ListFilter className="size-3.5" />
-          </button>
-        }
-      />
-      <DropdownMenuContent align="end" side="bottom" sideOffset={4} className="w-56">
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>{choice(t("workspace_list.feed_group_by"), FEED_GROUP_BY_LABEL[groupBy]())}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuRadioGroup
-              value={groupBy}
-              onValueChange={(value: FeedGroupBy) => useSessionManagementStore.getState().setFeedGroupBy(value)}
-            >
-              {FEED_GROUP_BY_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option} value={option} data-feed-group-by={option}>
-                  {FEED_GROUP_BY_LABEL[option]()}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>{choice(t("workspace_list.feed_sort_by"), FEED_SORT_BY_LABEL[sortBy]())}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuRadioGroup
-              value={sortBy}
-              onValueChange={(value: FeedSortBy) => useSessionManagementStore.getState().setFeedSortBy(value)}
-            >
-              {FEED_SORT_BY_OPTIONS.map((option) => (
-                <DropdownMenuRadioItem key={option} value={option} data-feed-sort-by={option}>
-                  {FEED_SORT_BY_LABEL[option]()}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={isDefault}
-          onClick={() => {
-            const store = useSessionManagementStore.getState();
-            store.setFeedGroupBy(DEFAULT_FEED_GROUP_BY);
-            store.setFeedSortBy(DEFAULT_FEED_SORT_BY);
-          }}
-        >
-          {t("workspace_list.feed_order_reset")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/** Every workspace's sessions in one Feed, or null outside the Feed view. */
-function useSessionFeed(groups: WorkspaceSessionGroup[], { enabled, statusById, settleWorkspaceIds }: {
-  enabled: boolean;
-  statusById: Record<string, string> | undefined;
-  settleWorkspaceIds: ReadonlySet<string> | undefined;
-}): SessionFeed | null {
-  const pinnedIdList = useSessionManagementStore((state) => state.pinnedIds);
-  const unreadIdList = useSessionManagementStore((state) => state.unreadIds);
-  const settledById = useSessionManagementStore((state) => state.settledById);
-  const autoSettleDays = useSessionManagementStore((state) => state.autoSettleDays);
-  const groupsByWorkspace = useSessionManagementStore((state) => state.groupsByWorkspace);
-  const feedFolders = useSessionManagementStore((state) => state.feedFolders);
-  const groupBy = useSessionManagementStore((state) => state.feedGroupBy);
-  const sortBy = useSessionManagementStore((state) => state.feedSortBy);
-  const now = useSettleNow();
-  return React.useMemo(() => !enabled ? null : buildSessionFeed(groups, {
-    feedFolders,
-    groupsByWorkspace,
-    groupBy,
-    sortBy,
-    pinnedIds: new Set(pinnedIdList),
-    unreadIds: new Set(unreadIdList),
-    settledById,
-    statusById,
-    settleWorkspaceIds,
-    autoSettleDays,
-    now,
-  }), [autoSettleDays, enabled, feedFolders, groupBy, groups, groupsByWorkspace, now, pinnedIdList, settleWorkspaceIds, settledById, sortBy, statusById, unreadIdList]);
-}
-
-/** The workspace, and the group when it has one, stands in for the project on each Feed row. */
-function useFeedSubtitle() {
-  const groupsByWorkspace = useSessionManagementStore((state) => state.groupsByWorkspace);
-  return React.useCallback(({ group, session }: FeedEntry) => {
-    const workspace = workspaceLabel(group.workspace);
-    const state = groupsByWorkspace[group.workspace.id];
-    const groupId = state?.assignments[session.id];
-    const groupLabel = groupId ? state?.groups.find((candidate) => candidate.id === groupId)?.label : undefined;
-    return groupLabel ? `${workspace} · ${groupLabel}` : workspace;
-  }, [groupsByWorkspace]);
-}
-
-/** The scrolling part of the Feed: the chosen sections, with waiting sessions in place. */
-function SessionFeedList({ feed }: { feed: SessionFeed }) {
-  const subtitleFor = useFeedSubtitle();
-  const section = (key: string, label: string | null, entries: FeedEntry[]) => entries.length === 0 ? null : (
-    <SidebarGroup key={key} data-sidebar-feed-section={key} className="pb-0 pt-2">
-      <SidebarGroupContent>
-        {label ? (
-          <div className="flex h-6 items-center gap-1.5 pe-2 ps-3">
-            <span className={SIDEBAR_SECTION_LABEL}>{label}</span>
-          </div>
-        ) : null}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuSub>
-              {entries.map((entry) => (
-                <SessionMenuItem
-                  key={`${entry.group.workspace.id}:${entry.session.id}`}
-                  session={entry.session}
-                  workspaceId={entry.group.workspace.id}
-                  workspaceName={workspaceLabel(entry.group.workspace)}
-                  subtitle={subtitleFor(entry)}
-                />
-              ))}
-            </SidebarMenuSub>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-
-  return (
-    <div data-sidebar-feed className="flex flex-col pb-2">
-      {feed.sections.map(({ section: key, entries }) => section(key, key === "all" ? null : FEED_SECTION_LABEL[key](), entries))}
-      {feed.sections.length === 0 ? (
-        <p className="px-5 py-3 text-xs text-muted-foreground">{t("workspace_list.feed_empty")}</p>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Pinned folders, Settled and Archived, fixed below the scrolling Feed so they stay apart from live work. One shelf
- * opens at a time and scrolls on its own.
- */
-function FeedShelfDock({ feed, archived, groups }: {
-  feed: SessionFeed;
-  archived: GlobalArchivedSessionEntry[];
-  groups: WorkspaceSessionGroup[];
-}) {
-  const subtitleFor = useFeedSubtitle();
-  const [openShelf, setOpenShelf] = React.useState<string | null>(null);
-  if (feed.folders.length === 0 && feed.settled.length === 0 && archived.length === 0) return null;
-  const workspaceNames = new Map(groups.map((group) => [group.workspace.id, workspaceLabel(group.workspace)]));
-  const shelfProps = (shelf: string) => ({
-    shelf,
-    subtitleFor,
-    expanded: openShelf === shelf,
-    onExpandedChange: (open: boolean) => setOpenShelf(open ? shelf : null),
-  });
-
-  return (
-    <div data-feed-shelves className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border/60 py-2">
-      {feed.folders.map((folder) => (
-        <GroupDropZone key={`${folder.workspaceId}:${folder.groupId}`} groupId={folder.groupId} workspaceId={folder.workspaceId}>
-          <FeedShelf
-            {...shelfProps(`folder:${folder.workspaceId}:${folder.groupId}`)}
-            icon={<Folder className="size-3.5 text-muted-foreground" />}
-            label={folder.label}
-            detail={workspaceNames.get(folder.workspaceId)}
-            attention={folder.attention}
-            entries={folder.entries}
-            action={(
-              <button
-                type="button"
-                className="hidden size-5 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground group-hover/separator:flex"
-                aria-label={t("session_management.unpin_from_feed")}
-                title={t("session_management.unpin_from_feed")}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  useSessionManagementStore.getState().toggleFeedFolder(folder.workspaceId, folder.groupId);
-                }}
-              >
-                <PinOff className="size-3.5" />
-              </button>
-            )}
-          />
-        </GroupDropZone>
-      ))}
-      {feed.settled.length > 0 ? (
-        <FeedShelf
-          {...shelfProps("settled")}
-          icon={<CheckCheck className="size-3.5 text-muted-foreground" />}
-          label={t("session_management.settled_label")}
-          entries={feed.settled}
-        />
-      ) : null}
-      {archived.length > 0 ? (
-        <FeedShelf
-          {...shelfProps("archived")}
-          icon={<Archive className="size-3.5 text-muted-foreground" />}
-          label={t("session_management.archived_label")}
-          entries={archived}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-/** A collapsed shelf below the Feed: a pinned folder, Settled or Archived. Open, it shows about three rows. */
-function FeedShelf({ shelf, icon, label, detail, attention = null, action, entries, subtitleFor, expanded, onExpandedChange }: {
-  shelf: string;
-  icon: React.ReactNode;
-  label: string;
-  detail?: string;
-  attention?: "needs-you" | "unread" | null;
-  action?: React.ReactNode;
-  entries: FeedEntry[];
-  subtitleFor: (entry: FeedEntry) => string;
-  expanded: boolean;
-  onExpandedChange: (open: boolean) => void;
-}) {
-  return (
-    <SidebarGroup data-feed-shelf={shelf} className="py-0">
-      <SidebarGroupContent>
-        <Collapsible open={expanded} onOpenChange={onExpandedChange} className="group/settled">
-          <CollapsibleTrigger
-            render={
-              <button
-                type="button"
-                className={cn("group/separator flex h-6 w-full cursor-pointer items-center gap-2 pe-2 rounded-md transition-colors hover:bg-sidebar-accent/50", SIDEBAR_ROW_LANE)}
-              >
-                <SidebarGlyphSlot>{icon}</SidebarGlyphSlot>
-                <span className={cn("min-w-0 truncate", SIDEBAR_SECTION_LABEL)}>{label}</span>
-                {detail ? <span className="min-w-0 shrink truncate text-[11px] text-muted-foreground/60">{detail}</span> : null}
-                <span className="text-[11px] tabular-nums text-muted-foreground/70">{entries.length}</span>
-                {attention ? (
-                  <span
-                    className="size-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: attention === "needs-you" ? OUTCOME_DOT_NEEDS_ACTION : OUTCOME_DOT_UNREAD }}
-                    aria-label={attention === "needs-you" ? t("workspace_list.session_needs_attention") : t("workspace_list.session_unread")}
-                  />
-                ) : null}
-                <span className="ml-auto flex items-center">
-                  {action}
-                  <ChevronRight className="size-3.5 text-muted-foreground transition-transform duration-200 group-data-open/settled:rotate-90" />
-                </span>
-              </button>
-            }
-          />
-          <CollapsibleContent>
-            {/* Three two-line rows (48px each, 2px apart); the rest scroll inside the shelf. */}
-            <div data-feed-shelf-rows className="no-scrollbar max-h-37 overflow-x-hidden overflow-y-auto overscroll-contain">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuSub>
-                    {entries.map((entry) => (
-                      <SessionMenuItem
-                        key={`${entry.group.workspace.id}:${entry.session.id}`}
-                        session={entry.session}
-                        workspaceId={entry.group.workspace.id}
-                        workspaceName={workspaceLabel(entry.group.workspace)}
-                        subtitle={subtitleFor(entry)}
-                      />
-                    ))}
-                  </SidebarMenuSub>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
       </SidebarGroupContent>
     </SidebarGroup>
   );
@@ -1409,14 +998,12 @@ type WorkspaceReorderItemProps = {
   className: string;
   group: WorkspaceSessionGroup;
   previewCount: number;
-  showMoreSessions: (workspaceId: string, totalRoots: number) => void;
 };
 
 function WorkspaceReorderItem({
   className,
   group,
   previewCount,
-  showMoreSessions,
 }: WorkspaceReorderItemProps) {
   const dragControls = useDragControls();
 
@@ -1434,7 +1021,6 @@ function WorkspaceReorderItem({
         className={className}
         group={group}
         previewCount={previewCount}
-        showMoreSessions={showMoreSessions}
         onWorkspaceTitlePointerDown={(event) => dragControls.start(event)}
       />
     </SidebarReorderItem>
@@ -1518,7 +1104,6 @@ type WorkspaceSidebarGroupProps = {
   className: string;
   group: WorkspaceSessionGroup;
   previewCount: number;
-  showMoreSessions: (workspaceId: string, totalRoots: number) => void;
   onWorkspaceTitlePointerDown: React.PointerEventHandler<HTMLButtonElement>;
 };
 
@@ -1526,7 +1111,6 @@ function WorkspaceSidebarGroup({
   className,
   group,
   previewCount,
-  showMoreSessions,
   onWorkspaceTitlePointerDown,
 }: WorkspaceSidebarGroupProps) {
   const ctx = useSidebarContext();
@@ -1597,17 +1181,6 @@ function WorkspaceSidebarGroup({
     () => sessionRows.map((row) => row.session.id),
     [sessionRows],
   );
-  const activeRootCount = React.useMemo(
-    () => getRootSessions(activeSessions).filter((session) => !hiddenRootIds.has(session.id)).length,
-    [activeSessions, hiddenRootIds],
-  );
-  const remainingRootSessions = Math.max(0, activeRootCount - previewCount);
-  const showMoreLabel = remainingRootSessions > 0
-    ? t("workspace_list.show_more", {
-      count: Math.min(MAX_SESSIONS_PREVIEW, remainingRootSessions),
-    })
-    : t("workspace_list.show_more_fallback");
-
   return (
     <SidebarGroup className={className}>
       <SidebarGroupContent>
@@ -1696,12 +1269,6 @@ function WorkspaceSidebarGroup({
                         ))}
                       </SessionReorderList>
                     )}
-                    {wsGroups.length === 0 && activeRootCount > previewCount ? (
-                      <ShowMoreSessionsButton
-                        label={showMoreLabel}
-                        onClick={() => showMoreSessions(workspace.id, activeRootCount)}
-                      />
-                    ) : null}
                   </>
                 ) : group.status === "error" ? (
                   <SidebarMenuSubItem>
@@ -2105,23 +1672,12 @@ export function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds
   store: typeof useSessionManagementStore;
   orderIds?: string[];
 }) {
-  const [previewCountByGroup, setPreviewCountByGroup] = React.useState<Record<string, number>>({});
   const ungroupedDraft = useNewSessionDraft(workspaceId);
   const fullOrderIds = orderIds ?? sessionRows.map(row => row.session.id);
   const reorderSessions = (ids: string[]) => store.getState().reorderSessions(workspaceId, ids);
 
-  const groupPreviewCount = (groupId: string) =>
-    previewCountByGroup[groupId] ?? MAX_SESSIONS_PREVIEW;
-
-  const showMoreInGroup = React.useCallback((groupId: string, totalCount: number) => {
-    setPreviewCountByGroup((current) => ({
-      ...current,
-      [groupId]: Math.min(
-        (current[groupId] ?? MAX_SESSIONS_PREVIEW) + MAX_SESSIONS_PREVIEW,
-        totalCount,
-      ),
-    }));
-  }, []);
+  // Groups and the ungrouped tail show every session, with no "Show more".
+  const groupPreviewCount = (_groupId?: string) => Number.MAX_SAFE_INTEGER;
 
   const { groupIds, rootRowsByGroup, ungroupedRows } = React.useMemo(
     () => groupSessionRows(sessionRows, groups, assignments),
@@ -2153,7 +1709,6 @@ export function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds
         store={store}
         renderRow={renderRow}
         previewCount={limit}
-        onShowMore={() => showMoreInGroup(group.id, rows.length)}
         orderIds={fullOrderIds}
         onReorder={reorderSessions}
       />
@@ -2161,9 +1716,7 @@ export function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds
   };
 
   const ungroupedExpanded = !(store.getState().groupsByWorkspace[workspaceId]?.collapsedGroupIds ?? []).includes(UNGROUPED_GROUP_ID);
-  const ungroupedLimit = groupPreviewCount(UNGROUPED_GROUP_ID);
-  const visibleUngroupedRows = ungroupedRows.slice(0, ungroupedLimit);
-  const ungroupedRemaining = Math.max(0, ungroupedRows.length - ungroupedLimit);
+  const visibleUngroupedRows = ungroupedRows;
   const visibleUngroupedRootIds = visibleUngroupedRows.map((r) => r.session.id);
 
   return (
@@ -2206,12 +1759,6 @@ export function GroupedSessionList({ sessionRows, groups, assignments, pinnedIds
                   />
                 ))}
               </SessionReorderList>
-              {ungroupedRemaining > 0 ? (
-                <ShowMoreSessionsButton
-                  label={t("workspace_list.show_more", { count: Math.min(MAX_SESSIONS_PREVIEW, ungroupedRemaining) })}
-                  onClick={() => showMoreInGroup(UNGROUPED_GROUP_ID, ungroupedRows.length)}
-                />
-              ) : null}
             </CollapsibleContent>
           </Collapsible>
         </GroupDropZone>
@@ -2242,7 +1789,7 @@ function WorkspaceSettledSessions({ workspaceId, sessions }: { workspaceId: stri
   );
 }
 
-function SessionGroupSection({ group, rows, expanded, workspaceId, store, renderRow, previewCount, onShowMore, orderIds, onReorder }: {
+function SessionGroupSection({ group, rows, expanded, workspaceId, store, renderRow, previewCount, orderIds, onReorder }: {
   group: SessionGroupDefinition;
   rows: FlattenedSessionRow[];
   expanded: boolean;
@@ -2250,14 +1797,12 @@ function SessionGroupSection({ group, rows, expanded, workspaceId, store, render
   store: typeof useSessionManagementStore;
   renderRow: (row: FlattenedSessionRow) => React.ReactNode;
   previewCount: number;
-  onShowMore: () => void;
   orderIds: string[];
   onReorder: (ids: string[]) => void;
 }) {
   const dragControls = useDragControls();
   const draft = useNewSessionDraft(workspaceId, group.id);
   const visibleRows = rows.slice(0, previewCount);
-  const remaining = Math.max(0, rows.length - previewCount);
 
   return (
     <SidebarReorderItem
@@ -2291,12 +1836,6 @@ function SessionGroupSection({ group, rows, expanded, workspaceId, store, render
                     <NewSessionDraftRow workspaceId={workspaceId} group={group} />
                     {visibleRows.map(renderRow)}
                   </SessionReorderList>
-                  {remaining > 0 ? (
-                    <ShowMoreSessionsButton
-                      label={t("workspace_list.show_more", { count: Math.min(MAX_SESSIONS_PREVIEW, remaining) })}
-                      onClick={onShowMore}
-                    />
-                  ) : null}
                 </>
               )
               : (

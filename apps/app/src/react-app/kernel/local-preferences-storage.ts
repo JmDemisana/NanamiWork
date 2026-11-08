@@ -1,5 +1,5 @@
 export const LOCAL_PREFERENCES_KEY = "openwork.preferences";
-export const DEFAULT_SHOW_THINKING = false;
+export const DEFAULT_SHOW_THINKING = true;
 
 export type LinkOpenDestination = "openwork" | "external";
 
@@ -19,17 +19,10 @@ export function needsShowThinkingReset(stored: unknown): boolean {
   return Boolean(stored) && typeof stored === "object" && Reflect.get(stored as object, SHOW_THINKING_RESET_MARKER) !== true;
 }
 
-/** Settings › Show model reasoning, read outside React when a prompt is sent. */
+/**
+ * Settings › Show model reasoning, read outside React when a prompt is sent.
+ * NanamiWork always asks providers for readable reasoning.
+ */
 export function readShowThinkingPreference(): boolean {
-  if (typeof window === "undefined") return DEFAULT_SHOW_THINKING;
-  try {
-    const raw = window.localStorage.getItem(LOCAL_PREFERENCES_KEY);
-    if (!raw) return DEFAULT_SHOW_THINKING;
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || needsShowThinkingReset(parsed)) return DEFAULT_SHOW_THINKING;
-    const value = Reflect.get(parsed, "showThinking");
-    return typeof value === "boolean" ? value : DEFAULT_SHOW_THINKING;
-  } catch {
-    return DEFAULT_SHOW_THINKING;
-  }
+  return DEFAULT_SHOW_THINKING;
 }

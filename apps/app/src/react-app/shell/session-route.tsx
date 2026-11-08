@@ -4137,7 +4137,6 @@ export function SessionRoute() {
         developerMode: false,
         sessionStatusById: sidebarSessionStatusById,
         settleWorkspaceIds: settleWorkspaceIdSet,
-        feedEnabled: settledSessionsEnabled,
         sessionAttentionLabelById: sidebarSessionAttention.labelById,
         sessionAttentionSourceById: sidebarSessionAttention.sourceById,
         sessionAttentionKindById: sidebarSessionAttention.kindById,

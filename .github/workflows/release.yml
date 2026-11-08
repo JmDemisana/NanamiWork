@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag (e.g. v1.1.1)"
         required: false
-        default: "v1.1.2"
+        default: "v1.1.3"
   push:
     tags:
       - "v*"
@@ -170,36 +170,40 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.2' }}
-          name: "NanamiWork 1.1.2 Microsoft Store Compatibility and Hotfixes"
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.3' }}
+          name: "NanamiWork 1.1.3 Critical Update: Isolation and Session Storage Retrieval Fix"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ github.ref_type == 'tag' && github.ref_name || 'v1.1.2' }}** is a compatibility and hotfix release featuring Microsoft Store packaging compliance, model selection guards, always-expanded thought traces, background shell commands, and critical UI runtime hotfixes.
+            **NanamiWork v1.1.3** is a critical update for profile isolation and reliable session storage retrieval, paired with a cleaner sidebar, simplified Preferences, and fixed prompt navigation.
 
-            ### 🚀 Highlights & Improvements
-            - **Microsoft Store & WinGet Compliance**:
-              - Auto-updater safely isolated for Store/WinGet distributions to comply with Microsoft Store certification policies.
-              - Native App menu "Check for Updates..." and Settings > Updates display store-managed notices when running under Store sandboxes.
-              - Full AppX package generation for Microsoft Partner Center deployment alongside NSIS installers.
-            - **Composer Model Retention & Safety Guards**:
-              - Typing drafts in new sessions strictly retains the user-selected model rather than resetting to starter states.
-              - Send button is disabled and Enter key redirects to the model picker if no valid model is picked, preventing empty model requests.
-            - **Always-Expanded Thought Traces & Workbench Steps**:
-              - Removed collapsible dropdown chevron from reasoning blocks so thought processes and duration statistics render expanded by default.
-              - Workbench tool steps and disclosures default to open for clear pair-programming visibility.
-            - **Run Running Command in Background**:
-              - Added instant "Run in background" quick button and dropdown action on active terminal commands, seamlessly converting running tasks into background shell jobs.
-            - **Critical UI Hotfixes**:
-              - Fixed `ReferenceError: Cannot access 'x' before initialization` in tool aggregate groups by resolving Temporal Dead Zone (TDZ) variable order.
-              - Fixed `TypeError: Cannot read properties of undefined (reading 'find')` in composer model validation.
-              - Fixed startup crash `ReferenceError: isStoreBuild is not defined` during application menu installation.
+            ### 🛠 Critical Fixes
+            - **Session Storage Retrieval**:
+              - Workspace directories are normalized to forward slashes before every session query, so OpenCode's SQLite exact-match lookups keep finding chats after a restart on Windows.
+              - Cold-boot session loading no longer waits for engine routing to be resolved before the first fetch.
+              - Packaged engines are verified across a full restart to confirm both private and legacy session stores load.
+            - **Profile & Engine Isolation**:
+              - Private profile migration and plugin directory isolation remain enforced, keeping NanamiWork credentials, plugins, and caches separate from global OpenCode, OpenWork, and other agent installations.
+            - **Cold-Engine Resilience**:
+              - Session list loading tolerates missing HTTP responses and extends bounded retries, so a slow-starting engine no longer drops the conversation list.
+
+            ### ✨ UI Cleanup
+            - **Sidebar**:
+              - Every session is visible at once; the "Show 6 more" pagination is gone.
+              - A labeled **Create workspace** button now sits directly below **New session**.
+              - The Feed view and Workspaces/Feed switcher are removed.
+            - **Preferences**:
+              - Removed the Model and Privacy groups and their toggles.
+              - Model reasoning and auto context compaction stay on; anonymous usage sharing stays off.
+            - **Prompt Navigation**:
+              - Previous/Next Prompt now steps strictly to the adjacent prompt instead of re-selecting the current one.
+              - Home, End, PageUp, and PageDown work from the transcript and the composer, with guards for dialogs, menus, other scroll regions, and split panes.
 
             ### 📦 Downloads & Installers
-            - **Windows**: `NanamiWork-1.1.2-win-x64.exe` (NSIS Installer) & `NanamiWork-1.1.2-win-x64.appx` (Microsoft Store Package)
-            - **macOS**: `NanamiWork-1.1.2-mac-universal.dmg` / `.zip` (Apple Silicon & Intel)
-            - **Linux**: `NanamiWork-1.1.2-linux-x86_64.AppImage` / `nanamiwork_1.1.2_amd64.deb`
+            - **Windows**: `NanamiWork-1.1.3-win-x64.exe` (NSIS Installer) & `NanamiWork-1.1.3-win-x64.appx` (Microsoft Store Package)
+            - **macOS**: `NanamiWork-1.1.3-mac-universal.dmg` / `.zip` (Apple Silicon & Intel)
+            - **Linux**: `NanamiWork-1.1.3-linux-x86_64.AppImage` / `nanamiwork_1.1.3_amd64.deb`
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

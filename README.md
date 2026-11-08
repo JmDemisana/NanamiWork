@@ -3,10 +3,6 @@
   <p align="center">
     <strong>An agent instance manager and unified desktop frontend bringing your Antigravity, Codex, and GitHub Copilot accounts together.</strong>
   </p>
-  <p align="center">
-    <a href="https://github.com/JmDemisana/NanamiWork/releases"><img src="https://img.shields.io/github/v/release/JmDemisana/NanamiWork?color=emerald&label=Release" alt="Latest Release" /></a>
-    <a href="https://github.com/JmDemisana/NanamiWork/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License" /></a>
-  </p>
 </p>
 
 <p align="center">

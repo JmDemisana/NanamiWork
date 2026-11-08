@@ -173,8 +173,6 @@ export type SessionPageSidebarProps = {
   developerMode: boolean;
   sessionStatusById: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
-  /** The Workspaces · Feed switch ships with `settledSessions`. */
-  feedEnabled?: boolean;
   sessionAttentionLabelById?: Record<string, string>;
   sessionAttentionSourceById?: Record<string, "child" | "descendant">;
   sessionAttentionKindById?: Record<string, SessionWaitingKind>;
@@ -1487,7 +1485,6 @@ export function SessionPage(props: SessionPageProps) {
           showSessionActions={Boolean(props.onRenameSession || props.onDeleteSession || props.onArchiveSession)}
           sessionStatusById={props.sidebar.sessionStatusById}
           settleWorkspaceIds={props.sidebar.settleWorkspaceIds}
-          feedEnabled={props.sidebar.feedEnabled}
           sessionAttentionLabelById={props.sidebar.sessionAttentionLabelById}
           sessionAttentionSourceById={props.sidebar.sessionAttentionSourceById}
           sessionAttentionKindById={props.sidebar.sessionAttentionKindById}

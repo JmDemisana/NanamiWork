@@ -40,27 +40,27 @@ async function sentPromptMetadata(): Promise<unknown> {
   return prompt && typeof prompt === "object" ? Reflect.get(prompt, "metadata") : undefined;
 }
 
-test("each prompt carries Settings › Show model reasoning to the engine", async () => {
+test("each prompt always carries Show model reasoning on", async () => {
   window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: false, showThinkingResetToOff: true }));
-  expect(await sentPromptMetadata()).toEqual({ openwork: { showReasoning: false } });
+  expect(await sentPromptMetadata()).toEqual({ openwork: { showReasoning: true } });
 
   window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: true, showThinkingResetToOff: true }));
   expect(await sentPromptMetadata()).toEqual({ openwork: { showReasoning: true } });
 });
 
-test("an unset preference sends the setting's default (off)", async () => {
-  expect(await sentPromptMetadata()).toEqual({ openwork: { showReasoning: false } });
+test("an unset preference still sends reasoning on", async () => {
+  expect(await sentPromptMetadata()).toEqual({ openwork: { showReasoning: true } });
 });
 
-test("saved preferences from before the reset are treated as off", async () => {
+test("saved preferences never turn reasoning off", async () => {
   window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: true }));
-  expect(readShowThinkingPreference()).toBe(false);
-  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: true, showThinkingResetToOff: true }));
+  expect(readShowThinkingPreference()).toBe(true);
+  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: false, showThinkingResetToOff: true }));
   expect(readShowThinkingPreference()).toBe(true);
 });
 
 async function mountLocal() {
-  let current: { showThinking: boolean } | null = null;
+  let current: { showThinking: boolean; analyticsEnabled: boolean } | null = null;
   function Probe() {
     current = useLocal().prefs;
     return null;
@@ -72,19 +72,19 @@ async function mountLocal() {
   return { prefs: current, stored: JSON.parse(window.localStorage.getItem(LOCAL_PREFERENCES_KEY) ?? "null") };
 }
 
-test("the app switches existing users off once, then keeps their choice", async () => {
-  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: true, analyticsEnabled: false }));
+test("the app keeps reasoning on and analytics off, ignoring saved values", async () => {
+  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ showThinking: false, analyticsEnabled: true }));
   window.localStorage.setItem("openwork.showThinking", "true");
   const first = await mountLocal();
-  expect(first.prefs?.showThinking).toBe(false);
-  expect(first.stored).toMatchObject({ showThinking: false, showThinkingResetToOff: true, analyticsEnabled: false });
+  expect(first.prefs?.showThinking).toBe(true);
+  expect(first.stored).toMatchObject({ showThinking: true, showThinkingResetToOff: true, analyticsEnabled: false });
   expect(window.localStorage.getItem("openwork.showThinking")).toBeNull();
 
-  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ ...first.stored, showThinking: true }));
+  window.localStorage.setItem(LOCAL_PREFERENCES_KEY, JSON.stringify({ ...first.stored, showThinking: false }));
   const second = await mountLocal();
   expect(second.prefs?.showThinking).toBe(true);
 });
 
-test("a fresh install starts with Show model reasoning off", async () => {
-  expect((await mountLocal()).prefs?.showThinking).toBe(false);
+test("a fresh install starts with Show model reasoning on", async () => {
+  expect((await mountLocal()).prefs?.showThinking).toBe(true);
 });

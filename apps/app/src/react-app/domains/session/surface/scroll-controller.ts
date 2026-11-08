@@ -594,23 +594,31 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
       lastKnownScrollTop = container.scrollTop;
     };
-    const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => {
-      if (!active) return;
-      const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
-      if (users.length === 0) {
-        jumpToStart(behavior);
-        return;
+    // Prompt navigation anchors to the prompt nearest the reading line, then
+    // steps strictly before/after it. A raw "top < N" filter used to re-select
+    // the current prompt, so the buttons sometimes looked like plain scrolling.
+    const PROMPT_SNAP_TOLERANCE = 24;
+    const promptElements = () =>
+      [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
+    const promptTop = (element: HTMLElement) =>
+      element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    const currentPrompt = (users: HTMLElement[]) => {
+      if (users.length === 0) return { index: -1, belowLine: false };
+      let index = 0;
+      let distance = Infinity;
+      for (let position = 0; position < users.length; position += 1) {
+        const candidate = Math.abs(promptTop(users[position]) - PROMPT_SCROLL_OFFSET);
+        if (candidate < distance) {
+          distance = candidate;
+          index = position;
+        }
       }
-      const containerTop = container.getBoundingClientRect().top;
-      const prevUsers = users.filter((el) => {
-        const top = el.getBoundingClientRect().top - containerTop;
-        return top < 50;
-      });
-      const targetUser = prevUsers.at(-1);
-      if (!targetUser) {
-        jumpToStart(behavior);
-        return;
-      }
+      return {
+        index,
+        belowLine: promptTop(users[index]) > PROMPT_SCROLL_OFFSET + PROMPT_SNAP_TOLERANCE,
+      };
+    };
+    const scrollToPrompt = (targetUser: HTMLElement, behavior: ScrollBehavior) => {
       const messageId = messageIdForElement(targetUser);
       const anchor = messageId ? { messageId, offset: PROMPT_SCROLL_OFFSET } : undefined;
       const top = anchor ? anchorTop(anchor) : null;
@@ -631,41 +639,32 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       }
       lastKnownScrollTop = container.scrollTop;
     };
+    const jumpToPreviousPrompt = (behavior: ScrollBehavior = "smooth") => {
+      if (!active) return;
+      const users = promptElements();
+      const { index } = currentPrompt(users);
+      if (index <= 0) {
+        jumpToStart(behavior);
+        return;
+      }
+      scrollToPrompt(users[index - 1], behavior);
+    };
     const jumpToNextPrompt = (behavior: ScrollBehavior = "smooth") => {
       if (!active) return;
-      const users = [...container.querySelectorAll<HTMLElement>('[data-message-role="user"][data-message-id]')];
-      if (users.length === 0) {
+      const users = promptElements();
+      const { index, belowLine } = currentPrompt(users);
+      if (index < 0) {
         scrollToBottom(behavior);
         return;
       }
-      const containerTop = container.getBoundingClientRect().top;
-      const nextUser = users.find((el) => {
-        const top = el.getBoundingClientRect().top - containerTop;
-        return top > 90;
-      });
+      // A prompt still below the reading line is the next one to align; only
+      // then advance to the prompt after it.
+      const nextUser = users[belowLine ? index : index + 1];
       if (!nextUser) {
         scrollToBottom(behavior);
         return;
       }
-      const messageId = messageIdForElement(nextUser);
-      const anchor = messageId ? { messageId, offset: PROMPT_SCROLL_OFFSET } : undefined;
-      const top = anchor ? anchorTop(anchor) : null;
-      cancelRestoration();
-      cancelFrames();
-      pendingRestore = false;
-      pendingSubmittedMessageId = null;
-      cancelledWhileLoading = false;
-      lastGestureAt = -Infinity;
-      if (top !== null && messageId && anchor) {
-        const targetTop = Math.max(0, top);
-        store.setManualScroll(scrollKey, targetTop, messageId, anchor);
-        smoothJump = behavior === "smooth";
-        container.scrollTo({ top: targetTop, behavior });
-      } else {
-        smoothJump = behavior === "smooth";
-        nextUser.scrollIntoView({ behavior, block: "center" });
-      }
-      lastKnownScrollTop = container.scrollTop;
+      scrollToPrompt(nextUser, behavior);
     };
     const jumpToStartOfMessage = (behavior: ScrollBehavior = "smooth") => {
       if (!active) return;
@@ -687,8 +686,35 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       lastKnownScrollTop = container.scrollTop;
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+      if (!active || !container.isConnected || container.clientHeight <= 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      // Only the pane that owns focus (or the sole visible pane) answers the
+      // shortcuts, so split view never scrolls both transcripts at once.
+      const pane = container.closest("[data-session-pane]");
+      const focusedElement = document.activeElement instanceof Element ? document.activeElement : null;
+      const focusedPane = focusedElement?.closest("[data-session-pane]") ?? null;
+      if (focusedPane && focusedPane !== pane) return;
+      if (!focusedPane && document.querySelectorAll("[data-session-pane]").length > 1) return;
+      // Leave dialogs, menus, the sidebar, and other scroll regions alone.
+      if (target?.closest("[role=dialog], [role=menu], [role=listbox], [data-sidebar]")) return;
+      const nestedScroll = target?.closest("[data-scrollable]");
+      if (nestedScroll && nestedScroll !== container) return;
+
+      const editable = target?.closest("input, textarea, select, [contenteditable=true]") as HTMLElement | null;
+      const isComposerEditor = Boolean(target?.closest("[data-composer-editor]"));
+
+      if (event.key === "PageUp" || event.key === "PageDown") {
+        // Prompt navigation also works from the composer, unless the editor
+        // itself can scroll or the person is selecting text.
+        if (editable && (!isComposerEditor || event.shiftKey
+          || editable.scrollHeight > editable.clientHeight + 1)) return;
+        event.preventDefault();
+        if (event.key === "PageUp") jumpToPreviousPrompt("smooth");
+        else jumpToNextPrompt("smooth");
+        return;
+      }
+      if (editable) return;
       if (event.key === "Home") {
         event.preventDefault();
         jumpToStart("smooth");
@@ -699,17 +725,10 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
         scrollToBottom("smooth");
         return;
       }
-      if (event.key === "PageUp") {
-        event.preventDefault();
-        jumpToPreviousPrompt("smooth");
-        return;
+      if (["ArrowUp", "ArrowDown", " "].includes(event.key)
+        && (!target || target === document.body || container.contains(target))) {
+        markScrollGesture(event.target);
       }
-      if (event.key === "PageDown") {
-        event.preventDefault();
-        jumpToNextPrompt("smooth");
-        return;
-      }
-      if (["ArrowUp", "ArrowDown", " "].includes(event.key)) markScrollGesture(event.target);
     };
     const handlePointerDown = (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0 || activePointerId !== null) return;
@@ -744,7 +763,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
     const observer = new ResizeObserver(reconcile);
     observer.observe(content);
     observer.observe(container);
-    container.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     container.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerUp);
@@ -794,7 +813,7 @@ export function useSessionScrollController(options: SessionScrollControllerOptio
       if (smoothJump) container.scrollTo({ top: container.scrollTop, behavior: "instant" });
       observer.disconnect();
       unsubscribeScrollState();
-      container.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
       container.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);

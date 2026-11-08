@@ -18,7 +18,7 @@ import {
   isDesktopNotificationPreference,
   type DesktopNotificationPreference,
 } from "./desktop-notification-preferences";
-import { DEFAULT_SHOW_THINKING, isLinkOpenDestination, LOCAL_PREFERENCES_KEY, needsShowThinkingReset, type LinkOpenDestination } from "./local-preferences-storage";
+import { DEFAULT_SHOW_THINKING, isLinkOpenDestination, LOCAL_PREFERENCES_KEY, type LinkOpenDestination } from "./local-preferences-storage";
 import {
   readStoredDefaultModel,
   storedDefaultModelChangedEvent,
@@ -32,7 +32,7 @@ export type LocalUIState = {
 
 export type LocalPreferences = {
   showThinking: boolean;
-  /** Set once the one-time reset of Show model reasoning to off has run. */
+  /** Legacy marker kept so saved preferences still parse. */
   showThinkingResetToOff: boolean;
   modelVariant: string | null;
   defaultModel: ModelRef | null;
@@ -57,10 +57,7 @@ export type LocalPreferences = {
    * workspace list is empty, the app redirects to /welcome.
    */
   hasCompletedOnboarding: boolean;
-  /**
-   * Anonymous product analytics (PostHog). On by default with a visible
-   * opt-out in Settings -> Preferences. Never includes message content.
-   */
+  /** Anonymous product analytics stay off; NanamiWork ships no opt-in UI. */
   analyticsEnabled: boolean;
   /**
    * Native OS notifications from the desktop app. Off by default so upgrading
@@ -106,16 +103,6 @@ const INITIAL_PREFS: LocalPreferences = {
   keepAwake: true,
 };
 
-function readStored(key: string): unknown {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 function readPersisted<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -150,7 +137,10 @@ export function LocalProvider({ children }: LocalProviderProps) {
   );
   const [prefs, setPrefsRaw] = useState<LocalPreferences>(() => {
     const persisted = readPersisted(LOCAL_PREFERENCES_KEY, INITIAL_PREFS);
-    if (needsShowThinkingReset(readStored(LOCAL_PREFERENCES_KEY))) persisted.showThinking = false;
+    // NanamiWork keeps model reasoning on and anonymous usage sharing off;
+    // both controls are removed from Preferences.
+    persisted.showThinking = true;
+    persisted.analyticsEnabled = false;
     persisted.showThinkingResetToOff = true;
     persisted.askBeforeOpeningLinks = persisted.askBeforeOpeningLinks !== false;
     persisted.linkOpenDestination = isLinkOpenDestination(persisted.linkOpenDestination)

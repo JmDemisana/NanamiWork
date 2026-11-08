@@ -559,9 +559,6 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
   const [renameWorkspaceId, setRenameWorkspaceId] = useState<string | null>(null);
   const [renameWorkspaceTitle, setRenameWorkspaceTitle] = useState("");
   const [renameWorkspaceBusy, setRenameWorkspaceBusy] = useState(false);
-  const [autoCompactContext, setAutoCompactContext] = useState(true);
-  const [autoCompactContextBusy, setAutoCompactContextBusy] = useState(false);
-  const [autoCompactContextLoaded, setAutoCompactContextLoaded] = useState(false);
   const [localProviderBusy, setLocalProviderBusy] = useState(false);
   const [localProviderStatus, setLocalProviderStatus] = useState<string | null>(null);
   const [localProviderError, setLocalProviderError] = useState<string | null>(null);
@@ -1682,51 +1679,6 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
     };
   }, [refreshRouteState]);
 
-  // Load auto-compaction state from OpenCode config on workspace change.
-  useEffect(() => {
-    if (!openworkClient || !selectedWorkspaceId) return;
-    const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
-    let cancelled = false;
-    (async () => {
-      try {
-        const config = await openworkClient.getConfig(workspaceId);
-        if (cancelled) return;
-        const compaction = config.opencode?.compaction;
-        const auto = compaction && typeof compaction === "object" && "auto" in compaction
-          ? (compaction as { auto?: boolean }).auto
-          : undefined;
-        setAutoCompactContext(auto !== false);
-        setAutoCompactContextLoaded(true);
-      } catch {
-        if (!cancelled) setAutoCompactContextLoaded(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [openworkClient, selectedWorkspaceId]);
-
-  const toggleAutoCompactContext = useCallback(async () => {
-    if (autoCompactContextBusy) return;
-    const workspaceId = routeStateRef.current.runtimeWorkspaceId?.trim() || selectedWorkspaceId;
-    if (!openworkClient || !workspaceId) return;
-    const next = !autoCompactContext;
-    setAutoCompactContext(next);
-    setAutoCompactContextBusy(true);
-    try {
-      await openworkClient.patchConfig(workspaceId, {
-        opencode: { compaction: { auto: next } },
-      });
-      reloadCoordinator.markReloadRequired("config", {
-        type: "config",
-        name: "opencode.json",
-        action: "updated",
-      });
-    } catch {
-      setAutoCompactContext(!next);
-    } finally {
-      setAutoCompactContextBusy(false);
-    }
-  }, [autoCompactContext, autoCompactContextBusy, openworkClient, reloadCoordinator, selectedWorkspaceId]);
-
   useEffect(() => {
     openworkServerStore.start();
     connectionsStore.start();
@@ -2334,17 +2286,6 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
             linkOpenDestination={local.prefs.linkOpenDestination}
             onLinkOpenDestinationChange={(linkOpenDestination) => {
               local.setPrefs((previous) => ({ ...previous, linkOpenDestination, askBeforeOpeningLinks: false }));
-            }}
-            showThinking={local.prefs.showThinking}
-            onToggleShowThinking={() => {
-              local.setPrefs((previous) => ({ ...previous, showThinking: !previous.showThinking }));
-            }}
-            autoCompactContext={autoCompactContext}
-            autoCompactContextBusy={autoCompactContextBusy}
-            onToggleAutoCompactContext={toggleAutoCompactContext}
-            analyticsEnabled={local.prefs.analyticsEnabled}
-            onToggleAnalytics={() => {
-              local.setPrefs((previous) => ({ ...previous, analyticsEnabled: !previous.analyticsEnabled }));
             }}
             keepAwake={local.prefs.keepAwake}
             onToggleKeepAwake={() => {
