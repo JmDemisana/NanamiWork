@@ -659,7 +659,6 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
     );
   }, [search, nonGoogleOptions, nonGoogleFavorites, nonGoogleRecent, query]);
   const providerMiss = search?.provider && !search.provider.found ? search.provider : undefined;
-  const routerGroup = groups.find((group) => group.value !== "Pinned" && group.items.some((option) => option.providerID === "nanami"))?.value;
   const pins = orderedModelPins(nonGoogleOptions, nonGoogleFavorites);
   const pinned = new Set(pins.map(modelRefKey));
   const root = useRef<HTMLDivElement>(null);
@@ -949,10 +948,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
           <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
-        <CommandList className={chrome === "page" ? "columns-3 [column-width:15rem] [column-gap:1rem]" : undefined}>
-          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "break-inside-avoid" : undefined}>
+        <CommandList className={chrome === "page" ? "columns-3 [column-width:20rem] [column-gap:1rem]" : undefined}>
+          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "mb-3 break-inside-avoid rounded-xl border border-border/70 bg-card/35 p-1" : undefined}>
             {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
-            {group.value === routerGroup ? leading : null}
             <CommandCollection>{(option: ModelOption) => {
               const key = modelRefKey(option);
               const name = modelTitle(option, display);
@@ -997,9 +995,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
             }}</CommandCollection>
           </CommandGroup>}
         </CommandList>
-        {leading && !routerGroup ? <div className="px-2 pb-1"><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">NanamiWorks</p>{leading}</div> : null}
+        {leading ? <div className={chrome === "page" ? "mx-2 mb-3 max-w-[22rem] rounded-xl border border-border/70 bg-card/35 p-2" : "px-2 pb-1"}><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">Local Router</p>{leading}</div> : null}
         {connectedAccounts.length > 0 ? (
-          <div className={chrome === "page" ? "pb-1 columns-3 [column-width:15rem] [column-gap:1rem]" : "pb-1"}>
+          <div className={chrome === "page" ? "pb-1 columns-3 [column-width:20rem] [column-gap:1rem]" : "pb-1"}>
             {connectedAccounts.map((entry, index) => {
               const moveProps = chrome === "page"
                 ? {
@@ -1009,7 +1007,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
                   }
                 : {};
               return (
-                <div key={entry.key} className="break-inside-avoid">
+                <div key={entry.key} className={chrome === "page" ? "mb-3 break-inside-avoid rounded-xl border border-border/70 bg-card/35" : "break-inside-avoid"}>
                   {entry.kind === "antigravity" ? (
                     <ConnectedAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectAntigravityModel} {...moveProps} />
                   ) : entry.kind === "chatgpt" ? (

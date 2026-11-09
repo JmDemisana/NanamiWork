@@ -792,7 +792,7 @@ export function AppSidebar(props: AppSidebarProps) {
         collapsible="offcanvas"
         className="border-e-0 group-data-[side=left]:border-e-0 mac:**:data-[sidebar=sidebar]:bg-transparent"
       >
-        <SidebarTitlebar history={props.conversationHistory} />
+        <SidebarTitlebar />
         <div className="flex shrink-0 items-center pr-2 titlebar-drag">
         {brandLogoUrl ? (
           <div

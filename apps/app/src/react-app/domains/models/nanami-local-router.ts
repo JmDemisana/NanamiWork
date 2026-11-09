@@ -79,6 +79,8 @@ export type LocalRouterAccount = {
   accountID: string;
   label: string;
   providerLabel: string;
+  /** Display connected accounts even when policy or verification blocks routing. */
+  unavailableReason?: string;
   models: LocalRouterModel[];
 };
 
@@ -165,13 +167,11 @@ function readStoredSettings(): LocalRouterSettings {
     const enabled = Array.isArray(strategies)
       ? strategies.filter(isStrategy).filter((value, index, list) => list.indexOf(value) === index)
       : [];
+    const terminalIndex = enabled.findIndex(isExclusiveFirstStrategy);
     return {
       mode: mode === "model" || mode === "account" ? mode : "priority",
       strategies: Array.isArray(strategies)
-        ? (isExclusiveFirstStrategy(enabled[0]) ? enabled.slice(0, 1) : [
-            ...enabled.filter((entry) => !isExclusiveFirstStrategy(entry)),
-            ...enabled.filter(isExclusiveFirstStrategy).slice(0, 1),
-          ])
+        ? (terminalIndex >= 0 ? enabled.slice(0, terminalIndex + 1) : enabled)
         : DEFAULT_SETTINGS.strategies,
       modelOrder: Array.isArray(modelOrder)
         ? modelOrder.filter((entry): entry is string => typeof entry === "string")
@@ -234,11 +234,9 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
   toggleStrategy: (strategy) => set((state) => {
     if (!isStrategy(strategy)) return state;
     const enabled = state.strategies.includes(strategy);
-    if (!enabled && isExclusiveFirstStrategy(state.strategies[0])) return state;
     const terminal = terminalRoutingStrategy(state.strategies);
-    if (!enabled && terminal && isExclusiveFirstStrategy(strategy)) return state;
+    if (!enabled && terminal) return state;
     const strategies = enabled ? state.strategies.filter((entry) => entry !== strategy)
-      : terminal ? [...state.strategies.filter((entry) => entry !== terminal), strategy, terminal]
       : [...state.strategies, strategy];
     writeStoredSettings({ ...settingsOf(state), strategies });
     return { strategies };
@@ -328,6 +326,8 @@ export function buildLocalRouterAccounts(input: {
   }[];
   chatgpt?: readonly {
     email: string;
+    primaryWindow?: { remainingFraction: number; resetTimeIso: string | null };
+    secondaryWindow?: { remainingFraction: number; resetTimeIso: string | null };
     models: readonly {
       modelID: string;
       displayName: string;
@@ -337,6 +337,8 @@ export function buildLocalRouterAccounts(input: {
   }[];
   copilot?: readonly {
     username: string;
+    quotaRemainingPct?: number | null;
+    quotaResetTimeIso?: string | null;
     models: readonly {
       modelID: string;
       displayName: string;
@@ -344,13 +346,27 @@ export function buildLocalRouterAccounts(input: {
       resetTime: string | null;
     }[];
   }[];
-  /** Eligible engine models, including other configured providers. */
+  /** The selectable provider models shown by the model picker. */
   options?: readonly ModelOption[];
+  disabledProviders?: readonly string[];
+  restrictToCloud?: boolean;
 }): LocalRouterAccount[] {
   const accounts: LocalRouterAccount[] = [];
+  const unavailableReason = (providerID: string, verificationRequired = false) => {
+    if (input.restrictToCloud) return "Blocked by your organization's provider policy.";
+    if (input.disabledProviders?.includes(providerID)) return "Provider is disabled in AI providers.";
+    if (verificationRequired) return "Complete account verification before routing.";
+    return undefined;
+  };
+  const strictestQuota = (quotas: readonly { remainingFraction: number | null | undefined; resetTime: string | null | undefined }[]) => {
+    const known = quotas.filter((quota): quota is { remainingFraction: number; resetTime: string | null | undefined } =>
+      typeof quota.remainingFraction === "number" && Number.isFinite(quota.remainingFraction));
+    if (known.length === 0) return { remainingFraction: null, resetTime: null };
+    const strictest = known.reduce((left, right) => left.remainingFraction <= right.remainingFraction ? left : right);
+    return { remainingFraction: strictest.remainingFraction, resetTime: strictest.resetTime ?? null };
+  };
 
   for (const account of input.antigravity ?? []) {
-    if (account.verificationRequired) continue;
     accounts.push({
       key: localRouterAccountKey("google", account.email),
       kind: "antigravity",
@@ -358,6 +374,7 @@ export function buildLocalRouterAccounts(input: {
       accountID: account.email,
       label: account.email,
       providerLabel: "Antigravity",
+      unavailableReason: unavailableReason("google", account.verificationRequired),
       models: account.models.map((model) => ({
         key: localRouterModelKey("google", model.modelID),
         modelID: model.modelID,
@@ -376,12 +393,16 @@ export function buildLocalRouterAccounts(input: {
       accountID: account.email,
       label: account.email,
       providerLabel: "ChatGPT",
+      unavailableReason: unavailableReason("openai"),
       models: account.models.map((model) => ({
         key: localRouterModelKey("openai", model.modelID),
         modelID: model.modelID,
         label: model.displayName,
-        remainingFraction: model.remainingFraction,
-        resetTime: model.resetTime,
+        ...strictestQuota([
+          model,
+          { remainingFraction: account.primaryWindow?.remainingFraction, resetTime: account.primaryWindow?.resetTimeIso },
+          { remainingFraction: account.secondaryWindow?.remainingFraction, resetTime: account.secondaryWindow?.resetTimeIso },
+        ]),
       })),
     });
   }
@@ -394,12 +415,15 @@ export function buildLocalRouterAccounts(input: {
       accountID: account.username,
       label: `@${account.username}`,
       providerLabel: "Copilot",
+      unavailableReason: unavailableReason("github-copilot"),
       models: account.models.map((model) => ({
         key: localRouterModelKey("github-copilot", model.modelID),
         modelID: model.modelID,
         label: model.displayName,
-        remainingFraction: model.remainingFraction,
-        resetTime: model.resetTime,
+        ...strictestQuota([
+          model,
+          { remainingFraction: account.quotaRemainingPct == null ? null : account.quotaRemainingPct / 100, resetTime: account.quotaResetTimeIso },
+        ]),
       })),
     });
   }
@@ -407,7 +431,12 @@ export function buildLocalRouterAccounts(input: {
   const localProviders = new Map<string, { label: string; models: LocalRouterModel[] }>();
   for (const option of input.options ?? []) {
     if (option.disabled || option.providerID === LOCAL_ROUTER_PROVIDER_ID) continue;
-    if (accounts.some((account) => account.providerID === option.providerID && account.models.some((model) => model.modelID === option.modelID))) continue;
+    // The picker shows these providers through account rows instead of raw
+    // catalog rows. Match that presentation, including when an account has no
+    // quota or needs verification, rather than reintroducing hidden variants.
+    if (option.providerID === "google") continue;
+    if (option.providerID === "openai" && (input.chatgpt?.length ?? 0) > 0) continue;
+    if (option.providerID === "github-copilot" && (input.copilot?.length ?? 0) > 0) continue;
     const group = localProviders.get(option.providerID) ?? {
       label: option.description?.trim() || option.providerID,
       models: [],
@@ -532,7 +561,7 @@ export function resolveLocalRouterChoice(
   const accountOrder = new Map(orderedAccounts.map((account, index) => [account.key, index]));
   const candidates: LocalRouterCandidate[] = [];
   for (const account of accounts) {
-    if (excludedAccounts.has(account.key)) continue;
+    if (excludedAccounts.has(account.key) || account.unavailableReason) continue;
     for (const model of account.models) {
       if (excludedModels.has(model.key)) continue;
       candidates.push({
@@ -552,7 +581,10 @@ export function resolveLocalRouterChoice(
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.mode !== "priority"
     ? []
-    : settings.strategies;
+    : (() => {
+        const terminalIndex = settings.strategies.findIndex(isExclusiveFirstStrategy);
+        return terminalIndex >= 0 ? settings.strategies.slice(0, terminalIndex + 1) : settings.strategies;
+      })();
   const context = {
     mode: settings.mode,
     randomScores: new Map(pool.map((candidate) => [candidate.key, Math.random()])),

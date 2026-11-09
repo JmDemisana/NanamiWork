@@ -24,7 +24,7 @@ const settings: LocalRouterSettings = {
 };
 
 describe("local router", () => {
-  test("includes other eligible providers and avoids duplicate account models", () => {
+  test("matches picker models and keeps disabled connected accounts visible", () => {
     const model = (providerID: string, modelID: string) => ({
       providerID, modelID, title: modelID, description: providerID,
       behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null,
@@ -32,9 +32,15 @@ describe("local router", () => {
     });
     const result = buildLocalRouterAccounts({
       antigravity: [{ email: "test@example.invalid", models: [{ modelID: "g1", displayName: "G1", remainingFraction: 0.5, resetTime: null }] }],
-      options: [model("google", "g1"), model("google", "g2"), model("nanami", "router"), model("other", "m1"), { ...model("other", "disabled"), disabled: true }],
+      chatgpt: [{ email: "chat@example.invalid", models: [{ modelID: "o1", displayName: "O1", remainingFraction: 0.8, resetTime: null }] }],
+      copilot: [{ username: "example", models: [{ modelID: "c1", displayName: "C1", remainingFraction: 0.4, resetTime: null }] }],
+      disabledProviders: ["openai"],
+      options: [model("google", "g1"), model("google", "hidden-tier"), model("openai", "hidden-openai"), model("github-copilot", "hidden-copilot"), model("nanami", "router"), model("other", "m1"), { ...model("other", "disabled"), disabled: true }],
     });
-    expect(result.flatMap((account) => account.models.map((item) => item.modelID))).toEqual(["g1", "g2", "router", "m1"]);
+    expect(result.flatMap((account) => account.models.map((item) => item.modelID))).toEqual(["g1", "o1", "c1", "router", "m1"]);
+    expect(result.find((account) => account.kind === "chatgpt")?.unavailableReason).toContain("disabled");
+    const blocked = result.find((account) => account.kind === "chatgpt");
+    expect(blocked && resolveLocalRouterChoice([blocked], settings)).toBeNull();
   });
 
   test("list modes follow displayed default and saved order", () => {
@@ -47,6 +53,23 @@ describe("local router", () => {
     expect(resolveLocalRouterChoice(accounts, { ...settings, mode: "account", accountOrder: ["a", "b"], modelOrder: ["m2", "m1"] })?.model.key).toBe("m1");
     const exhausted = accounts.map((account) => ({ ...account, models: account.models.map((model) => ({ ...model, remainingFraction: 0 })) }));
     expect(resolveLocalRouterChoice(exhausted, settings)).toBeNull();
+  });
+
+  test("skips an account if either its short or long quota window is exhausted", () => {
+    const result = buildLocalRouterAccounts({
+      chatgpt: [{
+        email: "chat@example.invalid",
+        primaryWindow: { remainingFraction: 0, resetTimeIso: "2026-11-10T00:00:00Z" },
+        secondaryWindow: { remainingFraction: 0.9, resetTimeIso: null },
+        models: [{ modelID: "gpt", displayName: "GPT", remainingFraction: 0.9, resetTime: null }],
+      }],
+      copilot: [{
+        username: "example", quotaRemainingPct: 0,
+        models: [{ modelID: "copilot", displayName: "Copilot", remainingFraction: null, resetTime: null }],
+      }],
+    });
+    expect(result.flatMap((account) => account.models.map((model) => model.remainingFraction))).toEqual([0, 0]);
+    expect(resolveLocalRouterChoice(result, settings)).toBeNull();
   });
 
   test("unknown reset times tie and fall through to the next priority", () => {
@@ -67,19 +90,22 @@ describe("local router", () => {
     expect(useLocalRouterStore.getState().accountOrder).toEqual(["a", "local", "b"]);
   });
 
-  test("round robin and random are exclusive at first and always last", () => {
+  test("round robin and random lock all later priorities while keeping earlier ones", () => {
     useLocalRouterStore.setState(settings);
     useLocalRouterStore.getState().toggleStrategy("highest-quota");
     expect(useLocalRouterStore.getState().strategies).toEqual(["round-robin"]);
     useLocalRouterStore.getState().toggleStrategy("round-robin");
     expect(resolveLocalRouterChoice(accounts, useLocalRouterStore.getState())).toBeNull();
     useLocalRouterStore.getState().toggleStrategy("highest-quota");
-    useLocalRouterStore.getState().toggleStrategy("random");
     useLocalRouterStore.getState().toggleStrategy("lowest-quota");
+    useLocalRouterStore.getState().toggleStrategy("random");
     expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
     useLocalRouterStore.getState().moveStrategy("random", -1);
     useLocalRouterStore.getState().moveStrategy("lowest-quota", 1);
     useLocalRouterStore.getState().toggleStrategy("round-robin");
+    useLocalRouterStore.getState().toggleStrategy("nearest-reset");
     expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
+    useLocalRouterStore.getState().toggleStrategy("random");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota"]);
   });
 });

@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { ArrowLeft, ArrowRight, Search, Settings } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -33,24 +33,10 @@ function SidebarToggle({ surface }: { surface: "sidebar" | "main" }) {
   );
 }
 
-export function SidebarTitlebar({ history }: { history?: ConversationHistoryControls }) {
+export function SidebarTitlebar() {
   return (
     <div data-sidebar-titlebar className="window-titlebar mac-window-controls-inset flex shrink-0 items-center gap-1 px-2 titlebar-drag">
       <SidebarToggle surface="sidebar" />
-      {history ? (
-        <div className="ml-auto flex gap-0.5 titlebar-no-drag" role="group" aria-label="Conversation history controls">
-          <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-            aria-label="Back in conversation history" title="Back in conversation history"
-            data-conversation-history-control="back" disabled={!history.canGoBack} onClick={() => history.onNavigate("back")}>
-            <ArrowLeft strokeWidth={1.5} />
-          </Button>
-          <Button variant="ghost" size="icon-sm" className="rounded-lg text-muted-foreground transition-colors hover:bg-muted"
-            aria-label="Forward in conversation history" title="Forward in conversation history"
-            data-conversation-history-control="forward" disabled={!history.canGoForward} onClick={() => history.onNavigate("forward")}>
-            <ArrowRight strokeWidth={1.5} />
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }

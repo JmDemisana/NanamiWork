@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, Pencil, Search, Sparkles, X } from "lucide-react";
+import { ChevronLeft, Pencil, Search, X } from "lucide-react";
 
 import type { ModelOption, ModelRef } from "@/app/types";
 import { markFeatureUsed } from "@/app/lib/den";
@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModelPickerPanel } from "@/react-app/domains/models/model-picker-panel";
 import { ModelProviderLoginBar } from "@/react-app/domains/models/model-picker-list";
-import { buildModelCatalog, resolveRetainedSelection, runtimeModelOptions, withoutBlockedSelection } from "@/react-app/domains/models/catalog";
-import { useProviderListQuery, getConnectedProviderItems } from "@/react-app/infra/provider-list-query";
-import { useWorkspace } from "@/react-app/shell/workspace-provider";
+import { buildModelCatalog, resolveRetainedSelection, withoutBlockedSelection } from "@/react-app/domains/models/catalog";
 import { useModelChoice } from "@/react-app/domains/models/use-model-catalog";
 import { managesOwnBehavior, isAutoModel, type ModelPickerCatalogState } from "@/react-app/domains/models/model-catalog";
 import { useSetWorkspaceDefaultModel } from "@/react-app/kernel/use-workspace-model-default";
@@ -45,9 +43,7 @@ function RouterRow({
 }) {
   return <div data-testid="nanami-local-router">
     <div className="flex min-h-9 items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-accent">
-      <div className="flex size-4 shrink-0 items-center justify-center text-dls-accent">
-        <Sparkles className="size-4" strokeWidth={1.5} />
-      </div>
+      <span className="size-4 shrink-0" aria-hidden="true" />
       <button type="button" onClick={onUse} className="min-w-0 flex-1 cursor-pointer text-left">
         <span className="block truncate">NanamiWorks Local Router</span>
         <span className="block truncate text-xs text-muted-foreground">Route Local Models</span>
@@ -80,7 +76,6 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
   const setWorkspaceDefault = useSetWorkspaceDefaultModel();
   const checkRestriction = useCheckDesktopRestriction();
   const auth = useDenAuth();
-  const workspace = useWorkspace();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const pageHost = useModelPickerPageHost();
   const host = pageHost?.host;
@@ -114,28 +109,9 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
     sessionScoped: props.target === "session",
   });
   const options = withoutBlockedSelection(catalog.options, retained);
-  const providerList = useProviderListQuery({
-    client: workspace.client,
-    baseUrl: workspace.opencodeBaseUrl,
-    directory: workspace.selectedWorkspaceRoot || undefined,
-    enabled: props.open && Boolean(workspace.client),
-    showSavedWhileLoading: true,
-  });
-  const routerRuntime = useMemo(() => {
-    if (!providerList.data?.all) return null;
-    const connected = new Set(getConnectedProviderItems(providerList.data).map((provider) => provider.id));
-    return runtimeModelOptions(providerList.data, undefined, true).filter((option) => connected.has(option.providerID));
-  }, [providerList.data]);
-  const routerCatalog = buildModelCatalog({
-    runtime: routerRuntime,
-    fallback: [...(props.knownOptions ?? props.options)],
-    signedIn: auth.isSignedIn,
-    restrictToCloud,
-    checkRestriction,
-    disabledProviders: props.disabledProviders,
-    gatewayProviderIds: props.gatewayProviderIds,
-  });
-  const routerOptions = withoutBlockedSelection(routerCatalog.options, retained);
+  // The router must offer the same selectable provider models as the picker,
+  // not hidden raw provider aliases or synthetic tier variants.
+  const routerOptions = options;
   const selected = options.find((option) => option.providerID === props.current.providerID && option.modelID === props.current.modelID && !option.disabled);
   const behaviorValue = props.currentBehaviorValue !== undefined ? props.currentBehaviorValue : selected?.behaviorValue ?? null;
   const autoVisible = retained?.reason !== "policy" && retained?.reason !== "disabled" && (options.some(isAutoModel) || isAutoModel(props.current));
@@ -143,10 +119,12 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
   const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
   const copilotAccounts = useCopilotAccountsStore((state) => state.accounts);
   const routerAccounts = useMemo(() => buildLocalRouterAccounts({
-    antigravity: !restrictToCloud && !props.disabledProviders?.includes("google") ? antigravityAccounts : [],
-    chatgpt: !restrictToCloud && !props.disabledProviders?.includes("openai") ? chatGptAccounts : [],
-    copilot: !restrictToCloud && !props.disabledProviders?.includes("github-copilot") ? copilotAccounts : [],
+    antigravity: antigravityAccounts,
+    chatgpt: chatGptAccounts,
+    copilot: copilotAccounts,
     options: routerOptions,
+    disabledProviders: props.disabledProviders,
+    restrictToCloud,
   }), [antigravityAccounts, chatGptAccounts, copilotAccounts, routerOptions, restrictToCloud, props.disabledProviders]);
   const pendingProviders = props.gatewayConnectProviders?.filter((provider) => !provider.models?.length) ?? [];
 
@@ -213,8 +191,11 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         return;
       }
       const summary = localRouterSummary(routerAccounts, state);
+      const available = localRouterSummary(routerAccounts.filter((account) => !account.unavailableReason), state);
       setRouterNotice(summary.modelCount === 0
         ? "No accounts or models are included. Open router settings to include some."
+        : available.modelCount === 0
+          ? "Included accounts are unavailable. Check provider policy, settings, or account verification."
         : "Every included account is out of quota right now. Wait for a reset or include another account.");
       return;
     }
@@ -283,16 +264,13 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
 
   return createPortal(<div className="flex h-full min-h-0 flex-col bg-dls-surface" data-testid="model-picker-page">
     {routerSettingsOpen ? <LocalRouterSettingsPage accounts={routerAccounts} onBack={() => setRouterSettingsOpen(false)} /> : <>
+    <h1 className="sr-only">Models</h1>
     <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
       <div className="flex min-w-0 items-center gap-1.5">
         <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" onClick={close}>
           <ChevronLeft className="size-4" />
           <span>Chat</span>
         </Button>
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold">Models</h1>
-          <p className="truncate text-xs text-muted-foreground">{props.subtitle ?? "Choose a model for this conversation"}</p>
-        </div>
       </div>
       <div className="relative flex min-w-0 flex-1 items-center sm:mx-2 sm:max-w-2xl">
         <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
@@ -317,9 +295,6 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
           </button>
         ) : null}
       </div>
-      <p className="hidden shrink-0 text-xs text-muted-foreground md:block">
-        {options.filter((option) => !option.disabled).length} available
-      </p>
     </header>
 
     <div className="mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col">

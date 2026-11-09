@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -178,6 +178,7 @@ export function LocalRouterSettingsPage({
   const modelOrder = useLocalRouterStore((state) => state.modelOrder);
   const resetUsage = useLocalRouterStore((state) => state.resetUsage);
   const summary = localRouterSummary(accounts, { excludedAccounts, excludedModels });
+  const unavailableCount = accounts.filter((account) => account.unavailableReason && !excludedAccounts.includes(account.key)).length;
 
   const modelEntries = useMemo(
     () => localRouterModels(accounts).flatMap((group) =>
@@ -193,10 +194,12 @@ export function LocalRouterSettingsPage({
     && modelEntries.every((entry) => !excludedModels.includes(entry.model.key));
   const allAccountsIncluded = accounts.length > 0
     && accounts.every((account) => !excludedAccounts.includes(account.key));
-  const exclusiveFirst = isExclusiveFirstStrategy(strategies[0]) ? strategies[0] : undefined;
-  const exclusiveLabel = exclusiveFirst === "round-robin" ? "Round robin" : "Random";
   const terminal = terminalRoutingStrategy(strategies);
   const terminalLabel = terminal === "round-robin" ? "Round robin" : "Random";
+  const orderedStrategies = [
+    ...strategies.flatMap((strategy) => LOCAL_ROUTER_STRATEGIES.filter((entry) => entry.value === strategy)),
+    ...LOCAL_ROUTER_STRATEGIES.filter((entry) => !strategies.includes(entry.value)),
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-dls-surface" data-testid="local-router-settings-page">
@@ -205,17 +208,16 @@ export function LocalRouterSettingsPage({
             <ChevronLeft className="size-4" /> Models
           </Button>
           <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className="size-4 text-dls-accent" strokeWidth={1.5} />
+          <h1 className="text-sm font-semibold">
             NanamiWorks Local Router
           </h1>
-          <p className="text-xs text-muted-foreground">{summary.accountCount} accounts · {summary.modelCount} models · Unknown quotas are treated as available</p>
+          <p className="text-xs text-muted-foreground">{summary.accountCount} accounts · {summary.modelCount} models{unavailableCount ? ` · ${unavailableCount} unavailable` : ""} · Unknown quotas are treated as available</p>
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
-          <div className="grid gap-x-5 gap-y-6 md:grid-cols-3">
-          <section className="min-w-0">
+        <div className="@container/router min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
+          <div className="flex flex-col gap-4">
+          <section className="min-w-0 rounded-xl border border-border/70 bg-card/35 p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Model Selection</h3>
@@ -242,7 +244,7 @@ export function LocalRouterSettingsPage({
                 No routable models yet. Connect an account below.
               </p>
             ) : (
-              <div className="flex flex-col gap-0.5">
+              <div tabIndex={0} aria-label="Router models" className="grid max-h-[min(45vh,24rem)] grid-cols-1 gap-x-4 gap-y-0.5 overflow-y-auto [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-ring @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
                 {orderedModels.map((entry, index) => {
                   const included = !excludedModels.includes(entry.model.key);
                   return (
@@ -275,7 +277,7 @@ export function LocalRouterSettingsPage({
             )}
           </section>
 
-          <section className="min-w-0">
+          <section className="min-w-0 rounded-xl border border-border/70 bg-card/35 p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Included Accounts</h3>
@@ -302,7 +304,7 @@ export function LocalRouterSettingsPage({
                 Connect an account below, then its models appear here.
               </p>
             ) : (
-              <div className="flex flex-col gap-0.5">
+              <div tabIndex={0} aria-label="Router accounts" className="grid max-h-[min(45vh,24rem)] grid-cols-1 gap-x-4 gap-y-0.5 overflow-y-auto [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-ring @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
                 {orderedAccounts.map((account, index) => {
                   const included = !excludedAccounts.includes(account.key);
                   return (
@@ -323,6 +325,7 @@ export function LocalRouterSettingsPage({
                         <span className="block truncate text-xs text-muted-foreground">
                           {account.providerLabel} · {account.models.length} model{account.models.length === 1 ? "" : "s"}
                         </span>
+                        {account.unavailableReason ? <span className="block text-xs text-amber-500">{account.unavailableReason}</span> : null}
                       </span>
                       <OrderButtons
                         label={account.label}
@@ -337,28 +340,24 @@ export function LocalRouterSettingsPage({
             )}
           </section>
 
-          <section className="min-w-0">
+          <section className="min-w-0 rounded-xl border border-border/70 bg-card/35 p-4">
             <div className="mb-2">
               <h3 className="text-sm font-medium">Routing</h3>
               <p className="text-xs text-muted-foreground">
                 {mode === "priority"
-                  ? exclusiveFirst
-                    ? `${exclusiveLabel} is priority 1, so other strategies cannot affect the choice. Turn it off to choose another first priority.`
+                  ? terminal
+                    ? `${terminalLabel} must be last. Turn it off to add priorities; any above it stay active.`
                     : strategies.length === 0 ? "Choose at least one priority before routing." : "Round robin and Random always come last; earlier priorities resolve first."
                   : `Routing follows the ${mode === "model" ? "model" : "account"} order above. Priority strategies are paused.`}
               </p>
             </div>
-            <ModeToggle mode={mode} onChange={setMode} />
+            <div className="max-w-md"><ModeToggle mode={mode} onChange={setMode} /></div>
             {mode === "priority" ? (
-              <div className="mt-1 flex flex-col gap-0.5">
-                {LOCAL_ROUTER_STRATEGIES.map((entry) => {
+              <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
+                {orderedStrategies.map((entry) => {
                   const priority = strategies.indexOf(entry.value);
-                  const blockedByFirst = Boolean(exclusiveFirst && entry.value !== exclusiveFirst);
-                  const blockedByTerminal = Boolean(terminal && entry.value !== terminal && isExclusiveFirstStrategy(entry.value));
-                  const disabled = blockedByFirst || blockedByTerminal;
-                  const disabledReason = blockedByFirst
-                    ? `${exclusiveLabel} already decides the choice at priority 1.`
-                    : blockedByTerminal ? `${terminalLabel} already occupies the final priority.` : undefined;
+                  const disabled = Boolean(terminal && priority < 0);
+                  const disabledReason = disabled ? `${terminalLabel} already decides the choice; nothing can follow it.` : undefined;
                   return <RoutingRow
                     key={entry.value}
                     strategy={entry.value}
