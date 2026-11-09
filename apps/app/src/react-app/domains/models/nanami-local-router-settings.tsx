@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import { Check, ChevronDown, ChevronUp, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { ProviderIcon } from "@/react-app/design-system/provider-icon";
 import {
@@ -149,13 +148,11 @@ function RoutingRow({
   </div>;
 }
 
-export function LocalRouterSettingsDialog({
-  open,
-  onOpenChange,
+export function LocalRouterSettingsPage({
+  onBack,
   accounts,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onBack: () => void;
   accounts: readonly LocalRouterAccount[];
 }) {
   const mode = useLocalRouterStore((state) => state.mode);
@@ -190,20 +187,23 @@ export function LocalRouterSettingsDialog({
     && accounts.every((account) => !excludedAccounts.includes(account.key));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(calc(100dvh-2rem),48rem)] w-[min(calc(100vw-2rem),46rem)] max-w-[46rem] flex-col gap-0 overflow-hidden p-0 sm:max-w-[46rem]">
-        <DialogHeader className="border-b border-border px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base">
+    <div className="flex min-h-0 flex-1 flex-col bg-dls-surface" data-testid="local-router-settings-page">
+        <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+          <Button type="button" variant="ghost" size="sm" className="gap-1 px-2" onClick={onBack}>
+            <ChevronLeft className="size-4" /> Models
+          </Button>
+          <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="size-4 text-dls-accent" strokeWidth={1.5} />
             NanamiWorks Local Router
-          </DialogTitle>
-          <DialogDescription>
-            Selects a model when you choose the router. {summary.accountCount} account{summary.accountCount === 1 ? "" : "s"} and {summary.modelCount} model{summary.modelCount === 1 ? "" : "s"} included. Unknown quotas are treated as available.
-          </DialogDescription>
-        </DialogHeader>
+          </h1>
+          <p className="text-xs text-muted-foreground">{summary.accountCount} accounts · {summary.modelCount} models · Unknown quotas are treated as available</p>
+          </div>
+        </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 [scrollbar-width:thin]">
-          <section className="mb-6">
+          <div className="grid gap-x-5 gap-y-6 md:grid-cols-3">
+          <section className="min-w-0">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Model Selection</h3>
@@ -263,7 +263,7 @@ export function LocalRouterSettingsDialog({
             )}
           </section>
 
-          <section className="mb-6">
+          <section className="min-w-0">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Included Accounts</h3>
@@ -325,7 +325,7 @@ export function LocalRouterSettingsDialog({
             )}
           </section>
 
-          <section>
+          <section className="min-w-0">
             <div className="mb-2">
               <h3 className="text-sm font-medium">Routing</h3>
               <p className="text-xs text-muted-foreground">
@@ -355,9 +355,10 @@ export function LocalRouterSettingsDialog({
               </div>
             ) : null}
           </section>
+          </div>
         </div>
 
-        <DialogFooter className="border-t border-border px-5 py-3 sm:justify-between">
+        <footer className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3">
           <Button
             type="button"
             variant="ghost"
@@ -368,12 +369,8 @@ export function LocalRouterSettingsDialog({
             <RotateCcw className="size-3.5" />
             Reset usage history
           </Button>
-          <Button type="button" size="sm" onClick={() => onOpenChange(false)}>
-            <Check className="size-4" />
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <span className="text-xs text-muted-foreground">Changes are saved locally</span>
+        </footer>
+    </div>
   );
 }

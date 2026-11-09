@@ -22,6 +22,8 @@ import { useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-acco
 import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
+import { ModelPickerPage } from "@/react-app/domains/models/model-picker-page";
+import { useLocalModelPickerEnabled } from "@/react-app/domains/models/use-local-model-picker";
 
 export { ModelPickerFooter } from "@/react-app/domains/models/model-picker-panel";
 
@@ -48,6 +50,7 @@ interface ModelSelectProps {
 export function ModelSelect({ open, value, hideValue = false, onOpenChange, onChange, disabled = false, sessionId,
   openWorkModelsSyncing = false, fallbackOptions = [], behaviorValue = null, behaviorOptions = [], onBehaviorChange, onSetWorkspaceDefault, onReloadWorkspace, retainedSelection: savedSelection }: ModelSelectProps) {
   const [focusAlternative, setFocusAlternative] = React.useState(false);
+  const [pageQuery, setPageQuery] = React.useState("");
   const isMobile = useIsMobile();
   const popupRef = React.useRef<HTMLDivElement>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -55,6 +58,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const setWorkspaceDefault = useSetWorkspaceDefaultModel();
   const checkRestriction = useCheckDesktopRestriction();
   const plainFreeModel = useDesktopFeature("plainFreeModel");
+  const localModelPickerEnabled = useLocalModelPickerEnabled();
   const choice = useModelChoice(JSON.stringify([sessionId, value, behaviorValue, disabled]));
   const catalog = useModelCatalog({ client: workspace.client, baseUrl: workspace.opencodeBaseUrl, directory: workspace.selectedWorkspaceRoot,
     enabled: true, refreshWhen: open, fallbackOptions, pendingOptions: choice.pendingOptions, disabledProviders: choice.disabledProviders,
@@ -243,7 +247,33 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
           </button>
         ) : null}
       </div>
-      <Dialog
+      {localModelPickerEnabled ? <ModelPickerPage
+        open={open}
+        options={options}
+        knownOptions={catalog.knownOptions}
+        disabledProviders={[...choice.disabledProviders]}
+        query={pageQuery}
+        setQuery={setPageQuery}
+        target={sessionId ? "session" : "default"}
+        current={value}
+        currentBehaviorValue={behaviorValue}
+        fallbackBehaviorOptions={behaviorOptions}
+        onSelect={(model) => onChange(model)}
+        onSelectWithBehavior={(model, behavior) => {
+          const sameModel = model.providerID === value.providerID && model.modelID === value.modelID;
+          onChange(model, behavior?.variant);
+          if (sameModel && behavior && !managesOwnBehavior(model)) onBehaviorChange?.(behavior.variant);
+        }}
+        onBehaviorChange={(_model, variant) => onBehaviorChange?.(variant)}
+        onOpenSettings={openSettings}
+        onClose={() => { setFocusAlternative(false); onOpenChange(false); }}
+        restrictToCloud={restrictToCloud}
+        catalogState={catalogState}
+        retainedSelection={retainedSelection}
+        onSetWorkspaceDefault={onSetWorkspaceDefault ?? setWorkspaceDefault}
+        openWorkModelsSyncing={openWorkModelsSyncing}
+        onReloadWorkspace={onReloadWorkspace}
+      /> : <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next && choice.loginOpen) return;
@@ -280,7 +310,7 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
             onClose={() => onOpenChange(false)}
           />
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }

@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
 import { focusPaneComposerSoon } from "./workbench-pane-focus";
+import { useModelPickerPageHost } from "@/react-app/domains/models/model-picker-page-host";
 import { isOpencodeConfigErrorMessage } from "@openwork/types/opencode-config-error";
 import { childOrigin, prepareChildReturn } from "@/lib/child-navigation";
 import { newSessionDraftOwnerKey } from "./new-session-destination";
@@ -471,6 +472,7 @@ function controlStringArg(args: unknown, key: string) {
 }
 
 export function SessionPage(props: SessionPageProps) {
+  const modelPickerPageHost = useModelPickerPageHost();
   // "Add Antigravity Account" buttons inside the session surface dispatch
   // openWorkbenchInstancesEvent, which settings-route.tsx handles with
   // the full OAuth + paste-URL flow (startProviderAuth → browser open →
@@ -1757,6 +1759,8 @@ export function SessionPage(props: SessionPageProps) {
           >
             <ResizablePanel minSize={isMobile ? "0px" : "360px"} className="min-w-0">
               <main data-session-pane className={cn("flex h-full min-w-0 flex-col overflow-hidden bg-dls-surface", props.primarySurface !== "flat" && "mac:bg-dls-surface/85 mac:backdrop-blur-2xl mac:backdrop-saturate-150")}>
+          <div ref={modelPickerPageHost?.setHost} hidden={!modelPickerPageHost?.active} className="flex min-h-0 flex-1 flex-col" data-model-picker-page-host />
+          <div hidden={modelPickerPageHost?.active} inert={modelPickerPageHost?.active} className="flex min-h-0 flex-1 flex-col">
           {showNarrowPaneSwitcher ? (
             <NarrowPaneSwitcher
               activePane={narrowPane}
@@ -2102,6 +2106,7 @@ export function SessionPage(props: SessionPageProps) {
             </div>
           </div>
 
+          </div>
               </main>
             </ResizablePanel>
               {sidePanelOpen && !isMobile ? (

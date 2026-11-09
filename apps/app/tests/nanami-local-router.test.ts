@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildLocalRouterAccounts,
   resolveLocalRouterChoice,
   useLocalRouterStore,
   type LocalRouterAccount,
@@ -23,6 +24,19 @@ const settings: LocalRouterSettings = {
 };
 
 describe("local router", () => {
+  test("includes other eligible providers and avoids duplicate account models", () => {
+    const model = (providerID: string, modelID: string) => ({
+      providerID, modelID, title: modelID, description: providerID,
+      behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null,
+      isFree: false,
+    });
+    const result = buildLocalRouterAccounts({
+      antigravity: [{ email: "test@example.invalid", models: [{ modelID: "g1", displayName: "G1", remainingFraction: 0.5, resetTime: null }] }],
+      options: [model("google", "g1"), model("google", "g2"), model("nanami", "router"), model("other", "m1"), { ...model("other", "disabled"), disabled: true }],
+    });
+    expect(result.flatMap((account) => account.models.map((item) => item.modelID))).toEqual(["g1", "g2", "router", "m1"]);
+  });
+
   test("list modes follow displayed default and saved order", () => {
     expect(resolveLocalRouterChoice(accounts, { ...settings, mode: "account" })?.account.key).toBe("b");
     expect(resolveLocalRouterChoice(accounts, { ...settings, mode: "model", modelOrder: ["m1", "m2"], accountOrder: ["a", "b"] })?.account.key).toBe("a");

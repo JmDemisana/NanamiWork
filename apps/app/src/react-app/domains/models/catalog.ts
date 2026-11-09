@@ -22,9 +22,9 @@ function costsNothing(model: { cost?: { input?: number; output?: number } }) {
 }
 
 /** The one place a connected provider's models become picker options. */
-export function runtimeModelOptions(data: ProviderList, isNewProvider: (providerId: string) => boolean = () => false): ModelOption[] {
+export function runtimeModelOptions(data: ProviderList, isNewProvider: (providerId: string) => boolean = () => false, includeAllProviders = false): ModelOption[] {
   const options = getConnectedProviderItems(data)
-    .filter((provider) => provider.id === "nanami" || provider.id === "google")
+    .filter((provider) => includeAllProviders || provider.id === "nanami" || provider.id === "google")
     .flatMap((provider) => {
     const providerDescription =
       provider.id === "nanami"
@@ -36,7 +36,7 @@ export function runtimeModelOptions(data: ProviderList, isNewProvider: (provider
             : provider.name;
     const entries = Object.entries(provider.models);
     const hasAntigravity = provider.id === "google" && entries.some(([id]) => id.startsWith("antigravity-"));
-    const visibleEntries = hasAntigravity
+    const visibleEntries = !includeAllProviders && hasAntigravity
       ? entries.filter(([id]) => id.startsWith("antigravity-"))
       : entries;
     return visibleEntries.map(([id, model]): ModelOption => {
@@ -51,7 +51,7 @@ export function runtimeModelOptions(data: ProviderList, isNewProvider: (provider
         behaviorDescription: summary.description,
         behaviorValue: summary.value,
         behaviorOptions: summary.options,
-        isFree: true,
+        isFree: includeAllProviders ? costsNothing(model) : true,
         ...(isNewProvider(provider.id) ? { isRecommended: true } : {}),
         ...(isCloudManagedProviderKey(provider.id) ? { source: "cloud" as const } : {}),
       };

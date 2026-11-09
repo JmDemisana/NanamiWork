@@ -1,7 +1,6 @@
 import { create } from "zustand";
 
 import type { ModelOption, ModelRef } from "@/app/types";
-import { modelSource } from "./model-catalog";
 import { modelRefKey } from "@/react-app/domains/session/models/model-collections-store";
 
 export const LOCAL_ROUTER_PROVIDER_ID = "nanami-local-router";
@@ -328,7 +327,7 @@ export function buildLocalRouterAccounts(input: {
       resetTime: string | null;
     }[];
   }[];
-  /** Local engine models that are not tied to one of the account providers. */
+  /** Eligible engine models, including other configured providers. */
   options?: readonly ModelOption[];
 }): LocalRouterAccount[] {
   const accounts: LocalRouterAccount[] = [];
@@ -388,13 +387,10 @@ export function buildLocalRouterAccounts(input: {
     });
   }
 
-  const accountProviders = new Set(["google", "openai", "github-copilot"]);
   const localProviders = new Map<string, { label: string; models: LocalRouterModel[] }>();
   for (const option of input.options ?? []) {
-    if (accountProviders.has(option.providerID)) continue;
-    // Nanami models require the picker's PIN flow and cannot be routed around it.
-    if (option.disabled || option.providerID === LOCAL_ROUTER_PROVIDER_ID || option.providerID === "nanami") continue;
-    if (modelSource(option) !== "local") continue;
+    if (option.disabled || option.providerID === LOCAL_ROUTER_PROVIDER_ID) continue;
+    if (accounts.some((account) => account.providerID === option.providerID && account.models.some((model) => model.modelID === option.modelID))) continue;
     const group = localProviders.get(option.providerID) ?? {
       label: option.description?.trim() || option.providerID,
       models: [],

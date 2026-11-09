@@ -221,7 +221,8 @@ import {
 } from "@/react-app/domains/cloud/openwork-models-promo";
 import { ModelPickerModal, MODEL_PICKER_UNAVAILABLE_SUBTITLE } from "@/react-app/domains/session/modals/model-picker-modal";
 import { ModelPickerPage } from "@/react-app/domains/models/model-picker-page";
-import { localModelPickerAvailable, useLocalModelPickerPreference } from "@/react-app/domains/models/local-model-picker-preference";
+import { useLocalModelPickerEnabled } from "@/react-app/domains/models/use-local-model-picker";
+import { ModelPickerPageHostProvider } from "@/react-app/domains/models/model-picker-page-host";
 import { PlatformConnectModal } from "@/react-app/domains/models/platform-connect-modal";
 import { CommandPalette, type PaletteItem, type SessionGroupOption } from "./command-palette";
 import { buildCommandPaletteSessions } from "./command-palette-sessions";
@@ -951,13 +952,7 @@ export function SessionRoute() {
   const sidebarSessionStatusById = sidebarSessionAttention.statusById;
   // Settling ships behind `settledSessions` and for OpenCode v2 only; v1 workspaces keep today's sidebar.
   const settledSessionsEnabled = useDesktopFeature("settledSessions");
-  const standaloneModelPicker = isDesktopRuntime() && denAuth.status === "signed_out";
-  const managedModelPickerEnabled = useDesktopFeature("localModelPicker", !standaloneModelPicker);
-  const localPickerPreference = useLocalModelPickerPreference((state) => state.enabled);
-  const localModelPickerEnabled = localModelPickerAvailable({
-    desktop: isDesktopRuntime(), signedOut: denAuth.status === "signed_out",
-    localEnabled: localPickerPreference, managedEnabled: managedModelPickerEnabled,
-  });
+  const localModelPickerEnabled = useLocalModelPickerEnabled();
   const ActiveModelPicker = localModelPickerEnabled ? ModelPickerPage : ModelPickerModal;
   const settleWorkspaceIdSet = useMemo(
     () => settledSessionsEnabled
@@ -3966,6 +3961,7 @@ export function SessionRoute() {
       scopeKey={JSON.stringify([gatewayProviderScopeKey, gatewayWorkbenchScope, selectedSessionId, modelPickerSessionId, local.prefs.defaultModel, local.prefs.modelVariant, selectedSessionModelSelection, modelPickerSelection])}
       login={(provider, signal, model) => handleConnectGatewayProvider(provider, { signal, model })}
     >
+    <ModelPickerPageHostProvider>
     {opencodeClient && selectedWorkspaceEndpoint && opencodeBaseUrl && selectedWorkspaceServerToken ? (
       <ReactSessionRuntime
         // Use the server-side workspace id so the React Query cache keys
@@ -4513,6 +4509,7 @@ export function SessionRoute() {
       restrictToCloud={restrictToCloudProviders}
     />
     <PlatformConnectModal />
+    </ModelPickerPageHostProvider>
     </GatewayModelAccessProvider>
     </WorkspaceProvider>
   );
