@@ -649,6 +649,18 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
     return new Map(modelShortcuts.map((shortcut) => [modelRefKey({ providerID: shortcut.action.providerID, modelID: shortcut.action.modelID }), formatChord(shortcut.keys, os)]));
   }, [modelShortcuts]);
   const searching = query.trim().length > 0;
+  const visibleConnectedAccounts = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return connectedAccounts;
+    return connectedAccounts.filter((entry) => {
+      if (entry.kind === "antigravity") return entry.account.models.some((model) =>
+        `${model.displayName} ${model.rawId} ${entry.account.email} antigravity`.toLowerCase().includes(term));
+      if (entry.kind === "chatgpt") return entry.account.models.some((model) =>
+        `${model.displayName} ${model.modelID} ${entry.account.email} openai chatgpt codex`.toLowerCase().includes(term));
+      return entry.account.models.some((model) =>
+        `${model.displayName} ${model.modelID} ${entry.account.username} copilot github`.toLowerCase().includes(term));
+    });
+  }, [connectedAccounts, query]);
   const search = useMemo(() => searching ? searchModels(nonGoogleOptions, query) : null, [searching, nonGoogleOptions, query]);
   const groups: ModelGroup[] = useMemo(() => {
     if (search) {
@@ -927,7 +939,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       </div>
     </div>}
     <Command items={groups} filter={null} value={query} onValueChange={onQueryChange} autoHighlight={false} keepHighlight={false}>
-      <CommandPanel className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&>[data-slot=scroll-area]]:h-auto">
+      <CommandPanel className="@container/modelgrid min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&>[data-slot=scroll-area]]:h-auto">
         {retainedVisible ? <div data-testid="retained-selected-model" aria-disabled="true" aria-label={`${retainedName}, current model, ${retainedSubtitle}`} className="px-2 pt-2">
           <p className="flex h-7 items-center px-2 text-xs text-muted-foreground">{retainedLabel}</p>
           <div className="flex min-h-11 items-center gap-2 rounded-md px-2 py-1 text-sm opacity-55">
@@ -941,15 +953,16 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
           {[providerMiss ? (search.modelWords.length ? `No “${search.modelWords.join(" ")}” on ${providerMiss.label}. Showing other providers.` : `${providerMiss.label} has no models here.`) : null,
             searchIntentSummary(search.intent)].filter(Boolean).join(" ")}
         </p> : null}
-        {!loading && groups.length === 0 && !leading && antigravityAccounts.length === 0 && chatGptAccounts.length === 0 && copilotAccounts.length === 0 && query.trim() ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm">
+        {!loading && groups.length === 0 && !leading && visibleConnectedAccounts.length === 0 && query.trim() ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm">
           <p>No models match “{query.trim()}”</p><p className="text-muted-foreground">{providerMiss ? `${providerMiss.label} isn't connected in this workspace.` : "Try a shorter name, or search by provider."}</p>
           <Button size="sm" variant="outline" className="mt-2" onClick={clearSearch}>Clear search</Button>
         </div> : null}
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
           <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
-        <CommandList className={chrome === "page" ? "columns-3 [column-width:20rem] [column-gap:1rem]" : undefined}>
-          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "mb-3 break-inside-avoid rounded-xl border border-border/70 bg-card/35 p-1" : undefined}>
+        <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : undefined}>
+        {groups.length > 0 || chrome !== "page" ? <CommandList className={chrome === "page" ? "not-empty:p-0" : undefined}>
+          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "px-2 py-1" : undefined}>
             {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
             <CommandCollection>{(option: ModelOption) => {
               const key = modelRefKey(option);
@@ -994,20 +1007,21 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
               </ActionContextMenu>;
             }}</CommandCollection>
           </CommandGroup>}
-        </CommandList>
-        {leading ? <div className={chrome === "page" ? "mx-2 mb-3 max-w-[22rem] rounded-xl border border-border/70 bg-card/35 p-2" : "px-2 pb-1"}><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">Local Router</p>{leading}</div> : null}
-        {connectedAccounts.length > 0 ? (
-          <div className={chrome === "page" ? "pb-1 columns-3 [column-width:20rem] [column-gap:1rem]" : "pb-1"}>
-            {connectedAccounts.map((entry, index) => {
-              const moveProps = chrome === "page"
+        </CommandList> : null}
+        {leading ? <div className={chrome === "page" ? "px-2 py-1" : "px-2 pb-1"}><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">Local Router</p>{leading}</div> : null}
+        </div>
+        {visibleConnectedAccounts.length > 0 ? (
+          <div data-testid="model-account-grid" className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-3 px-2 pb-1 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : "pb-1"}>
+            {visibleConnectedAccounts.map((entry, index) => {
+              const moveProps = chrome === "page" && !searching
                 ? {
                     canMoveUp: index > 0,
-                    canMoveDown: index < connectedAccounts.length - 1,
+                    canMoveDown: index < visibleConnectedAccounts.length - 1,
                     onMove: (direction: -1 | 1) => moveAccount(entry.key, direction, connectedAccounts.map((item) => item.key)),
                   }
                 : {};
               return (
-                <div key={entry.key} className={chrome === "page" ? "mb-3 break-inside-avoid rounded-xl border border-border/70 bg-card/35" : "break-inside-avoid"}>
+                <div key={entry.key} className={chrome === "page" ? "min-w-0" : "break-inside-avoid"}>
                   {entry.kind === "antigravity" ? (
                     <ConnectedAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectAntigravityModel} {...moveProps} />
                   ) : entry.kind === "chatgpt" ? (
