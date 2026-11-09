@@ -77,6 +77,13 @@ test("the picker occupies the page, keeps chat mounted, and opens router setting
   expect(settings).not.toBeNull();
   expect(settings?.textContent).toContain("claude");
   expect(settings?.textContent).toContain("gemini");
+  const roundRobin = settings?.querySelector<HTMLElement>('[aria-label="Round robin routing"]');
+  const highest = settings?.querySelector<HTMLElement>('[aria-label="Highest quota routing"]');
+  expect(highest?.getAttribute("aria-disabled")).toBe("true");
+  expect(settings?.textContent).toContain("other strategies cannot affect the choice");
+  await act(async () => roundRobin?.click());
+  expect(highest?.getAttribute("aria-disabled")).not.toBe("true");
+  await act(async () => highest?.click());
   const modelsBack = [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Models");
   await act(async () => modelsBack?.click());
   expect(container.querySelector('[data-testid="local-router-settings-page"]')).toBeNull();

@@ -29,15 +29,11 @@ function OrderButtons({
   label,
   canMoveUp,
   canMoveDown,
-  disabled,
-  disabledReason,
   onMove,
 }: {
   label: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
-  disabled: boolean;
-  disabledReason?: string;
   onMove: (direction: -1 | 1) => void;
 }) {
   return <span className="flex shrink-0 items-center">
@@ -90,6 +86,8 @@ function RoutingRow({
   priority,
   canMoveUp,
   canMoveDown,
+  disabled,
+  disabledReason,
   onToggle,
   onMove,
 }: {
@@ -100,6 +98,8 @@ function RoutingRow({
   priority: number | null;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  disabled: boolean;
+  disabledReason?: string;
   onToggle: () => void;
   onMove: (direction: -1 | 1) => void;
 }) {
