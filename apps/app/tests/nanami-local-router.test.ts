@@ -66,4 +66,20 @@ describe("local router", () => {
     useLocalRouterStore.getState().moveAccount("a", -1, ["b", "a"]);
     expect(useLocalRouterStore.getState().accountOrder).toEqual(["a", "local", "b"]);
   });
+
+  test("round robin and random are exclusive at first and always last", () => {
+    useLocalRouterStore.setState(settings);
+    useLocalRouterStore.getState().toggleStrategy("highest-quota");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["round-robin"]);
+    useLocalRouterStore.getState().toggleStrategy("round-robin");
+    expect(resolveLocalRouterChoice(accounts, useLocalRouterStore.getState())).toBeNull();
+    useLocalRouterStore.getState().toggleStrategy("highest-quota");
+    useLocalRouterStore.getState().toggleStrategy("random");
+    useLocalRouterStore.getState().toggleStrategy("lowest-quota");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
+    useLocalRouterStore.getState().moveStrategy("random", -1);
+    useLocalRouterStore.getState().moveStrategy("lowest-quota", 1);
+    useLocalRouterStore.getState().toggleStrategy("round-robin");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
+  });
 });

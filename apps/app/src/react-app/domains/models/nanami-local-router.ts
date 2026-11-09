@@ -139,6 +139,15 @@ function isStrategy(value: unknown): value is LocalRouterStrategy {
   return LOCAL_ROUTER_STRATEGIES.some((entry) => entry.value === value);
 }
 
+export function isExclusiveFirstStrategy(strategy: LocalRouterStrategy | undefined): boolean {
+  return strategy === "round-robin" || strategy === "random";
+}
+
+/** Round robin and random settle the choice; neither can have a later priority. */
+export function terminalRoutingStrategy(strategies: readonly LocalRouterStrategy[]): LocalRouterStrategy | undefined {
+  return strategies.find(isExclusiveFirstStrategy);
+}
+
 function readStoredSettings(): LocalRouterSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
@@ -158,7 +167,12 @@ function readStoredSettings(): LocalRouterSettings {
       : [];
     return {
       mode: mode === "model" || mode === "account" ? mode : "priority",
-      strategies: enabled.length > 0 ? enabled : DEFAULT_SETTINGS.strategies,
+      strategies: Array.isArray(strategies)
+        ? (isExclusiveFirstStrategy(enabled[0]) ? enabled.slice(0, 1) : [
+            ...enabled.filter((entry) => !isExclusiveFirstStrategy(entry)),
+            ...enabled.filter(isExclusiveFirstStrategy).slice(0, 1),
+          ])
+        : DEFAULT_SETTINGS.strategies,
       modelOrder: Array.isArray(modelOrder)
         ? modelOrder.filter((entry): entry is string => typeof entry === "string")
         : [],
@@ -220,13 +234,14 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
   toggleStrategy: (strategy) => set((state) => {
     if (!isStrategy(strategy)) return state;
     const enabled = state.strategies.includes(strategy);
-    const strategies = enabled
-      ? state.strategies.filter((entry) => entry !== strategy)
+    if (!enabled && isExclusiveFirstStrategy(state.strategies[0])) return state;
+    const terminal = terminalRoutingStrategy(state.strategies);
+    if (!enabled && terminal && isExclusiveFirstStrategy(strategy)) return state;
+    const strategies = enabled ? state.strategies.filter((entry) => entry !== strategy)
+      : terminal ? [...state.strategies.filter((entry) => entry !== terminal), strategy, terminal]
       : [...state.strategies, strategy];
-    // Keep at least one strategy: turning off the last one falls back to round robin.
-    const next = strategies.length > 0 ? strategies : ["round-robin" as const];
-    writeStoredSettings({ ...settingsOf(state), strategies: next });
-    return { strategies: next };
+    writeStoredSettings({ ...settingsOf(state), strategies });
+    return { strategies };
   }),
   moveStrategy: (strategy, direction) => set((state) => {
     const index = state.strategies.indexOf(strategy);
@@ -234,6 +249,8 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
     if (index < 0 || target < 0 || target >= state.strategies.length) return state;
     const strategies = [...state.strategies];
     [strategies[index], strategies[target]] = [strategies[target]!, strategies[index]!];
+    const terminalIndex = strategies.findIndex(isExclusiveFirstStrategy);
+    if (terminalIndex >= 0 && terminalIndex !== strategies.length - 1) return state;
     writeStoredSettings({ ...settingsOf(state), strategies });
     return { strategies };
   }),
@@ -531,10 +548,11 @@ export function resolveLocalRouterChoice(
   const usable = candidates.filter((candidate) =>
     candidate.model.remainingFraction === null || candidate.model.remainingFraction > 0);
   if (usable.length === 0) return null;
+  if (settings.mode === "priority" && settings.strategies.length === 0) return null;
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.mode !== "priority"
     ? []
-    : settings.strategies.length > 0 ? settings.strategies : (["round-robin"] as const);
+    : settings.strategies;
   const context = {
     mode: settings.mode,
     randomScores: new Map(pool.map((candidate) => [candidate.key, Math.random()])),

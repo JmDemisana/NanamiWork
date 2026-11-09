@@ -208,6 +208,10 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
     const state = useLocalRouterStore.getState();
     const next = resolveLocalRouterChoice(routerAccounts, state);
     if (!next) {
+      if (state.mode === "priority" && state.strategies.length === 0) {
+        setRouterNotice("Choose a routing priority in router settings first.");
+        return;
+      }
       const summary = localRouterSummary(routerAccounts, state);
       setRouterNotice(summary.modelCount === 0
         ? "No accounts or models are included. Open router settings to include some."

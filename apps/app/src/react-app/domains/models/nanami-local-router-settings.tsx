@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { ProviderIcon } from "@/react-app/design-system/provider-icon";
 import {
   LOCAL_ROUTER_STRATEGIES,
+  isExclusiveFirstStrategy,
+  terminalRoutingStrategy,
   localRouterModels,
   localRouterSummary,
   orderByLocalRouterOrder,
@@ -27,11 +29,15 @@ function OrderButtons({
   label,
   canMoveUp,
   canMoveDown,
+  disabled,
+  disabledReason,
   onMove,
 }: {
   label: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  disabled: boolean;
+  disabledReason?: string;
   onMove: (direction: -1 | 1) => void;
 }) {
   return <span className="flex shrink-0 items-center">
@@ -99,11 +105,13 @@ function RoutingRow({
 }) {
   return <div
     data-testid={`router-strategy-${strategy}`}
-    className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${enabled ? "bg-accent/45" : "hover:bg-accent/30"}`}
+    className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${disabled ? "opacity-50" : enabled ? "bg-accent/45" : "hover:bg-accent/30"}`}
+    title={disabledReason}
   >
     <Switch
       aria-label={`${label} routing`}
       checked={enabled}
+      disabled={disabled}
       onCheckedChange={onToggle}
     />
     <span className="min-w-0 flex-1">
@@ -115,7 +123,7 @@ function RoutingRow({
           </span>
         ) : null}
       </span>
-      <span className="block truncate text-xs text-muted-foreground" title={description}>{description}</span>
+      <span className="block truncate text-xs text-muted-foreground" title={disabledReason ?? description}>{disabledReason ?? description}</span>
     </span>
     {enabled ? (
       <span className="flex shrink-0 items-center">
@@ -124,7 +132,7 @@ function RoutingRow({
           variant="ghost"
           size="icon-sm"
           className="size-6 text-muted-foreground"
-          disabled={!canMoveUp}
+          disabled={disabled || !canMoveUp}
           onClick={() => onMove(-1)}
           aria-label={`Move ${label} earlier`}
           title="Move earlier"
@@ -136,7 +144,7 @@ function RoutingRow({
           variant="ghost"
           size="icon-sm"
           className="size-6 text-muted-foreground"
-          disabled={!canMoveDown}
+          disabled={disabled || !canMoveDown}
           onClick={() => onMove(1)}
           aria-label={`Move ${label} later`}
           title="Move later"
@@ -185,6 +193,10 @@ export function LocalRouterSettingsPage({
     && modelEntries.every((entry) => !excludedModels.includes(entry.model.key));
   const allAccountsIncluded = accounts.length > 0
     && accounts.every((account) => !excludedAccounts.includes(account.key));
+  const exclusiveFirst = isExclusiveFirstStrategy(strategies[0]) ? strategies[0] : undefined;
+  const exclusiveLabel = exclusiveFirst === "round-robin" ? "Round robin" : "Random";
+  const terminal = terminalRoutingStrategy(strategies);
+  const terminalLabel = terminal === "round-robin" ? "Round robin" : "Random";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-dls-surface" data-testid="local-router-settings-page">
@@ -330,7 +342,9 @@ export function LocalRouterSettingsPage({
               <h3 className="text-sm font-medium">Routing</h3>
               <p className="text-xs text-muted-foreground">
                 {mode === "priority"
-                  ? "Turn on one or more strategies. The number shows their priority when they disagree."
+                  ? exclusiveFirst
+                    ? `${exclusiveLabel} is priority 1, so other strategies cannot affect the choice. Turn it off to choose another first priority.`
+                    : strategies.length === 0 ? "Choose at least one priority before routing." : "Round robin and Random always come last; earlier priorities resolve first."
                   : `Routing follows the ${mode === "model" ? "model" : "account"} order above. Priority strategies are paused.`}
               </p>
             </div>
@@ -339,6 +353,12 @@ export function LocalRouterSettingsPage({
               <div className="mt-1 flex flex-col gap-0.5">
                 {LOCAL_ROUTER_STRATEGIES.map((entry) => {
                   const priority = strategies.indexOf(entry.value);
+                  const blockedByFirst = Boolean(exclusiveFirst && entry.value !== exclusiveFirst);
+                  const blockedByTerminal = Boolean(terminal && entry.value !== terminal && isExclusiveFirstStrategy(entry.value));
+                  const disabled = blockedByFirst || blockedByTerminal;
+                  const disabledReason = blockedByFirst
+                    ? `${exclusiveLabel} already decides the choice at priority 1.`
+                    : blockedByTerminal ? `${terminalLabel} already occupies the final priority.` : undefined;
                   return <RoutingRow
                     key={entry.value}
                     strategy={entry.value}
@@ -346,8 +366,10 @@ export function LocalRouterSettingsPage({
                     description={entry.description}
                     enabled={priority >= 0}
                     priority={priority >= 0 ? priority + 1 : null}
-                    canMoveUp={priority > 0}
-                    canMoveDown={priority >= 0 && priority < strategies.length - 1}
+                    canMoveUp={priority > 0 && !isExclusiveFirstStrategy(entry.value)}
+                    canMoveDown={priority >= 0 && priority < strategies.length - 1 && !isExclusiveFirstStrategy(strategies[priority + 1])}
+                    disabled={disabled}
+                    disabledReason={disabledReason}
                     onToggle={() => toggleStrategy(entry.value)}
                     onMove={(direction) => moveStrategy(entry.value, direction)}
                   />;
