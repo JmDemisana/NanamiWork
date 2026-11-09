@@ -431,9 +431,10 @@ function useSessionMenuActions({
     onSelect: () => ctx.onOpenRenameSession?.(sessionId),
   });
   const groupActions: MenuAction[] = groups.length === 0 ? [{
-    type: "item", id: "create-first-group", label: t("session_management.no_groups_yet"),
+    type: "item", id: "create-first-group", label: t("session_management.new_group"),
+    icon: <FolderPlus className="size-4" />,
     webContent: <>
-      <span className="min-w-0 flex-1 ow-fade-truncate text-muted-foreground">{t("session_management.no_groups_yet")}</span>
+      <span className="min-w-0 flex-1 ow-fade-truncate">{t("session_management.new_group")}</span>
       <span className="ml-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground"><Plus className="size-3.5" /></span>
     </>,
     onSelect: () => ctx.onOpenCreateGroupModal?.(workspaceId),

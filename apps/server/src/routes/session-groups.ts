@@ -129,7 +129,16 @@ export function registerSessionGroupRoutes(options: RegisterSessionGroupRoutesOp
       } else {
         delete assignments[sessionId];
       }
-      return { ...current, assignments };
+      // A group that held this session and now holds nothing goes away with
+      // it. Groups that were already empty are left alone so a newly created
+      // destination survives until it is used.
+      const usedBefore = new Set(Object.values(current.assignments));
+      const usedAfter = new Set(Object.values(assignments));
+      return {
+        ...current,
+        groups: current.groups.filter((group) => !usedBefore.has(group.id) || usedAfter.has(group.id)),
+        assignments,
+      };
     });
     sessionGroupEvents.record(workspace.id, "assigned", { sessionId, ...(groupId ? { groupId } : {}) });
     return jsonResponse({ state: result.state, updatedAt: result.updatedAt });

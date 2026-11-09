@@ -128,6 +128,8 @@ type SessionManagementActions = {
   toggleFeedFolder: (workspaceId: string, groupId: string) => void;
   reorderSessions: (workspaceId: string, sessionIds: string[]) => void;
   assignGroup: (workspaceId: string, sessionId: string, groupId: string | null) => void;
+  /** Drop a deleted session's assignment, then remove any group it left empty. */
+  forgetSession: (workspaceId: string, sessionId: string) => void;
   createGroup: (workspaceId: string, label: string) => void;
   renameGroup: (workspaceId: string, groupId: string, label: string) => void;
   reorderGroups: (workspaceId: string, groupIds: string[]) => void;
@@ -164,6 +166,22 @@ function sameAssignments(left: Record<string, string>, right: Record<string, str
   const entries = Object.entries(left);
   return entries.length === Object.keys(right).length
     && entries.every(([sessionId, groupId]) => right[sessionId] === groupId);
+}
+
+/**
+ * A group that held sessions and just lost its last one is clutter. Keep groups
+ * that were already empty (a freshly created destination the person has not
+ * used yet) so creating one stays possible.
+ */
+function pruneEmptiedGroups(
+  groups: SessionGroupDefinition[],
+  before: Record<string, string>,
+  after: Record<string, string>,
+): SessionGroupDefinition[] {
+  const usedBefore = new Set(Object.values(before));
+  const usedAfter = new Set(Object.values(after));
+  const next = groups.filter((group) => !usedBefore.has(group.id) || usedAfter.has(group.id));
+  return next.length === groups.length ? groups : next;
 }
 
 let sessionGroupSyncHandler: SessionGroupSyncHandler | null = null;
@@ -385,12 +403,40 @@ export const useSessionManagementStore = create<SessionManagementStore>()(
           return {
             groupsByWorkspace: {
               ...state.groupsByWorkspace,
-              [workspaceId]: { ...ws, assignments },
+              [workspaceId]: {
+                ...ws,
+                groups: pruneEmptiedGroups(ws.groups, ws.assignments, assignments),
+                assignments,
+              },
             },
           };
         });
         syncServerState(
           sessionGroupSyncHandler?.assignGroup(workspaceId, sessionId, groupId),
+          workspaceId,
+        );
+      },
+
+      forgetSession: (workspaceId, sessionId) => {
+        const ws = useSessionManagementStore.getState().groupsByWorkspace[workspaceId] ?? EMPTY_GROUP_STATE;
+        if (!(sessionId in ws.assignments)) return;
+        const assignments = { ...ws.assignments };
+        delete assignments[sessionId];
+        set((state) => {
+          const current = state.groupsByWorkspace[workspaceId] ?? EMPTY_GROUP_STATE;
+          return {
+            groupsByWorkspace: {
+              ...state.groupsByWorkspace,
+              [workspaceId]: {
+                ...current,
+                groups: pruneEmptiedGroups(current.groups, current.assignments, assignments),
+                assignments,
+              },
+            },
+          };
+        });
+        syncServerState(
+          sessionGroupSyncHandler?.assignGroup(workspaceId, sessionId, null),
           workspaceId,
         );
       },

@@ -92,6 +92,40 @@ describe("session group management", () => {
     expect(useSessionManagementStore.getState().groupsByWorkspace[workspaceId]).toBe(before);
     expect(notifications).toBe(0);
   });
+
+  test("removes a group when its last session moves out", () => {
+    useSessionManagementStore.getState().assignGroup(workspaceId, "session-3", null);
+
+    const workspace = useSessionManagementStore.getState().groupsByWorkspace[workspaceId];
+    expect(workspace?.groups).toEqual([{ id: "group-a", label: "Alpha" }]);
+    expect(workspace?.assignments).toEqual({ "session-1": "group-a", "session-2": "group-a" });
+  });
+
+  test("keeps a group while it still holds another session", () => {
+    useSessionManagementStore.getState().assignGroup(workspaceId, "session-1", "group-b");
+
+    const workspace = useSessionManagementStore.getState().groupsByWorkspace[workspaceId];
+    expect(workspace?.groups).toEqual([
+      { id: "group-a", label: "Alpha" },
+      { id: "group-b", label: "Beta" },
+    ]);
+  });
+
+  test("keeps a freshly created empty destination until it is used", () => {
+    useSessionManagementStore.getState().createGroup(workspaceId, "Gamma");
+    useSessionManagementStore.getState().assignGroup(workspaceId, "session-1", "group-b");
+
+    const workspace = useSessionManagementStore.getState().groupsByWorkspace[workspaceId];
+    expect(workspace?.groups.map((group) => group.label)).toEqual(["Alpha", "Beta", "Gamma"]);
+  });
+
+  test("drops the assignment and emptied group when a session is deleted", () => {
+    useSessionManagementStore.getState().forgetSession(workspaceId, "session-3");
+
+    const workspace = useSessionManagementStore.getState().groupsByWorkspace[workspaceId];
+    expect(workspace?.groups).toEqual([{ id: "group-a", label: "Alpha" }]);
+    expect(workspace?.assignments).toEqual({ "session-1": "group-a", "session-2": "group-a" });
+  });
 });
 
 describe("sidebar view", () => {

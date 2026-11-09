@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
-import { BookOpen, Check, Download, Loader2, Sparkles } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { BookOpen, Check, Download, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -47,6 +47,8 @@ export function SpecializedToolsView() {
   const finishPackInstall = useStudyStore((state) => state.finishPackInstall);
   const failPackInstall = useStudyStore((state) => state.failPackInstall);
   const setEnabled = useStudyStore((state) => state.setEnabled);
+  const removePack = useStudyStore((state) => state.removePack);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const timers = useRef<number[]>([]);
 
   useEffect(() => () => {
@@ -145,11 +147,45 @@ export function SpecializedToolsView() {
           ) : null}
 
           <LayoutSectionItemFootnote>
-            <span className={cn(notebookCount > 0 && !enabled && "text-amber-11")}>
-              {notebookCount > 0
-                ? `${notebookCount} notebook${notebookCount === 1 ? "" : "s"} stored locally. Turning Study off does not delete them.`
-                : "Notebooks are stored in this app's local data, never in a workspace."}
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className={cn(notebookCount > 0 && !enabled && "text-amber-11")}>
+                {notebookCount > 0
+                  ? `${notebookCount} notebook${notebookCount === 1 ? "" : "s"} stored locally. Turning Study off does not delete them.`
+                  : "Notebooks are stored in this app's local data, never in a workspace."}
+              </span>
+              {installed ? (
+                confirmRemove ? (
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Remove the pack? Notebooks stay on this computer.
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        removePack();
+                        setConfirmRemove(false);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmRemove(false)}>
+                      Cancel
+                    </Button>
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setConfirmRemove(true)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Remove pack
+                  </Button>
+                )
+              ) : null}
+            </div>
           </LayoutSectionItemFootnote>
         </LayoutSectionItem>
       </LayoutSection>

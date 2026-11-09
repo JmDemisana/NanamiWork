@@ -575,7 +575,7 @@ export function SessionRoute() {
   } = useWorkspaceRouteState({
     preservePendingConversationRoute: Boolean(requestedPendingId && pendingConversations[requestedPendingId]?.scope === sessionDraftScope),
     developerMode,
-    workspaceRoute: activityRouteActive ? "activity" : appsRouteActive ? "apps" : automationsRouteActive ? "automations" : dashboardWorkspaceRoute ? "dashboard" : "session",
+    workspaceRoute: studyRouteActive ? "study" : activityRouteActive ? "activity" : appsRouteActive ? "apps" : automationsRouteActive ? "automations" : dashboardWorkspaceRoute ? "dashboard" : "session",
     onServerSettingsChanged: () => undefined,
     onHostInfo: setOpenworkServerHostInfoState,
   });
@@ -4278,6 +4278,9 @@ export function SessionRoute() {
               const endpoint = endpointForWorkspace(selectedWorkspace);
               if (!endpoint) return;
               await deleteRouteSession(endpoint, sessionId);
+              // The group it was in should not linger just because its last
+              // session is gone.
+              sessionManagementStore.getState().forgetSession(selectedWorkspaceId, sessionId);
               if (selectedSessionId === sessionId) {
                 navigateToWorkspaceSession(selectedWorkspaceId);
               }

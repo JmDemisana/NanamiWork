@@ -8,6 +8,7 @@ import {
   Sparkles,
   Terminal,
   RefreshCcw,
+  Wrench,
 } from "lucide-react";
 
 import type { SettingsTab } from "../../../../app/types";
@@ -32,6 +33,7 @@ const globalCards: SettingsCardDefinition[] = [
   { tab: "appearance", icon: Paintbrush, title: "Appearance", desc: "Theme, font size, and display." },
   { tab: "shortcuts", icon: Keyboard, title: "Keyboard shortcuts", desc: "Keys that switch to your saved models." },
   { tab: "environment", icon: Terminal, title: "Environment", desc: "Environment variables and paths." },
+  { tab: "specialized-tools", icon: Wrench, title: "Specialized tools", desc: "Optional local surfaces such as Study notebooks." },
   { tab: "updates", icon: RefreshCcw, title: "Updates", desc: "Check for NanamiWork updates and releases." },
 ];
 

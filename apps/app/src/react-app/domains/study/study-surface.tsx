@@ -9,6 +9,7 @@ import {
   Layers,
   ListChecks,
   Network,
+  Pencil,
   Plus,
   Search,
   Sparkles,
@@ -177,8 +178,10 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
   const addArtifact = useStudyStore((state) => state.addArtifact);
   const removeArtifact = useStudyStore((state) => state.removeArtifact);
   const archiveNotebook = useStudyStore((state) => state.archiveNotebook);
+  const deleteNotebook = useStudyStore((state) => state.deleteNotebook);
   const navigate = useNavigate();
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [titleDraft, setTitleDraft] = useState(notebook.title);
   const [editingTitle, setEditingTitle] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -279,8 +282,14 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
             }}
           />
         ) : (
-          <button type="button" className="truncate text-sm font-medium" onClick={() => setEditingTitle(true)} title="Rename notebook">
-            {notebook.title}
+          <button
+            type="button"
+            className="group/title flex min-w-0 items-center gap-1.5"
+            onClick={() => { setTitleDraft(notebook.title); setEditingTitle(true); }}
+            title="Rename notebook"
+          >
+            <span className="truncate text-sm font-medium">{notebook.title}</span>
+            <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
           </button>
         )}
         <span className="ml-auto text-[11px] text-muted-foreground">Stored locally · no account</span>
@@ -295,6 +304,16 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
           }}
         >
           <Archive />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Delete notebook"
+          title="Delete notebook"
+          className="hover:text-destructive"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <Trash2 />
         </Button>
       </header>
 
@@ -488,6 +507,34 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
 
       {openArtifact ? (
         <ArtifactDialog artifact={openArtifact} onClose={() => setOpenArtifact(null)} />
+      ) : null}
+
+      {confirmDelete ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-4 shadow-xl">
+            <h2 className="text-sm font-medium">Delete this notebook?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              “{notebook.title}” and its {notebook.sources.length} source{notebook.sources.length === 1 ? "" : "s"} and{" "}
+              {notebook.artifacts.length} artifact{notebook.artifacts.length === 1 ? "" : "s"} will be removed from this computer.
+              This cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  deleteNotebook(notebook.id);
+                  setConfirmDelete(false);
+                  navigate("/study");
+                }}
+              >
+                <Trash2 className="size-3.5" />
+                Delete notebook
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
