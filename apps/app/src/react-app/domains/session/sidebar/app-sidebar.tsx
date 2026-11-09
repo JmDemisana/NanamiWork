@@ -25,6 +25,7 @@ import {
   Trash2,
   RotateCcw,
   FolderOpen,
+  NotebookPen,
   SquarePen,
   Tag,
   Undo2,
@@ -50,6 +51,7 @@ import { openWorkbenchInstancesEvent } from "../../../shell/new-providers-listen
 import { resolveExtensionIconSrc } from "../../../design-system/extension-icon-src";
 import { useBrandAppName, useBrandLogoUrl } from "../../cloud/brand-theme";
 import { canCreateWorkspaces } from "../../../../app/lib/workspace-creation-policy";
+import { useStudyStore } from "../../study/study-store";
 
 import {
   Sidebar,
@@ -859,6 +861,7 @@ export function AppSidebar(props: AppSidebarProps) {
             {pinnedSessions.length > 0 ? (
               <GlobalPinnedSessions entries={pinnedSessions} />
             ) : null}
+            <StudyNotebooksSection />
             {/* A flex item of the scrolling list: without shrink-0 it collapses to its
                 button's height once the list overflows, shifting every row up. */}
             <div className={cn("group/workspaces-header flex h-6 shrink-0 items-center mt-4", SIDEBAR_SECTION_LANE)}>
@@ -885,6 +888,7 @@ export function AppSidebar(props: AppSidebarProps) {
             {archivedSessions.length > 0 ? (
               <GlobalArchivedSessions entries={archivedSessions} />
             ) : null}
+            <StudyArchivedNotebooks />
           </m.div>
         </SidebarReorderScope>
 
@@ -930,6 +934,98 @@ function GlobalPinnedSessions({ entries }: { entries: GlobalPinnedSessionEntry[]
               </SessionReorderList>
             </SidebarMenuSub>
           </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function StudyNotebooksSection() {
+  const enabled = useStudyStore((state) => state.enabled);
+  const notebooks = useStudyStore((state) => state.notebooks);
+  const createNotebook = useStudyStore((state) => state.createNotebook);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const active = React.useMemo(
+    () => notebooks.filter((notebook) => notebook.archivedAt === null),
+    [notebooks],
+  );
+  if (!enabled) return null;
+  return (
+    <SidebarGroup className="pb-0 pt-4" data-study-notebooks>
+      <SidebarGroupContent>
+        <div className={cn("flex h-6 shrink-0 items-center justify-between pe-2", SIDEBAR_SECTION_LANE)}>
+          <span className={SIDEBAR_SECTION_LABEL}>Notebooks</span>
+          <button
+            type="button"
+            aria-label="New notebook"
+            title="New notebook"
+            className="rounded-md p-1 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => {
+              const notebook = createNotebook();
+              navigate(`/study/${notebook.id}`);
+            }}
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+        <SidebarMenu>
+          {active.map((notebook) => (
+            <SidebarMenuItem key={notebook.id}>
+              <SidebarMenuButton
+                type="button"
+                isActive={location.pathname === `/study/${notebook.id}`}
+                tooltip={notebook.title}
+                onClick={() => navigate(`/study/${notebook.id}`)}
+              >
+                <NotebookPen className="size-4" />
+                <span className="truncate">{notebook.title}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+          {active.length === 0 ? (
+            <p className="px-3 py-1 text-xs text-sidebar-foreground/50">No notebooks yet</p>
+          ) : null}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function StudyArchivedNotebooks() {
+  const enabled = useStudyStore((state) => state.enabled);
+  const notebooks = useStudyStore((state) => state.notebooks);
+  const archiveNotebook = useStudyStore((state) => state.archiveNotebook);
+  const deleteNotebook = useStudyStore((state) => state.deleteNotebook);
+  const archived = React.useMemo(
+    () => notebooks.filter((notebook) => notebook.archivedAt !== null),
+    [notebooks],
+  );
+  if (!enabled || archived.length === 0) return null;
+  return (
+    <SidebarGroup className="pb-0 pt-4" data-study-archive>
+      <SidebarGroupContent>
+        <div className={cn("flex h-6 shrink-0 items-center", SIDEBAR_SECTION_LANE)}>
+          <span className={SIDEBAR_SECTION_LABEL}>Archive</span>
+        </div>
+        <SidebarMenu>
+          {archived.map((notebook) => (
+            <SidebarMenuItem key={notebook.id} className="group/archived-notebook flex items-center">
+              <SidebarMenuButton type="button" tooltip={notebook.title} onClick={() => archiveNotebook(notebook.id, false)}>
+                <ArchiveRestore className="size-4" />
+                <span className="truncate">{notebook.title}</span>
+              </SidebarMenuButton>
+              <button
+                type="button"
+                aria-label={`Delete ${notebook.title}`}
+                title="Delete notebook"
+                className="rounded-md p-1 text-sidebar-foreground/40 opacity-0 hover:bg-sidebar-accent hover:text-destructive group-hover/archived-notebook:opacity-100"
+                onClick={() => deleteNotebook(notebook.id)}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </SidebarMenuItem>
+          ))}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

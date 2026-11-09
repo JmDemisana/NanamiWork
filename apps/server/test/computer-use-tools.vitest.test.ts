@@ -41,6 +41,19 @@ test("computer_open defaults to control and offers the narrower modes only when 
   expect(description).toContain("ask them in this chat with the question tool");
 });
 
+test("computer control is a last resort behind terminal, file, API and browser tools", async () => {
+  const plugin = await server();
+  for (const name of ["computer_open", "computer_run", "computer_script"] as const) {
+    const tool = plugin.tool[name];
+    if (!tool) continue;
+    expect(tool.description, name).toContain("cannot do the task");
+    expect(tool.description, name).toContain("takes over the person's machine");
+  }
+  // The old wording told the model to do it rather than hand steps back; that
+  // pushed computer control ahead of quieter tools.
+  expect(plugin.tool.computer_open.description).not.toContain("rather than handing the steps back to them");
+});
+
 test("a Windows PC is not offered app scripting", async () => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
   Object.defineProperty(process, "platform", { value: "win32" });

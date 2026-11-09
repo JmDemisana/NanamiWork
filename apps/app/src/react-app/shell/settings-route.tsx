@@ -107,6 +107,7 @@ import { ClaudeImportView } from "@/react-app/domains/settings/pages/claude-impo
 import { AppearanceView } from "@/react-app/domains/settings/pages/appearance-view";
 import { KeyboardShortcutsView } from "@/react-app/domains/settings/pages/keyboard-shortcuts-view";
 import { ComputerUseView } from "@/react-app/domains/settings/pages/computer-use-view";
+import { SpecializedToolsView } from "@/react-app/domains/study/specialized-tools-view";
 import { CloudAccountView } from "@/react-app/domains/settings/pages/cloud-account-view";
 import {
   connectPluginsForComposer,
@@ -310,6 +311,7 @@ export function parseSettingsPath(pathname: string): {
     case "appearance":
     case "shortcuts":
     case "computer":
+    case "specialized-tools":
     case "environment":
     case "updates":
     case "debug":
@@ -2506,6 +2508,8 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
         );
       case "computer":
         return <ComputerUseView />;
+      case "specialized-tools":
+        return <SpecializedToolsView />;
       case "updates":
         return (
           <UpdatesView

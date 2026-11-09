@@ -2,6 +2,7 @@
 import type * as React from "react";
 import {
   ArrowLeft,
+  BookOpen,
   Bug,
   Cable,
   ChevronDown,
@@ -95,6 +96,8 @@ export function getSettingsTabIcon(tab: SettingsTab) {
       return Keyboard;
     case "computer":
       return Monitor;
+    case "specialized-tools":
+      return BookOpen;
     case "updates":
       return RefreshCcw;
     case "recovery":
@@ -142,6 +145,8 @@ export function getSettingsTabLabel(tab: SettingsTab) {
       return "Keyboard shortcuts";
     case "computer":
       return "Computer use";
+    case "specialized-tools":
+      return "Specialized tools";
     case "updates":
       return t("settings.tab_updates");
     case "recovery":
@@ -191,6 +196,8 @@ export function getSettingsTabDescription(tab: SettingsTab) {
       return "Keys that switch to the models you use most";
     case "computer":
       return "Let the agent use apps on this computer";
+    case "specialized-tools":
+      return "Optional local tools such as Study notebooks";
     case "updates":
       return t("settings.tab_description_updates");
     case "recovery":
@@ -213,7 +220,7 @@ export function getGlobalSettingsTabs(
   _capabilities: Pick<PlatformCapabilities, "autoUpdate">,
   options: { computerUse?: boolean } = {},
 ): SettingsTab[] {
-  const tabs: SettingsTab[] = ["appearance", "shortcuts", "environment", "updates"];
+  const tabs: SettingsTab[] = ["appearance", "shortcuts", "environment", "specialized-tools", "updates"];
   if (options.computerUse) tabs.push("computer");
   if (developerMode) tabs.push("debug");
   return tabs;
