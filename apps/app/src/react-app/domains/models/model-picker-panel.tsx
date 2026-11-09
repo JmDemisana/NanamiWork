@@ -65,6 +65,13 @@ export type ModelPickerPanelProps = {
   onClose?: () => void;
   /** Rows under the footer that only one surface offers. */
   footerExtra?: React.ReactNode;
+  /** A full page owns its own title, search and account logins. */
+  chrome?: "panel" | "page";
+  /** Controlled search text, for page chrome. */
+  query?: string;
+  onQueryChange?: (value: string) => void;
+  /** Content above the first model group, such as the local router card. */
+  leading?: React.ReactNode;
 };
 
 /**
@@ -74,7 +81,9 @@ export type ModelPickerPanelProps = {
  */
 export function ModelPickerPanel(props: ModelPickerPanelProps) {
   const { options, current, behaviorValue, onBehaviorChange } = props;
-  const [query, setQuery] = React.useState("");
+  const [internalQuery, setInternalQuery] = React.useState("");
+  const query = props.query ?? internalQuery;
+  const setQuery = props.onQueryChange ?? setInternalQuery;
   const [effort, setEffort] = React.useState(false);
   const effortButtonRef = React.useRef<HTMLButtonElement>(null);
   const backButtonRef = React.useRef<HTMLButtonElement>(null);
@@ -111,7 +120,8 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
   return <ModelPickerList searchInputRef={props.searchInputRef} autoFocusSearch={false} options={options} current={current} query={query} onQueryChange={setQuery} onSelect={props.onSelect}
     focusAlternative={props.focusAlternative} catalogState={props.catalogState} retainedSelection={props.retainedSelection} onConnectProvider={props.onConnectProvider} onConnectCodex={props.onConnectCodex}
     onOpenProviderSettings={props.onOpenProviderSettings} onSetWorkspaceDefault={props.onSetWorkspaceDefault} currentBehaviorValue={behaviorValue}
-    openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} onClose={props.onClose} footer={<>
+    openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} onClose={props.onClose}
+    chrome={props.chrome} leading={props.leading} footer={<>
       {props.footerExtra}
       <AutoAccessFooter available={props.autoVisible} syncing={props.autoVisible && Boolean(props.openWorkModelsSyncing)} />
     </>} />;

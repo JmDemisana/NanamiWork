@@ -137,6 +137,17 @@ export const FEATURES = defineFeatures({
     deployments: ["cloud"],
     default: false,
   },
+  localModelPicker: {
+    label: "Desktop: local model picker and router",
+    description: "A full-page model picker with sortable accounts and a configurable local model router.",
+    category: "models",
+    added: "2026-11-09",
+    since: "2026-11",
+    author: "JmDemisana",
+    docs: "docs/features/local-model-picker/README.md",
+    deployments: everywhere,
+    default: false,
+  },
   plainFreeModel: {
     label: "Desktop: OpenWork Free listed like any other model",
     description: "The free model shows in the model picker under its own name (GPT-6 Luna) with the same row as every other model, stays selectable when its usage limit is used up, and the limit message appears in the chat after sending.",

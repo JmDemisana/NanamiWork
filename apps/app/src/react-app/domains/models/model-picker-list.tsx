@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X, Bot } from "lucide-react";
+import { Building, Check, ChevronDown, ChevronUp, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X, Bot } from "lucide-react";
 import { confirmAntigravityAuthEvent, openCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { useModelShortcutsStore } from "@/react-app/domains/shortcuts/model-shor
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
 import { formatChord, resolveShortcutOs } from "@/react-app/domains/shortcuts/shortcut-keys";
 import { openDesktopUrl } from "@/app/lib/desktop";
+import { localRouterAccountKey, orderByLocalRouterOrder, useLocalRouterStore } from "./nanami-local-router";
 
 export function ModelSourceIcon({ model }: { model: ModelRef & { source?: ModelOption["source"] } }) {
   const source = modelSource(model);
@@ -69,9 +70,16 @@ export type ModelPickerListProps = {
   onReloadWorkspace?: () => void | Promise<unknown>;
   onRetryAuto?: () => void | Promise<unknown>;
   onClose?: () => void;
+  /** `page` moves the title, search and account logins into the page chrome. */
+  chrome?: "panel" | "page";
 };
 
 type AutoRowState = { model: ModelRef; state: AutoPickerState; code?: string | null; resetsAt?: string | null };
+
+type ConnectedAccountEntry =
+  | { kind: "antigravity"; key: string; account: AntigravityAccountInfo }
+  | { kind: "chatgpt"; key: string; account: ChatGptAccountInfo }
+  | { kind: "copilot"; key: string; account: CopilotAccountInfo };
 export function ModelPickerList(props: ModelPickerListProps) {
   return isAutoModel(props.current) || props.options.some(isAutoModel) || props.openWorkModelsSyncing
     ? <AutoStatusModelPickerList {...props} /> : <ModelPickerRows {...props} />;
@@ -122,16 +130,69 @@ function AccountQuotaPill({
   );
 }
 
+function AccountMoveButtons({
+  label,
+  canMoveUp,
+  canMoveDown,
+  onMove,
+}: {
+  label: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  return <span className="flex shrink-0 items-center">
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      className="size-6 text-muted-foreground hover:text-foreground"
+      disabled={!canMoveUp}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onMove(-1);
+      }}
+      aria-label={`Move ${label} up`}
+      title="Move up"
+    >
+      <ChevronUp className="size-3.5" />
+    </Button>
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      className="size-6 text-muted-foreground hover:text-foreground"
+      disabled={!canMoveDown}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onMove(1);
+      }}
+      aria-label={`Move ${label} down`}
+      title="Move down"
+    >
+      <ChevronDown className="size-3.5" />
+    </Button>
+  </span>;
+}
+
 function ConnectedAccountGroup({
   account,
   current,
   query,
   onSelectModel,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
 }: {
   account: AntigravityAccountInfo;
   current: ModelRef;
   query: string;
   onSelectModel: (account: AntigravityAccountInfo, item: AntigravityModelItem) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (direction: -1 | 1) => void;
 }) {
   const search = query.trim().toLowerCase();
   const visibleModels = useMemo(() => {
@@ -141,7 +202,7 @@ function ConnectedAccountGroup({
     );
   }, [account.models, account.email, search]);
 
-  if (visibleModels.length === 0) return null;
+  if (visibleModels.length === 0 && search) return null;
 
   return (
     <div className="px-2 pt-1 pb-1" data-testid={`antigravity-account-group-${account.email}`}>
@@ -166,6 +227,7 @@ function ConnectedAccountGroup({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {onMove ? <AccountMoveButtons label={account.email} canMoveUp={canMoveUp} canMoveDown={canMoveDown} onMove={onMove} /> : null}
           <Button
             type="button"
             variant="ghost"
@@ -245,11 +307,17 @@ function ConnectedChatGptAccountGroup({
   current,
   query,
   onSelectModel,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
 }: {
   account: ChatGptAccountInfo;
   current: ModelRef;
   query: string;
   onSelectModel: (account: ChatGptAccountInfo, item: ChatGptModelItem) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (direction: -1 | 1) => void;
 }) {
   const search = query.trim().toLowerCase();
   const visibleModels = useMemo(() => {
@@ -259,7 +327,7 @@ function ConnectedChatGptAccountGroup({
     );
   }, [account.models, account.email, search]);
 
-  if (visibleModels.length === 0) return null;
+  if (visibleModels.length === 0 && search) return null;
 
   return (
     <div className="px-2 pt-1 pb-1" data-testid={`chatgpt-account-group-${account.email}`}>
@@ -270,6 +338,7 @@ function ConnectedChatGptAccountGroup({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {onMove ? <AccountMoveButtons label={account.email} canMoveUp={canMoveUp} canMoveDown={canMoveDown} onMove={onMove} /> : null}
           <Button
             type="button"
             variant="ghost"
@@ -345,11 +414,17 @@ function ConnectedCopilotAccountGroup({
   current,
   query,
   onSelectModel,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMove,
 }: {
   account: CopilotAccountInfo;
   current: ModelRef;
   query: string;
   onSelectModel: (account: CopilotAccountInfo, item: CopilotModelItem) => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMove?: (direction: -1 | 1) => void;
 }) {
   const search = query.trim().toLowerCase();
   const visibleModels = useMemo(() => {
@@ -359,7 +434,7 @@ function ConnectedCopilotAccountGroup({
     );
   }, [account.models, account.username, search]);
 
-  if (visibleModels.length === 0) return null;
+  if (visibleModels.length === 0 && search) return null;
 
   return (
     <div className="px-2 pt-1 pb-1" data-testid={`copilot-account-group-${account.username}`}>
@@ -370,6 +445,7 @@ function ConnectedCopilotAccountGroup({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {onMove ? <AccountMoveButtons label={`@${account.username}`} canMoveUp={canMoveUp} canMoveDown={canMoveDown} onMove={onMove} /> : null}
           <Button
             type="button"
             variant="ghost"
@@ -440,8 +516,77 @@ function ConnectedCopilotAccountGroup({
   );
 }
 
-function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, searchInputRef,
-  catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false,
+export function ModelProviderLoginBar({
+  onConnectProvider,
+  onClose,
+  className,
+}: {
+  onConnectProvider?: () => void;
+  onClose?: () => void;
+  className?: string;
+}) {
+  if (!onConnectProvider) return null;
+  return <div className={className ?? "border-t border-border bg-muted/20 p-2 flex flex-col gap-2"}>
+    <div className="flex items-center justify-between gap-1.5">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+        onClick={() => {
+          onClose?.();
+          useAntigravityAccountsStore.getState().setModalOpen(true);
+          window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
+        }}
+        title="Add Antigravity Account"
+      >
+        <Sparkles className="size-3.5 text-amber-500" />
+        <span>Antigravity</span>
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+        onClick={() => {
+          onClose?.();
+          useCopilotAccountsStore.getState().setModalOpen(true);
+        }}
+        title="Add GitHub Copilot Account"
+      >
+        <Sparkles className="size-3.5 text-emerald-500" />
+        <span>Copilot</span>
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
+        onClick={() => {
+          onClose?.();
+          useChatGptAccountsStore.getState().setModalOpen(true);
+          window.dispatchEvent(new Event(openCodexAuthEvent));
+        }}
+        title="Add ChatGPT / OpenAI Account"
+      >
+        <Bot className="size-3.5 text-sky-500" />
+        <span>ChatGPT</span>
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 px-2 justify-center text-xs text-muted-foreground hover:text-foreground shrink-0"
+        onClick={() => window.location.reload()}
+        title="Confirm & Refresh"
+      >
+        <RefreshCw className="size-3.5" />
+      </Button>
+    </div>
+    <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
+      For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
+    </p>
+  </div>;
+}
+
+function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, leading, searchInputRef,
+  catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false, chrome = "panel",
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
   const display = { plainFreeModel };
   const favorites = useModelCollectionsStore((state) => state.favorites);
@@ -450,6 +595,16 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
   const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
   const copilotAccounts = useCopilotAccountsStore((state) => state.accounts);
+  const accountOrder = useLocalRouterStore((state) => state.accountOrder);
+  const moveAccount = useLocalRouterStore((state) => state.moveAccount);
+  const connectedAccounts = useMemo<ConnectedAccountEntry[]>(() => {
+    const entries: ConnectedAccountEntry[] = [
+      ...antigravityAccounts.map((account) => ({ kind: "antigravity" as const, key: localRouterAccountKey("google", account.email), account })),
+      ...chatGptAccounts.map((account) => ({ kind: "chatgpt" as const, key: localRouterAccountKey("openai", account.email), account })),
+      ...copilotAccounts.map((account) => ({ kind: "copilot" as const, key: localRouterAccountKey("github-copilot", account.username), account })),
+    ];
+    return orderByLocalRouterOrder(entries, (entry) => entry.key, accountOrder);
+  }, [antigravityAccounts, chatGptAccounts, copilotAccounts, accountOrder]);
 
   useEffect(() => {
     void useChatGptAccountsStore.getState().loadAccounts();
@@ -728,7 +883,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         </form>
       </div>
     ) : null}
-    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+    {chrome === "page" ? null : <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <div className="min-w-0 pr-2">
         <h3 className="text-sm font-semibold text-foreground">Select Model</h3>
         <p className="text-xs text-muted-foreground">Choose a model from your connected accounts</p>
@@ -770,9 +925,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
           </Button>
         ) : null}
       </div>
-    </div>
+    </div>}
     <Command items={groups} filter={null} value={query} onValueChange={onQueryChange} autoHighlight={false} keepHighlight={false}>
       <CommandPanel className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [&>[data-slot=scroll-area]]:h-auto">
+        {leading ? <div className="px-2 pt-2">{leading}</div> : null}
         {retainedVisible ? <div data-testid="retained-selected-model" aria-disabled="true" aria-label={`${retainedName}, current model, ${retainedSubtitle}`} className="px-2 pt-2">
           <p className="flex h-7 items-center px-2 text-xs text-muted-foreground">{retainedLabel}</p>
           <div className="flex min-h-11 items-center gap-2 rounded-md px-2 py-1 text-sm opacity-55">
@@ -793,8 +949,8 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
           <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
-        <CommandList>
-          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items}>
+        <CommandList className={chrome === "page" ? "lg:columns-2 2xl:columns-3 lg:[column-gap:1.5rem]" : undefined}>
+          {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "break-inside-avoid" : undefined}>
             {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
             <CommandCollection>{(option: ModelOption) => {
               const key = modelRefKey(option);
@@ -840,43 +996,28 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
             }}</CommandCollection>
           </CommandGroup>}
         </CommandList>
-        {antigravityAccounts.length > 0 ? (
-          <div className="pb-1">
-            {antigravityAccounts.map((acc) => (
-              <ConnectedAccountGroup
-                key={acc.email}
-                account={acc}
-                current={current}
-                query={query}
-                onSelectModel={selectAntigravityModel}
-              />
-            ))}
-          </div>
-        ) : null}
-        {chatGptAccounts.length > 0 ? (
-          <div className="pb-1">
-            {chatGptAccounts.map((acc) => (
-              <ConnectedChatGptAccountGroup
-                key={acc.email}
-                account={acc}
-                current={current}
-                query={query}
-                onSelectModel={selectChatGptModel}
-              />
-            ))}
-          </div>
-        ) : null}
-        {copilotAccounts.length > 0 ? (
-          <div className="pb-1">
-            {copilotAccounts.map((acc) => (
-              <ConnectedCopilotAccountGroup
-                key={acc.username}
-                account={acc}
-                current={current}
-                query={query}
-                onSelectModel={selectCopilotModel}
-              />
-            ))}
+        {connectedAccounts.length > 0 ? (
+          <div className={chrome === "page" ? "pb-1 lg:columns-2 2xl:columns-3 lg:[column-gap:1.5rem]" : "pb-1"}>
+            {connectedAccounts.map((entry, index) => {
+              const moveProps = chrome === "page"
+                ? {
+                    canMoveUp: index > 0,
+                    canMoveDown: index < connectedAccounts.length - 1,
+                    onMove: (direction: -1 | 1) => moveAccount(entry.key, direction, connectedAccounts.map((item) => item.key)),
+                  }
+                : {};
+              return (
+                <div key={entry.key} className="break-inside-avoid">
+                  {entry.kind === "antigravity" ? (
+                    <ConnectedAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectAntigravityModel} {...moveProps} />
+                  ) : entry.kind === "chatgpt" ? (
+                    <ConnectedChatGptAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectChatGptModel} {...moveProps} />
+                  ) : (
+                    <ConnectedCopilotAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectCopilotModel} {...moveProps} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : null}
         {loading && hasOptions ? <ModelLoadingRows /> : null}
@@ -891,65 +1032,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       </>}>{retainedCopy.detail}</PickerNotice> : null}
       {autoRow && autoRow.state !== "ready" ? <AutoPickerRecovery state={autoRow.state} code={autoRow.code} resetsAt={autoRow.resetsAt} onRetry={onRetryAuto} onReload={onReloadWorkspace} hasAlternatives={Boolean(alternativeKey)} />
         : openWorkModelsSyncing ? <AutoPickerRecovery state="sync" onReload={onReloadWorkspace} /> : null}
-      {onConnectProvider ? (
-        <div className="border-t border-border bg-muted/20 p-2 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
-              onClick={() => {
-                onClose?.();
-                useAntigravityAccountsStore.getState().setModalOpen(true);
-                window.dispatchEvent(new Event(openWorkbenchInstancesEvent));
-              }}
-              title="Add Antigravity Account"
-            >
-              <Sparkles className="size-3.5 text-amber-500" />
-              <span>Antigravity</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
-              onClick={() => {
-                onClose?.();
-                useCopilotAccountsStore.getState().setModalOpen(true);
-              }}
-              title="Add GitHub Copilot Account"
-            >
-              <Sparkles className="size-3.5 text-emerald-500" />
-              <span>Copilot</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 flex-1 justify-center gap-1.5 text-xs text-foreground truncate"
-              onClick={() => {
-                onClose?.();
-                useChatGptAccountsStore.getState().setModalOpen(true);
-                window.dispatchEvent(new Event(openCodexAuthEvent));
-              }}
-              title="Add ChatGPT / OpenAI Account"
-            >
-              <Bot className="size-3.5 text-sky-500" />
-              <span>ChatGPT</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 justify-center text-xs text-muted-foreground hover:text-foreground shrink-0"
-              onClick={() => window.location.reload()}
-              title="Confirm & Refresh"
-            >
-              <RefreshCw className="size-3.5" />
-            </Button>
-          </div>
-          <p className="text-[11px] text-muted-foreground/80 px-1 leading-snug">
-            For accounts using Antigravity for the first time, use the official app to authenticate. They will not work unless verified.
-          </p>
-        </div>
-      ) : null}
+      {chrome === "page" || !onConnectProvider ? null : <ModelProviderLoginBar onConnectProvider={onConnectProvider} onClose={onClose} />}
       {footer}
     </Command>
   </div>;

@@ -220,6 +220,8 @@ import {
   shouldShowOpenWorkModelsSyncing,
 } from "@/react-app/domains/cloud/openwork-models-promo";
 import { ModelPickerModal, MODEL_PICKER_UNAVAILABLE_SUBTITLE } from "@/react-app/domains/session/modals/model-picker-modal";
+import { ModelPickerPage } from "@/react-app/domains/models/model-picker-page";
+import { localModelPickerAvailable, useLocalModelPickerPreference } from "@/react-app/domains/models/local-model-picker-preference";
 import { PlatformConnectModal } from "@/react-app/domains/models/platform-connect-modal";
 import { CommandPalette, type PaletteItem, type SessionGroupOption } from "./command-palette";
 import { buildCommandPaletteSessions } from "./command-palette-sessions";
@@ -949,6 +951,14 @@ export function SessionRoute() {
   const sidebarSessionStatusById = sidebarSessionAttention.statusById;
   // Settling ships behind `settledSessions` and for OpenCode v2 only; v1 workspaces keep today's sidebar.
   const settledSessionsEnabled = useDesktopFeature("settledSessions");
+  const standaloneModelPicker = isDesktopRuntime() && denAuth.status === "signed_out";
+  const managedModelPickerEnabled = useDesktopFeature("localModelPicker", !standaloneModelPicker);
+  const localPickerPreference = useLocalModelPickerPreference((state) => state.enabled);
+  const localModelPickerEnabled = localModelPickerAvailable({
+    desktop: isDesktopRuntime(), signedOut: denAuth.status === "signed_out",
+    localEnabled: localPickerPreference, managedEnabled: managedModelPickerEnabled,
+  });
+  const ActiveModelPicker = localModelPickerEnabled ? ModelPickerPage : ModelPickerModal;
   const settleWorkspaceIdSet = useMemo(
     () => settledSessionsEnabled
       ? settleWorkspaceIds(workspaces, (workspace) => endpointForSessionWorkspace(workspace)?.opencodeBaseUrl)
@@ -4418,7 +4428,7 @@ export function SessionRoute() {
       sessions={paletteSessionOptions}
       onOpenSession={(workspaceId, sessionId) => navigateToWorkspaceSession(workspaceId, sessionId)}
     />
-    <ModelPickerModal
+    <ActiveModelPicker
       open={modelPicker.open}
       options={modelPicker.options}
       knownOptions={modelPicker.knownOptions}

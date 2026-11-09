@@ -31,6 +31,7 @@ import {
 } from "../settings-layout";
 import { DesktopIntegrationSection } from "../desktop-integration-section";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
+import { useLocalModelPickerPreference } from "@/react-app/domains/models/local-model-picker-preference";
 import {
   AUTO_SETTLE_DAY_OPTIONS,
   useSessionManagementStore,
@@ -106,6 +107,23 @@ function AutoSettleSection() {
   );
 }
 
+function LocalModelPickerSettings() {
+  const enabled = useLocalModelPickerPreference((state) => state.enabled);
+  const setEnabled = useLocalModelPickerPreference((state) => state.setEnabled);
+  return <LayoutSection>
+    <LayoutSectionHeader><LayoutSectionTitle>Model picker</LayoutSectionTitle></LayoutSectionHeader>
+    <LayoutSectionItem>
+      <LayoutSectionItemHeader>
+        <LayoutSectionItemTitle>Full-page model picker</LayoutSectionItemTitle>
+        <LayoutSectionItemDescription>Use the full-page picker and local router. Turn off to restore the previous picker. Managed organizations may restrict this feature.</LayoutSectionItemDescription>
+        <LayoutSectionItemHeaderActions>
+          <Switch aria-label="Full-page model picker" checked={enabled} onCheckedChange={setEnabled} />
+        </LayoutSectionItemHeaderActions>
+      </LayoutSectionItemHeader>
+    </LayoutSectionItem>
+  </LayoutSection>;
+}
+
 export function PreferencesView(props: PreferencesViewProps) {
   const linkDestinationItems = [
     { value: "openwork", label: "NanamiWork" },
@@ -119,6 +137,7 @@ export function PreferencesView(props: PreferencesViewProps) {
   return (
     <LayoutStack>
       <AutoSettleSettings />
+      {isElectronRuntime() ? <LocalModelPickerSettings /> : null}
 
       <LayoutSection>
         <LayoutSectionHeader>
