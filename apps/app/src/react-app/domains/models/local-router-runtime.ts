@@ -53,6 +53,12 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
   const host = settings.hostToken && localRuntime
     ? createOpenworkServerClient({ baseUrl: input.openworkClient.baseUrl, token: input.openworkClient.token, hostToken: settings.hostToken })
     : null;
+  const releaseRouterLease = async () => {
+    const currentLeaseId = leaseId;
+    leaseId = null;
+    leasedClient = null;
+    if (currentLeaseId && host) await host.releaseLocalRouterLease(currentLeaseId).catch(() => undefined);
+  };
   try {
   return await dispatchLocalRouterTurn({
     selected: input.selected,
@@ -98,11 +104,13 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
         restrictToCloud: input.restrictToCloud,
       });
     },
+    release: releaseRouterLease,
     ensureIdle: async (candidate) => {
       if (isOpencodeV2BaseUrl(input.opencodeBaseUrl)) {
         throw new Error("Local Router account switching is not available on this engine yet. Nothing was sent.");
       }
       if (!host || !settings.hostToken) throw new Error("Local Router cannot verify this computer's engine activity. Nothing was sent.");
+      await releaseRouterLease();
       const lease = await host.acquireLocalRouterLease({ workspaceId: input.workspaceId, sessionId: input.sessionId,
         providerId: candidate.ref.providerID, modelId: candidate.ref.modelID });
       if (!/^[a-f0-9]{64}$/.test(lease.id)) throw new Error("Local Router could not secure the engine. Nothing was sent.");
@@ -112,8 +120,9 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
         { desktopTransport: "main", localRouterLease: { id: lease.id, hostToken: settings.hostToken } });
     },
     activate: async (candidate) => {
-      if (!leasedClient) throw new Error("Local Router could not secure the engine. Nothing was sent.");
       if (candidate.account.kind !== "antigravity") await restoreAntigravityRouterPin();
+      if (candidate.account.kind === "local") return;
+      if (!leasedClient) throw new Error("Local Router could not secure the engine. Nothing was sent.");
       if (candidate.account.kind === "antigravity") await activateAntigravityRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
       else if (candidate.account.kind === "chatgpt") await activateChatGptRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
       else if (candidate.account.kind === "copilot") await activateCopilotRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
@@ -122,6 +131,6 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
     send: (selection) => input.send({ ...selection, client: leasedClient ?? input.opencodeClient }),
   });
   } finally {
-    if (leaseId && host) await host.releaseLocalRouterLease(leaseId).catch(() => undefined);
+    await releaseRouterLease();
   }
 }

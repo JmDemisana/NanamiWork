@@ -586,7 +586,15 @@ export function resolveLocalRouterChoice(
   accounts: readonly LocalRouterAccount[],
   settings: Pick<LocalRouterSettings, "mode" | "strategies" | "modelOrder" | "accountOrder" | "excludedAccounts" | "excludedModels" | "usage">,
 ): LocalRouterCandidate | null {
-  if (!hasLocalRouterRouting(settings)) return null;
+  return resolveLocalRouterCandidates(accounts, settings)[0] ?? null;
+}
+
+/** All picker-listed candidates in the configured order, for safe provider rejection failover. */
+export function resolveLocalRouterCandidates(
+  accounts: readonly LocalRouterAccount[],
+  settings: Pick<LocalRouterSettings, "mode" | "strategies" | "modelOrder" | "accountOrder" | "excludedAccounts" | "excludedModels" | "usage">,
+): LocalRouterCandidate[] {
+  if (!hasLocalRouterRouting(settings)) return [];
   const excludedAccounts = new Set(settings.excludedAccounts);
   const excludedModels = new Set(settings.excludedModels);
   const orderedAccounts = orderLocalRouterAccounts(accounts, settings.accountOrder);
@@ -607,7 +615,7 @@ export function resolveLocalRouterChoice(
       });
     }
   }
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) return [];
 
   const usable = candidates.filter((candidate) => {
     if (candidate.model.remainingFraction !== null) {
@@ -615,7 +623,7 @@ export function resolveLocalRouterChoice(
     }
     return candidate.account.kind === "local";
   });
-  if (usable.length === 0) return null;
+  if (usable.length === 0) return [];
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.strategies.slice(0, 1).flatMap((strategy) =>
     strategy === "model-order" || strategy === "account-order" || strategy === "round-robin" || strategy === "random"
@@ -628,7 +636,7 @@ export function resolveLocalRouterChoice(
     modelOrder,
     accountOrder,
   };
-  return [...pool].sort((left, right) => compareCandidates(left, right, strategies, context))[0] ?? null;
+  return [...pool].sort((left, right) => compareCandidates(left, right, strategies, context));
 }
 
 export function localRouterSummary(

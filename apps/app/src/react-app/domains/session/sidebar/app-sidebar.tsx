@@ -110,6 +110,9 @@ import { RemoteTaskSidebarRows } from "./remote-task-sidebar-rows";
 import { AntigravitySidebarLimits } from "./antigravity-sidebar-limits";
 import { CopilotSidebarLimits } from "./copilot-sidebar-limits";
 import { CodexSidebarLimits } from "./codex-sidebar-limits";
+import { LocalRouterSidebarStatus } from "./local-router-sidebar-status";
+import { hasLocalRouterRouting, isLocalRouterModel, useLocalRouterStore } from "@/react-app/domains/models/nanami-local-router";
+import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 import type { AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -688,6 +691,16 @@ function isSessionActivityStatus(status: string | undefined): status is SessionA
 
 export function AppSidebar(props: AppSidebarProps) {
   const { open, isMobile } = useSidebar();
+  const routerMode = useLocalRouterStore((state) => state.mode);
+  const routerStrategies = useLocalRouterStore((state) => state.strategies);
+  const routerUsage = useLocalRouterStore((state) => state.usage);
+  const selectedModel = useAntigravityAccountsStore((state) => state.selectedModel);
+  const lastRoutedKey = Object.entries(routerUsage).reduce<[string, number] | null>((current, [key, value]) =>
+    !current || value.lastUsedAt > current[1] ? [key, value.lastUsedAt] : current, null)?.[0];
+  const lastRoutedModelKey = lastRoutedKey?.slice((lastRoutedKey.lastIndexOf("|") + 1)) ?? null;
+  const localRouterActive = hasLocalRouterRouting({ mode: routerMode, strategies: routerStrategies })
+    && (isLocalRouterModel(selectedModel)
+      || (selectedModel !== null && lastRoutedModelKey === `${selectedModel.providerID}:${selectedModel.modelID}`));
   // Lives in the UI store (not component state) so the open/closed state of
   // each workspace group survives this sidebar unmounting, e.g. while the
   // user is in Settings.
@@ -893,9 +906,15 @@ export function AppSidebar(props: AppSidebarProps) {
           </m.div>
         </SidebarReorderScope>
 
-        <AntigravitySidebarLimits />
-        <CopilotSidebarLimits />
-        <CodexSidebarLimits />
+        {localRouterActive ? (
+          <LocalRouterSidebarStatus sessionId={props.selectedSessionId} />
+        ) : (
+          <>
+            <AntigravitySidebarLimits />
+            <CopilotSidebarLimits />
+            <CodexSidebarLimits />
+          </>
+        )}
         <SidebarFooter className="border-t border-sidebar-border/60 p-1.5 pe-0">
           <div className="flex min-w-0 select-none cursor-default items-center gap-2 px-2.5 py-1.5 text-[10.5px] leading-tight text-muted-foreground group-data-[collapsible=icon]:hidden">
             <span className="truncate select-none cursor-default">A fork of OpenWork.</span>
