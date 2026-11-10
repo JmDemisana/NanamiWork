@@ -115,6 +115,7 @@ async function performQueuedDraftSend(
   draft: ComposerDraft,
   generation: number,
   transport?: { desktopTransport: "main" },
+  steer = false,
 ): Promise<"sent" | "cancelled"> {
   assertQueuedSendCurrent(sessionId, generation);
   const text = draft.text.trim();
@@ -140,6 +141,7 @@ async function performQueuedDraftSend(
   const routerContext = {
     selected: sendModel ?? null,
     variant: sendVariant ?? null,
+    steer,
     sessionId,
     opencodeClient,
     opencodeBaseUrl: context.opencodeBaseUrl,
@@ -450,7 +452,7 @@ async function attemptDrain(sessionId: string) {
     // A requested Send now stays latency-sensitive after its surface unmounts.
     // Keep its history, interruption and admission off renderer background traffic.
     const transport: { desktopTransport: "main" } | undefined = nextItem.steer ? { desktopTransport: "main" } : undefined;
-    const send = () => performQueuedDraftSend(sendContext, sessionId, draft, generation, transport);
+    const send = () => performQueuedDraftSend(sendContext, sessionId, draft, generation, transport, Boolean(nextItem.steer));
     const outcome = await (async () => {
       if (!nextItem.steer) return submitAfterInterruption(context.opencodeBaseUrl, sessionId, send, draft.messageId);
       const messages = await getNativeSessionMessages({ opencodeBaseUrl: context.opencodeBaseUrl, token: context.openworkToken, ...transport }, sessionId, { limit: 140 });

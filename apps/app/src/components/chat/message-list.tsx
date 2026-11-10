@@ -166,9 +166,6 @@ import { resolveConnectorToolIdentity } from "@/react-app/domains/connections/co
 
 const SEARCH_HIGHLIGHT_MARK_CLASS = "rounded px-0.5 bg-amber-4/70 text-current"
 
-/** A finished turn with at least this many step rows folds into one summary line (T1). */
-const COLLAPSED_STEP_RUN_MIN_ROWS = 1
-
 const AppCreationPartsContext = React.createContext<ReadonlySet<string>>(new Set())
 /**
  * While an App is being built, its panel is the one live
@@ -1435,79 +1432,19 @@ function LiveSteps({ children, active }: { children: React.ReactNode; active: bo
   return <div ref={ref} data-live-steps="" className="flex flex-col gap-2">{children}</div>
 }
 
-/**
- * steadyLiveTurn: while a turn runs, the chat never gets shorter. When the
- * live turn shrinks (a step folds its detail before the next row arrives) the
- * room it gave up moves here, to the very end of the list, below the Working
- * line; whatever arrives next fills it before anything moves. Nothing above is
- * held open, so no gap can open between steps, and the scroll position stays.
- * Measured from the last turn's top, so history placeholders swapping above
- * do not count. A shrink the person causes (collapsing a row) is not held.
- * Released when the turn ends, where the steps fold anyway.
- */
-function LiveTurnReserve({ active }: { active: boolean }) {
-  const ref = React.useRef<HTMLDivElement>(null)
-  React.useLayoutEffect(() => {
-    const spacer = ref.current
-    const list = spacer?.parentElement
-    if (!spacer || !list) return
-    spacer.style.height = ""
-    if (!active || typeof ResizeObserver === "undefined") return
-    let anchor: Element | null = null
-    let tallest = 0
-    let releaseUntil = 0
-    const measure = () => {
-      const groups = list.querySelectorAll(":scope > [data-thread-group], :scope > [data-thread-placeholder]")
-      const last = groups[groups.length - 1]
-      // Scrolled far into history: the turn is not mounted, keep what is reserved.
-      if (!last || last.hasAttribute("data-thread-placeholder")) return
-      const box = spacer.getBoundingClientRect()
-      const span = box.top - last.getBoundingClientRect().top
-      // A new last group (a follow-up mid-run) keeps the room already reserved.
-      if (last !== anchor) {
-        tallest = anchor ? span + box.height : span
-        anchor = last
-      }
-      tallest = performance.now() < releaseUntil ? span : Math.max(tallest, span)
-      const reserve = Math.max(0, tallest - span)
-      if (Math.abs(reserve - box.height) > 0.5) spacer.style.height = reserve > 0 ? `${reserve}px` : ""
-    }
-    const release = () => { releaseUntil = performance.now() + 500 }
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(list)
-    list.addEventListener("pointerdown", release)
-    list.addEventListener("keydown", release)
-    return () => {
-      observer.disconnect()
-      list.removeEventListener("pointerdown", release)
-      list.removeEventListener("keydown", release)
-      spacer.style.height = ""
-    }
-  }, [active])
-  // -mt-2 cancels the list's gap, so an empty reserve adds no space.
-  return <div ref={ref} aria-hidden="true" data-live-turn-reserve="" className="-mt-2 shrink-0" style={{ overflowAnchor: "none" }} />
-}
-
-/**
- * A finished turn's steps collapse to a single "Worked for 1m 19s" line
- * that expands back into the full run. Only live turns show their steps
- * unprompted; once the answer is in, the reasoning is available but out
- * of the way.
- */
 function CompletedStepRun({ label, count, children }: { label: string; count?: string | null; children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(true)
-  // Text-first: "Worked for 43m 29s ›", no step count beside it.
+  const [open, setOpen] = React.useState(false)
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-2">
       <div className="mx-auto flex w-full max-w-3xl px-2 md:px-10">
         <CollapsibleTrigger
           className="group flex min-h-6 cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          aria-label={`${label}${count ? `, ${count}` : ""}. ${open ? "Hide steps" : "Show steps"}`}
+          aria-label={`Summary of Turn${label ? `, ${label}` : ""}${count ? `, ${count}` : ""}. ${open ? "Hide details" : "Show details"}`}
           data-testid="completed-work-rail"
         >
-          <span>{label}</span>
+          <span>Summary of Turn</span>
+          {label ? <span className="text-muted-foreground/70">{label}</span> : null}
           <TrailingChevron open={open} />
         </CollapsibleTrigger>
       </div>
@@ -1604,8 +1541,7 @@ function MessageGroup({
   const computerWorking = useComputerSessionHistoryStore(state => Boolean(state.working[sessionId]))
   const watchingComputer = useComputerSessionHistoryStore(state => Boolean(state.watching[sessionId]))
   // steadyLiveTurn: a running turn keeps its parts in arrival order (no
-  // steps/answer split until it finishes) and the list reserves room at its end
-  // (LiveTurnReserve) instead of holding the steps area open.
+  // steps/answer split until it finishes).
   const steadyLiveTurn = useSteadyLiveTurnStore(state => state.enabled)
   // The skill this turn produced stays in view as its result, even when the
   // steps fold; later updates and shares change this card, not add another.
@@ -1692,7 +1628,7 @@ function MessageGroup({
       : []
   )
   // An aggregate line counts each call it absorbed: it reads as one row but
-  // stands for that much work, and folding should key off the work done.
+  // stands for that much work.
   const stepRowCount =
     stepItems.reduce(
       (total, item) =>
@@ -1711,13 +1647,12 @@ function MessageGroup({
       : stepRowCount === 1
         ? "1 step"
         : `${stepRowCount} steps`
-  // A short finished run reads fine as a list, so only long ones fold away.
+  const turnConcluded = getMessageCompleted(lastItem.message) !== null
+  const hasComputerActionError = computerHistory?.parts.some((part) => part.state === "output-error") ?? false
   const collapseSteps =
-    !isLiveGroup && stepItems.length > 0 && stepRowCount >= COLLAPSED_STEP_RUN_MIN_ROWS
-    && !stepsNeedAttention(stepItems, connectionCardParts)
-  // A task on another computer outlives the turn that started it and may still
-  // need the person, so its row stays in view below a folded run.
-  const pinnedRemoteThreads = collapseSteps ? remoteThreadStarts : []
+    turnConcluded && !isLiveGroup && (stepItems.length > 0 || Boolean(computerHistory))
+    && !stepsNeedAttention(stepItems, connectionCardParts) && !hasComputerActionError
+  const pinnedRemoteThreads = collapseSteps ? [] : remoteThreadStarts
   const pinnedRemoteIds = pinnedRemoteThreads.length > 0 ? new Set(pinnedRemoteThreads.map(({ part }) => part.toolCallId)) : NO_PINNED_REMOTE_THREADS
   const replyStartedAt = stepsStartedAt ?? (lastRealItem ? getMessageCreated(lastRealItem.message) : null)
   const stepCountLabel = stepRowCount ? `${stepRowCount} ${stepRowCount === 1 ? "step" : "steps"}` : null
@@ -1820,15 +1755,23 @@ function MessageGroup({
           <span>{replyWorkedLabel ?? replySummaryLabel}</span>
         </div>
       </div> : null}
-      {stepItems.length > 0 && stepRowCount > 0 ? (
+      {collapseSteps || (stepItems.length > 0 && stepRowCount > 0) ? (
         collapseSteps ? (
           <CompletedStepRun
-            label={(resolvedReplyModel ? replyWorkedLabel : null) ?? stepRunLabel}
+            label={(resolvedReplyModel ? replyWorkedLabel : null) ?? (stepRowCount ? stepRunLabel : "")}
             count={((resolvedReplyModel ? replyWorkedLabel : null) ?? stepRunLabel).startsWith("Worked for") ? stepCountLabel : null}
           >
             <div className="flex flex-col gap-2">
               {renderItems(stepItems, 0)}
               {foldedReasoning}
+              {remoteThreadStarts.map(({ start, part }) => (
+                <Message key={`remote-thread-${start.key}`} className="mx-auto flex w-full max-w-3xl flex-col px-2 md:px-10">
+                  <RemoteThreadRunLine start={start} part={part} />
+                </Message>
+              ))}
+              {computerHistory ? <Message className="mx-auto flex w-full max-w-3xl flex-col px-2 md:px-10">
+                <ComputerSessionHistory key={computerHistory.id} history={computerHistory} active={isLiveGroup && parentActive} renderAction={part => <ToolMessage part={part} />} />
+              </Message> : null}
             </div>
           </CompletedStepRun>
         ) : (
@@ -1847,7 +1790,7 @@ function MessageGroup({
         </Message>
       ))}
       {renderItems(proseItems, stepItems.length, collapseSteps || panelLive)}
-      {computerHistory ? <Message className="mx-auto flex w-full max-w-3xl flex-col px-2 md:px-10">
+      {!collapseSteps && computerHistory ? <Message className="mx-auto flex w-full max-w-3xl flex-col px-2 md:px-10">
         <ComputerSessionHistory key={computerHistory.id} history={computerHistory} active={isLiveGroup && parentActive} renderAction={part => <ToolMessage part={part} />}
           live={computerWorking && isLastGroup ? { watching: watchingComputer, onWatch: watching => useComputerSessionHistoryStore.getState().setWatching(sessionId, watching) } : undefined} />
       </Message> : null}
@@ -2157,7 +2100,6 @@ export function MessageList({ messages, messageIdReplacements, status, activityS
         {!showLoading && backgroundShells.length > 0 && <BackgroundTasksMessage shells={backgroundShells} stale={syncDegraded} />}
         {retryStatus ? <RetryMessage status={retryStatus} /> : null}
         {error && !hasSessionErrorMessage && !sessionErrorHandled ? <ErrorMessage error={error} /> : null}
-        {steadyLiveTurn ? <LiveTurnReserve key={sessionId} active={runActive || status === "submitted"} /> : null}
       </ProgressiveMessageList>
     </CurrentToolLifecycleProvider>
     </BuiltAppPreviewSync>

@@ -10,7 +10,7 @@ import { activateChatGptRouterAccount, useChatGptAccountsStore } from "./chatgpt
 import { activateCopilotRouterAccount, useCopilotAccountsStore } from "./copilot-accounts-store";
 import { dispatchLocalRouterTurn, type ResolvedTurnModel } from "./local-router-dispatch";
 import { useLocalModelPickerPreference } from "./local-model-picker-preference";
-import { buildLocalRouterAccounts, recordLocalRouterUse, useLocalRouterStore } from "./nanami-local-router";
+import { buildLocalRouterAccounts, getLastLocalRouterCandidate, recordLocalRouterUse, useLocalRouterStore } from "./nanami-local-router";
 
 /** Never send the desktop host token to a different loopback service. */
 export function isConfiguredRouterHost(baseUrl: string, settings: { urlOverride?: string; portOverride?: number }): boolean {
@@ -32,6 +32,7 @@ export function isConfiguredRouterHost(baseUrl: string, settings: { urlOverride?
 export async function dispatchConfiguredLocalRouterTurn<T>(input: {
   selected: ModelRef | null;
   variant: string | null;
+  steer?: boolean;
   sessionId: string;
   opencodeClient: Client;
   opencodeBaseUrl: string;
@@ -63,9 +64,11 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
   return await dispatchLocalRouterTurn({
     selected: input.selected,
     variant: input.variant,
+    steer: input.steer,
     localRuntime,
     assertCurrent: input.assertCurrent,
     settings: () => useLocalRouterStore.getState(),
+    steeringCandidate: () => getLastLocalRouterCandidate(input.sessionId),
     accounts: async () => {
       const antigravity = useAntigravityAccountsStore.getState();
       const chatgpt = useChatGptAccountsStore.getState();
@@ -127,7 +130,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
       else if (candidate.account.kind === "chatgpt") await activateChatGptRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
       else if (candidate.account.kind === "copilot") await activateCopilotRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
     },
-    record: (candidate) => recordLocalRouterUse(candidate.key),
+    record: (candidate) => recordLocalRouterUse(candidate, input.sessionId),
     send: (selection) => input.send({ ...selection, client: leasedClient ?? input.opencodeClient }),
   });
   } finally {

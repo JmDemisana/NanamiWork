@@ -434,22 +434,11 @@ class MeasuredGroups<T> extends React.Component<MeasuredGroupsProps<T>> {
   getSnapshotBeforeUpdate(): ReadingPosition | null {
     const container = this.container
     if (!container || !this.isMeasurable() || sameStructure(this.committed, this.props.segments)) return null
-    const bounds = container.getBoundingClientRect()
     const sticky = Boolean(this.props.viewport?.stickyBottom()) && container.scrollHeight - container.scrollTop - container.clientHeight <= 1
-    const reserved = [...this.nodes.values()].some((node) => {
-      if (!['history-prefix', 'history-suffix'].includes(node.dataset.threadPlaceholder ?? "")) return false
-      const rect = node.getBoundingClientRect()
-      return rect.top <= bounds.top && rect.bottom > bounds.top
-    })
-    const top = container.scrollTop
-    if (top === 0 || reserved) return { element: null, offset: 0, top, sticky }
-    for (const node of container.querySelectorAll<HTMLElement>("[data-message-id]")) {
-      const rect = node.getBoundingClientRect()
-      if (rect.height > 0 && rect.bottom > bounds.top && rect.top < bounds.bottom) {
-        return { element: node, messageId: node.dataset.messageId, offset: rect.top - bounds.top, top, sticky }
-      }
-    }
-    return { element: null, offset: 0, top, sticky }
+    // The scroll controller enables native overflow anchoring while the reader
+    // is browsing history. A second, virtualizer-owned correction races it and
+    // can jump the viewport. Only pin the bottom in sticky mode.
+    return sticky ? { element: null, offset: 0, top: container.scrollTop, sticky: true } : null
   }
 
   componentDidUpdate(previous: MeasuredGroupsProps<T>, _state: unknown, snapshot: ReadingPosition | null) {

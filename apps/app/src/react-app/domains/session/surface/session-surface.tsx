@@ -776,7 +776,7 @@ export type SessionSurfaceProps = {
   onModelChange: (model: ModelRef, variant?: string | null) => void;
   archived?: boolean;
   onRestoreSession?: () => Promise<void>;
-  onSendDraft: (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null) => Promise<CloudMcpSubmissionResult>;
+  onSendDraft: (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null, steer?: boolean) => Promise<CloudMcpSubmissionResult>;
   cloudMcpSubmissionState: CloudMcpSubmissionGateState;
   onOpenConnect: () => void;
   onDraftChange: (draft: ComposerDraft) => void;
@@ -1408,6 +1408,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     setOwnedError(nextError ? { owner: sessionOwner, error: nextError } : null);
   }, [sessionOwner]);
   const [restoringRevertedMessages, setRestoringRevertedMessages] = useState(false);
+  const revertingUserMessageRef = useRef(false);
   const [awaitingAssistantBaseline, setAwaitingAssistantBaseline] = useState<number | null>(null);
   // Terminal invariant: an accepted admission that reached idle with no
   // assistant result surfaces a bounded recovery card instead of plain idle.
@@ -2427,7 +2428,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     nextDraft: ComposerDraft,
     itemId: string,
     onPrepared?: (text?: string) => void,
-    options: { consumeQueuedItem?: boolean; agent?: string | null } = {},
+    options: { consumeQueuedItem?: boolean; agent?: string | null; steer?: boolean } = {},
   ): Promise<CloudMcpSubmissionResult | AutoAccessBlock | { outcome: "unknown" }> => {
     // Capture before interruption/readiness waits; later selections affect only later sends.
     const agent = options.agent !== undefined ? options.agent : getSessionAgentSelection(props.sessionId, props.selectedAgent);
@@ -2471,7 +2472,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       if (getQueuedSendGeneration(props.sessionId) !== generation) throw new Error("Send cancelled by Stop.");
       const submit = async () => {
         if (getQueuedSendGeneration(props.sessionId) !== generation) return { outcome: "cancelled" as const, reason: "context_changed" as const };
-        return props.onSendDraft({ ...nextDraft, messageId }, props.sessionId, onPrepared, agent);
+        return props.onSendDraft({ ...nextDraft, messageId }, props.sessionId, onPrepared, agent, options.steer === true);
       };
       const result = snapshot?.session.parentID
         ? await submitAfterInterruption(props.opencodeBaseUrl, props.sessionId, submit, messageId)
@@ -2546,7 +2547,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
 
   // Initial send (agent idle) and explicit "Steer" follow-up (agent busy)
   // share the same immediate path.
-  const handleSend = useCallback(async (sourceComposer?: ComposerSessionState) => {
+  const handleSend = useCallback(async (sourceComposer?: ComposerSessionState, steer = false) => {
     if (archived || !archiveStateKnown || sessionWorkHeld(props.opencodeBaseUrl, props.sessionId)) return;
     if ([...pendingSendsRef.current.values()].includes(sessionOwner)) return;
     const generation = getQueuedSendGeneration(props.sessionId);
@@ -2624,7 +2625,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     };
     if (sentAttachments.length) setAttachmentsUploading(true);
     try {
-      const result = await sendDraft(nextDraft, nextDraft.messageId, markPrepared);
+      const result = await sendDraft(nextDraft, nextDraft.messageId, markPrepared, { steer });
       if ((result.outcome === "sent" || result.outcome === "accepted")
         && !isDesktopRuntime() && window.matchMedia("(max-width: 1023px)").matches
         && focusedComposer instanceof HTMLElement
@@ -2721,7 +2722,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
       handleQueue(true);
       return;
     }
-    await handleSend();
+    await handleSend(undefined, true);
   }, [autoSending, handleQueue, handleSend, props.sessionId, sessionOwner]);
 
   const removeQueuedDraft = useCallback((id: string) => {
@@ -2759,7 +2760,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
     if (!claimQueuedSend(props.sessionId, item.id, true)) return;
     cloudQueueBlockedRef.current = false;
     try {
-      const result = await sendDraft(target, item.id, undefined, { consumeQueuedItem: true, agent: item.steer?.agent });
+      const result = await sendDraft(target, item.id, undefined, { consumeQueuedItem: true, agent: item.steer?.agent, steer: Boolean(item.steer) });
       if (result.outcome === "blocked" || result.outcome === "cancelled" || result.outcome === "unknown") {
         return;
       }
@@ -3663,22 +3664,37 @@ export function SessionSurface(props: SessionSurfaceProps) {
     void handleResumeInterrupted(COMPUTER_CONTINUE_PROMPT);
   }, [computerContinued, handleResumeInterrupted]);
 
-  const handleRevertToUserMessage = useCallback((messageId: string, text?: string) => {
-    if (archived || !archiveStateKnown || sessionWorkHeld(props.opencodeBaseUrl, props.sessionId)) return;
-    setAwaitingAssistantBaseline(null);
-    setAdmissionOutcomeUnresolved(false);
-    useSessionActivityStore.getState().setRunStatus(props.workspaceId, props.sessionId, { type: "idle" });
-    if (text) {
-      replaceComposerDraft(props.sessionId, text);
-      props.onDraftChange(buildDraft(text, []));
-      window.dispatchEvent(new Event("openwork:focusPrompt"));
+  const handleRevertToUserMessage = useCallback(async (messageId: string, text?: string) => {
+    if (archived || !archiveStateKnown || sessionWorkHeld(props.opencodeBaseUrl, props.sessionId)
+      || revertingUserMessageRef.current || !props.onRevertToMessage) return false;
+    revertingUserMessageRef.current = true;
+    try {
+      let reverted = false;
+      await openingHistory.runWithFullSnapshot(async (full) => {
+        if (!full.messages.some((message) => message.info.id === messageId)) {
+          throw new Error("That message is no longer in this conversation. Refresh and try Undo again.");
+        }
+        queryClient.setQueryData(snapshotQueryKey, full);
+        reverted = await props.onRevertToMessage!(messageId, props.sessionId) === true;
+      }, { fresh: true });
+      if (!reverted) return false;
+
+      setAwaitingAssistantBaseline(null);
+      setAdmissionOutcomeUnresolved(false);
+      useSessionActivityStore.getState().setRunStatus(props.workspaceId, props.sessionId, { type: "idle" });
+      if (typeof text === "string") {
+        replaceComposerDraft(props.sessionId, text);
+        props.onDraftChange(buildDraft(text, []));
+        window.dispatchEvent(new Event("openwork:focusPrompt"));
+      }
+      return true;
+    } catch (error) {
+      setError(parseSessionError(error));
+      return false;
+    } finally {
+      revertingUserMessageRef.current = false;
     }
-    void openingHistory.runWithFullSnapshot((full) => {
-      queryClient.setQueryData(snapshotQueryKey, full);
-      return props.onRevertToMessage?.(messageId, props.sessionId);
-    }, { fresh: true })
-      .catch((error) => setError(parseSessionError(error)));
-  }, [archived, archiveStateKnown, buildDraft, openingHistory.runWithFullSnapshot, props.onDraftChange, props.onRevertToMessage, props.opencodeBaseUrl, props.sessionId, queryClient, snapshotQueryKey, setError, replaceComposerDraft]);
+  }, [archived, archiveStateKnown, buildDraft, openingHistory.runWithFullSnapshot, props.onDraftChange, props.onRevertToMessage, props.opencodeBaseUrl, props.sessionId, props.workspaceId, queryClient, snapshotQueryKey, setError, replaceComposerDraft]);
 
   const branchAction = useSessionBranchAction(sessionOwner);
   const forkingMessageId = branchAction?.status === "pending" ? branchAction.messageId : undefined;

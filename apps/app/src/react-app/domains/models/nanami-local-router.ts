@@ -104,6 +104,8 @@ export type LocalRouterCandidate = {
   ref: ModelRef;
 };
 
+const lastRoutedCandidateBySession = new Map<string, LocalRouterCandidate>();
+
 export type LocalRouterSettings = {
   /** `model`/`account` follow those sorted lists; `priority` uses the strategies. */
   mode: LocalRouterMode;
@@ -292,12 +294,17 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
   },
 }));
 
-export function recordLocalRouterUse(candidateKey: string) {
+export function getLastLocalRouterCandidate(sessionId: string): LocalRouterCandidate | null {
+  return lastRoutedCandidateBySession.get(sessionId) ?? null;
+}
+
+export function recordLocalRouterUse(candidate: LocalRouterCandidate, sessionId: string) {
   const state = useLocalRouterStore.getState();
-  const previous = state.usage[candidateKey];
+  lastRoutedCandidateBySession.set(sessionId, candidate);
+  const previous = state.usage[candidate.key];
   const usage = {
     ...state.usage,
-    [candidateKey]: { count: (previous?.count ?? 0) + 1, lastUsedAt: Date.now() },
+    [candidate.key]: { count: (previous?.count ?? 0) + 1, lastUsedAt: Date.now() },
   };
   writeStoredSettings({ ...settingsOf(state), usage });
   useLocalRouterStore.setState({ usage });

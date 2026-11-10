@@ -52,9 +52,11 @@ function routingSignature(settings: LocalRouterSettings): string {
 export async function dispatchLocalRouterTurn<T>(input: {
   selected: ModelRef | null;
   variant: string | null;
+  steer?: boolean;
   localRuntime: boolean;
   settings: () => LocalRouterSettings;
   accounts: () => Promise<readonly LocalRouterAccount[]>;
+  steeringCandidate?: () => LocalRouterCandidate | null;
   release?: () => Promise<void>;
   ensureIdle: (candidate: LocalRouterCandidate) => Promise<void>;
   activate: (candidate: LocalRouterCandidate) => Promise<void>;
@@ -66,6 +68,17 @@ export async function dispatchLocalRouterTurn<T>(input: {
   const fence = input.fence ?? modelAdmissionFence;
   if (!isLocalRouterModel(input.selected)) {
     return fence.regular(() => input.send({ model: input.selected, variant: input.variant }), input.assertCurrent);
+  }
+  if (input.steer) {
+    return fence.regular(async () => {
+      input.assertCurrent?.();
+      if (!input.localRuntime) throw new Error("Local Router is available only on this computer.");
+      const candidate = input.steeringCandidate?.();
+      if (!candidate) throw new Error("The active routed model is unknown, so this steer was not sent. Stop the run and try again.");
+      const result = await input.send({ model: candidate.ref, variant: candidate.model.variant ?? null });
+      input.record(candidate);
+      return result;
+    }, input.assertCurrent);
   }
   return fence.routed(async () => {
     input.assertCurrent?.();

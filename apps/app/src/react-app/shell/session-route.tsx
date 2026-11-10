@@ -1812,7 +1812,7 @@ export function SessionRoute() {
       },
       // Library detail ids hold ":" and "/", so they travel as one encoded segment.
       onOpenLibraryDetail: (detailId: string) => handleOpenExtensions(encodeURIComponent(detailId)),
-      onSendDraft: async (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null): Promise<CloudMcpSubmissionResult> => {
+      onSendDraft: async (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null, steer?: boolean): Promise<CloudMcpSubmissionResult> => {
         const targetSessionId = sessionId.trim() || selectedSessionId;
         if (!targetSessionId) return { outcome: "cancelled", reason: "context_changed" };
         const generation = getQueuedSendGeneration(targetSessionId);
@@ -1857,6 +1857,7 @@ export function SessionRoute() {
               const routerContext = {
                 selected: sendModel ?? null,
                 variant: sendVariant ?? null,
+                steer,
                 sessionId: targetSessionId,
                 opencodeClient: promptClient,
                 opencodeBaseUrl,
@@ -2236,7 +2237,7 @@ export function SessionRoute() {
       },
       environmentRuntimeKey,
       onApplyEnvironmentChanges: undefined,
-      onSendDraft: async (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null): Promise<CloudMcpSubmissionResult> => {
+      onSendDraft: async (draft: ComposerDraft, sessionId: string, onPrepared?: (text?: string) => void, agent?: string | null, steer?: boolean): Promise<CloudMcpSubmissionResult> => {
         const targetSessionId = sessionId.trim() || session.sessionId;
         const generation = getQueuedSendGeneration(targetSessionId);
         const assertCurrent = () => {
@@ -2270,6 +2271,7 @@ export function SessionRoute() {
               const routerContext = {
                 selected: sendModel ?? null,
                 variant: sendVariant ?? null,
+                steer,
                 sessionId: targetSessionId,
                 opencodeClient: promptClient,
                 opencodeBaseUrl: endpoint.opencodeBaseUrl,
