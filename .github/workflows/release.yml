@@ -195,6 +195,7 @@ jobs:
             - Added per-model and per-account inclusion, ordering, and routing strategies, including **Earliest to reset** and **Latest to reset**.
             - The router tries another eligible picker candidate after an explicit model/account rejection, while avoiding replay on timeouts, rate limits, and ambiguous failures.
             - Sidebar router status shows the account and model used by the most recent successful routed turn.
+            - The router status is shown only while Local Router is selected; choosing a concrete model restores its regular provider quota widget, even when the router used that model on the previous turn.
 
             ### NanamiWork Local Router
             - Routing stays inside NanamiWork; OpenCode receives the selected provider model for each turn.
