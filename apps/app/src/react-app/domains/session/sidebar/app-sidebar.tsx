@@ -946,7 +946,7 @@ function StudyNotebookItem({
   isActive,
   onNavigate,
 }: {
-  notebook: import("../study/study-store").StudyNotebook;
+  notebook: import("@/react-app/domains/study/study-store").StudyNotebook;
   isActive: boolean;
   onNavigate: () => void;
 }) {

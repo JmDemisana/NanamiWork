@@ -1108,11 +1108,15 @@ function ViewSourceModal({ source, onClose }: { source: StudySource; onClose: ()
               {downloading ? "Exporting…" : "Download File"}
             </Button>
             {source.url ? (
-              <Button variant="ghost" size="icon-xs" asChild>
-                <a href={source.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="size-3.5" />
-                </a>
-              </Button>
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Open original link"
+              >
+                <ExternalLink className="size-3.5" />
+              </a>
             ) : null}
             <Button variant="ghost" size="icon-xs" onClick={onClose}><X className="size-4" /></Button>
           </div>
