@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronLeft, Pencil, Search, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 import type { ModelOption, ModelRef } from "@/app/types";
 import { markFeatureUsed } from "@/app/lib/den";
@@ -202,81 +203,113 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
 
   const close = () => props.onClose({ restorePromptFocus: true });
 
-  return createPortal(<div className="flex h-full min-h-0 flex-col bg-dls-surface" data-testid="model-picker-page">
-    {routerSettingsOpen ? <LocalRouterSettingsPage accounts={routerAccounts} onBack={() => setRouterSettingsOpen(false)} /> : <>
-    <h1 className="sr-only">Models</h1>
-    <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" onClick={close}>
-          <ChevronLeft className="size-4" />
-          <span>Chat</span>
-        </Button>
-      </div>
-      <div className="relative flex min-w-0 flex-1 items-center sm:mx-2 sm:max-w-2xl">
-        <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={props.query}
-          onChange={(event) => props.setQuery(event.target.value)}
-          placeholder="Search models, providers, accounts..."
-          aria-label="Search all models"
-          className="h-9 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
-        />
-        {props.query ? (
-          <button
-            type="button"
-            onClick={() => { props.setQuery(""); searchInputRef.current?.focus({ preventScroll: true }); }}
-            className="absolute right-2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
-            title="Clear search"
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, scale: 0.99, y: 6 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.99, y: 6 }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className="flex h-full min-h-0 flex-col bg-dls-surface"
+      data-testid="model-picker-page"
+    >
+      <AnimatePresence mode="wait">
+        {routerSettingsOpen ? (
+          <motion.div
+            key="router-settings"
+            initial={{ opacity: 0, x: 14 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -14 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="flex h-full min-h-0 flex-col"
           >
-            <X className="size-4" />
-          </button>
-        ) : null}
-      </div>
-    </header>
+            <LocalRouterSettingsPage accounts={routerAccounts} onBack={() => setRouterSettingsOpen(false)} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="model-picker-main"
+            initial={{ opacity: 0, x: -14 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 14 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="flex h-full min-h-0 flex-col"
+          >
+            <h1 className="sr-only">Models</h1>
+            <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" onClick={close}>
+                  <ChevronLeft className="size-4" />
+                  <span>{props.disableWorkspaceDefault ? "Study" : "Chat"}</span>
+                </Button>
+              </div>
+              <div className="relative flex min-w-0 flex-1 items-center sm:mx-2 sm:max-w-2xl">
+                <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={props.query}
+                  onChange={(event) => props.setQuery(event.target.value)}
+                  placeholder="Search models, providers, accounts..."
+                  aria-label="Search all models"
+                  className="h-9 w-full rounded-lg border border-border bg-muted/30 pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                {props.query ? (
+                  <button
+                    type="button"
+                    onClick={() => { props.setQuery(""); searchInputRef.current?.focus({ preventScroll: true }); }}
+                    className="absolute right-2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                    title="Clear search"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
+              </div>
+            </header>
 
-    <div className="mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col">
-      <ModelPickerPanel
-        chrome="page"
-        query={props.query}
-        onQueryChange={props.setQuery}
-        searchInputRef={searchInputRef}
-        leading={!props.query.trim() || "nanamiworks local router route local models".includes(props.query.trim().toLowerCase())
-          ? <RouterRow onUse={useRouter} onEdit={() => setRouterSettingsOpen(true)} notice={routerNotice} needsRouting={needsRouting} selected={isLocalRouterModel(props.current)} /> : null}
-        options={options}
-        current={props.current}
-        behaviorValue={behaviorValue}
-        fallbackBehaviorOptions={props.fallbackBehaviorOptions}
-        onSelect={handleSelect}
-        onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
-        catalogState={catalogState}
-        retainedSelection={retained}
-        onConnectProvider={!restrictToCloud ? () => { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
-        onConnectCodex={undefined}
-        onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? () => { props.onClose({ restorePromptFocus: false }); (props.onOpenProviderSettings ?? openAutoProviderSettings)(); } : undefined}
-        onSetWorkspaceDefault={props.disableWorkspaceDefault ? undefined : props.onSetWorkspaceDefault ?? setWorkspaceDefault}
-        openWorkModelsSyncing={props.openWorkModelsSyncing}
-        autoVisible={autoVisible}
-        onReloadWorkspace={props.onReloadWorkspace}
-        onClose={close}
-        footerExtra={pendingProviders.length ? <div className="border-t border-border p-1.5">{pendingProviders.map((provider) => <div key={`${provider.providerId}:${provider.name}`} className="flex h-9 items-center gap-2.5 px-2 text-sm">
-          <span className="min-w-0 flex-1 truncate">{provider.name}</span>
-          <Button size="sm" variant="ghost" disabled={!props.onConnectGatewayProvider || props.disabledProviders?.includes(provider.providerId)} onClick={() => void props.onConnectGatewayProvider?.(provider)}>Login</Button>
-        </div>)}</div> : null}
-      />
-    </div>
+            <div className="mx-auto flex min-h-0 w-full max-w-[110rem] flex-1 flex-col">
+              <ModelPickerPanel
+                chrome="page"
+                query={props.query}
+                onQueryChange={props.setQuery}
+                searchInputRef={searchInputRef}
+                leading={!props.query.trim() || "nanamiworks local router route local models".includes(props.query.trim().toLowerCase())
+                  ? <RouterRow onUse={useRouter} onEdit={() => setRouterSettingsOpen(true)} notice={routerNotice} needsRouting={needsRouting} selected={isLocalRouterModel(props.current)} /> : null}
+                options={options}
+                current={props.current}
+                behaviorValue={behaviorValue}
+                fallbackBehaviorOptions={props.fallbackBehaviorOptions}
+                onSelect={handleSelect}
+                onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
+                catalogState={catalogState}
+                retainedSelection={retained}
+                onConnectProvider={!restrictToCloud ? () => { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
+                onConnectCodex={undefined}
+                onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? () => { props.onClose({ restorePromptFocus: false }); (props.onOpenProviderSettings ?? openAutoProviderSettings)(); } : undefined}
+                onSetWorkspaceDefault={props.disableWorkspaceDefault ? undefined : props.onSetWorkspaceDefault ?? setWorkspaceDefault}
+                openWorkModelsSyncing={props.openWorkModelsSyncing}
+                autoVisible={autoVisible}
+                onReloadWorkspace={props.onReloadWorkspace}
+                onClose={close}
+                footerExtra={pendingProviders.length ? <div className="border-t border-border p-1.5">{pendingProviders.map((provider) => <div key={`${provider.providerId}:${provider.name}`} className="flex h-9 items-center gap-2.5 px-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">{provider.name}</span>
+                  <Button size="sm" variant="ghost" disabled={!props.onConnectGatewayProvider || props.disabledProviders?.includes(provider.providerId)} onClick={() => void props.onConnectGatewayProvider?.(provider)}>Login</Button>
+                </div>)}</div> : null}
+              />
+            </div>
 
-    <footer className="shrink-0 border-t border-border px-4 py-2 sm:px-5">
-      <div className="mx-auto w-full max-w-[110rem]">
-        <ModelProviderLoginBar
-          onConnectProvider={!restrictToCloud ? () => { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
-          onClose={close}
-          className="flex flex-col gap-2"
-        />
-      </div>
-    </footer>
-    </>}
-  </div>, host);
+            <footer className="shrink-0 border-t border-border px-4 py-2 sm:px-5">
+              <div className="mx-auto w-full max-w-[110rem]">
+                <ModelProviderLoginBar
+                  onConnectProvider={!restrictToCloud ? () => { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
+                  onClose={close}
+                  className="flex flex-col gap-2"
+                />
+              </div>
+            </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>,
+    host
+  );
 }

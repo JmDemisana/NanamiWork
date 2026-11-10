@@ -7,7 +7,7 @@ import { persist } from "zustand/middleware";
 
 import type { ModelRef } from "@/app/types";
 
-export type StudySourceKind = "text" | "markdown" | "pdf";
+export type StudySourceKind = "text" | "markdown" | "pdf" | "youtube" | "web" | "drive" | "audio";
 
 export type StudySource = {
   id: string;
@@ -16,6 +16,9 @@ export type StudySource = {
   mimeType: string | null;
   sizeBytes: number;
   text: string;
+  url?: string | null;
+  /** Whether this source is currently active/selected for questions */
+  selected?: boolean;
   /** Page count for PDFs once text extraction lands; null for other sources. */
   pageCount: number | null;
   addedAt: number;
@@ -24,7 +27,7 @@ export type StudySource = {
 export type StudyCard = { front: string; back: string };
 export type StudyQuestion = { question: string; answer: string };
 
-export type StudyArtifactKind = "study-guide" | "flashcards" | "quiz" | "mind-map";
+export type StudyArtifactKind = "study-guide" | "flashcards" | "quiz" | "mind-map" | "faq" | "briefing";
 
 export type StudyArtifact = {
   id: string;
@@ -42,6 +45,7 @@ export type StudyNotebook = {
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
+  pinned?: boolean;
   model: ModelRef | null;
   modelVariant?: string | null;
   sources: StudySource[];
@@ -73,11 +77,14 @@ type StudyState = {
 
   createNotebook: (title?: string) => StudyNotebook;
   renameNotebook: (notebookId: string, title: string) => void;
+  togglePinNotebook: (notebookId: string) => void;
   archiveNotebook: (notebookId: string, archived: boolean) => void;
   deleteNotebook: (notebookId: string) => void;
   setNotebookModel: (notebookId: string, model: ModelRef | null, variant?: string | null) => void;
   addSource: (notebookId: string, source: Omit<StudySource, "id" | "addedAt">) => StudySource | null;
   removeSource: (notebookId: string, sourceId: string) => void;
+  toggleSourceSelection: (notebookId: string, sourceId: string) => void;
+  selectAllSources: (notebookId: string, selected: boolean) => void;
   addArtifact: (notebookId: string, artifact: Omit<StudyArtifact, "id" | "createdAt">) => StudyArtifact | null;
   removeArtifact: (notebookId: string, artifactId: string) => void;
 };
@@ -145,6 +152,7 @@ export const useStudyStore = create<StudyState>()(
           createdAt: now,
           updatedAt: now,
           archivedAt: null,
+          pinned: false,
           model: null,
           sources: [],
           artifacts: [],
@@ -155,6 +163,11 @@ export const useStudyStore = create<StudyState>()(
       renameNotebook: (notebookId, title) => set((state) => ({
         notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
           ? touch({ ...notebook, title: title.trim() || notebook.title })
+          : notebook),
+      })),
+      togglePinNotebook: (notebookId) => set((state) => ({
+        notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
+          ? touch({ ...notebook, pinned: !notebook.pinned })
           : notebook),
       })),
       archiveNotebook: (notebookId, archived) => set((state) => ({
@@ -173,7 +186,7 @@ export const useStudyStore = create<StudyState>()(
       addSource: (notebookId, source) => {
         const notebook = get().notebooks.find((item) => item.id === notebookId);
         if (!notebook) return null;
-        const added: StudySource = { ...source, id: newId("src"), addedAt: Date.now() };
+        const added: StudySource = { ...source, selected: true, id: newId("src"), addedAt: Date.now() };
         set((state) => ({
           notebooks: state.notebooks.map((item) => item.id === notebookId
             ? touch({ ...item, sources: [...item.sources, added] })
@@ -184,6 +197,24 @@ export const useStudyStore = create<StudyState>()(
       removeSource: (notebookId, sourceId) => set((state) => ({
         notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
           ? touch({ ...notebook, sources: notebook.sources.filter((source) => source.id !== sourceId) })
+          : notebook),
+      })),
+      toggleSourceSelection: (notebookId, sourceId) => set((state) => ({
+        notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
+          ? touch({
+              ...notebook,
+              sources: notebook.sources.map((source) => source.id === sourceId
+                ? { ...source, selected: source.selected === false ? true : false }
+                : source),
+            })
+          : notebook),
+      })),
+      selectAllSources: (notebookId, selected) => set((state) => ({
+        notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
+          ? touch({
+              ...notebook,
+              sources: notebook.sources.map((source) => ({ ...source, selected })),
+            })
           : notebook),
       })),
       addArtifact: (notebookId, artifact) => {
@@ -276,15 +307,14 @@ function splitPassages(text: string): string[] {
 }
 
 /**
- * Local BM25-flavoured keyword search over a notebook's sources. FTS5 lives on
- * the server roadmap; this keeps the surface useful offline today and gives the
- * same citation shape the agent will use later.
+ * Local BM25-flavoured keyword search over a notebook's sources.
  */
 export function searchNotebook(notebook: StudyNotebook, query: string, limit = 5): StudyPassage[] {
   const queryTerms = terms(query);
   if (queryTerms.length === 0) return [];
   const scored: StudyPassage[] = [];
-  notebook.sources.forEach((source, sourceIndex) => {
+  const activeSources = notebook.sources.filter((s) => s.selected !== false);
+  activeSources.forEach((source, sourceIndex) => {
     const passages = splitPassages(source.text);
     passages.forEach((passage) => {
       const passageTerms = terms(passage);
@@ -313,7 +343,8 @@ export function searchNotebook(notebook: StudyNotebook, query: string, limit = 5
 /** Split a source into sentence-ish units for local artifact generation. */
 function sourceSentences(notebook: StudyNotebook): { sentence: string; citation: number }[] {
   const sentences: { sentence: string; citation: number }[] = [];
-  notebook.sources.forEach((source, sourceIndex) => {
+  const activeSources = notebook.sources.filter((s) => s.selected !== false);
+  activeSources.forEach((source, sourceIndex) => {
     const parts = source.text
       .replace(/\s+/g, " ")
       .split(/(?<=[.!?])\s+/)
@@ -399,5 +430,7 @@ export function buildArtifact(notebook: StudyNotebook, kind: StudyArtifactKind) 
     case "flashcards": return buildFlashcards(notebook);
     case "quiz": return buildQuiz(notebook);
     case "mind-map": return buildMindMap(notebook);
+    case "faq": return { kind: "faq", title: "Frequently Asked Questions", body: "Add sources to generate FAQs." };
+    case "briefing": return { kind: "briefing", title: "Briefing Document", body: "Add sources to generate an executive briefing." };
   }
 }

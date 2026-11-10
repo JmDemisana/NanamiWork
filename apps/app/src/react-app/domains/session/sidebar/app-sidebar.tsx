@@ -941,16 +941,149 @@ function GlobalPinnedSessions({ entries }: { entries: GlobalPinnedSessionEntry[]
   );
 }
 
+function StudyNotebookItem({
+  notebook,
+  isActive,
+  onNavigate,
+}: {
+  notebook: import("../study/study-store").StudyNotebook;
+  isActive: boolean;
+  onNavigate: () => void;
+}) {
+  const togglePin = useStudyStore((state) => state.togglePinNotebook);
+  const renameNotebook = useStudyStore((state) => state.renameNotebook);
+  const archiveNotebook = useStudyStore((state) => state.archiveNotebook);
+  const deleteNotebook = useStudyStore((state) => state.deleteNotebook);
+  const [editing, setEditing] = React.useState(false);
+  const [draftTitle, setDraftTitle] = React.useState(notebook.title);
+  const isPinned = Boolean(notebook.pinned);
+
+  const actions: MenuAction[] = [
+    {
+      type: "item",
+      id: "pin",
+      label: isPinned ? "Unpin notebook" : "Pin notebook",
+      icon: isPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />,
+      onSelect: () => togglePin(notebook.id),
+    },
+    {
+      type: "item",
+      id: "rename",
+      label: "Rename notebook",
+      icon: <Pencil className="size-4" />,
+      onSelect: () => {
+        setDraftTitle(notebook.title);
+        setEditing(true);
+      },
+    },
+    {
+      type: "item",
+      id: "archive",
+      label: "Archive notebook",
+      icon: <Archive className="size-4" />,
+      onSelect: () => archiveNotebook(notebook.id, true),
+    },
+    {
+      type: "item",
+      id: "delete",
+      label: "Delete notebook",
+      icon: <Trash2 className="size-4" />,
+      variant: "destructive",
+      onSelect: () => {
+        if (window.confirm(`Delete notebook "${notebook.title}"?`)) {
+          deleteNotebook(notebook.id);
+        }
+      },
+    },
+  ];
+
+  return (
+    <SidebarMenuItem className="group/study-item relative flex items-center">
+      <ActionContextMenu actions={actions} contentClassName="w-48">
+        <div className="relative min-w-0 flex-1">
+          {editing ? (
+            <div className="flex items-center px-2 py-1">
+              <input
+                autoFocus
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onBlur={() => {
+                  renameNotebook(notebook.id, draftTitle);
+                  setEditing(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    renameNotebook(notebook.id, draftTitle);
+                    setEditing(false);
+                  }
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                className="h-6 w-full rounded border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          ) : (
+            <SidebarMenuButton
+              type="button"
+              isActive={isActive}
+              tooltip={notebook.title}
+              onClick={onNavigate}
+              className="pr-12"
+            >
+              <NotebookPen className="size-4 shrink-0 text-sidebar-foreground/70" />
+              <span className="truncate">{notebook.title}</span>
+              {isPinned && <Pin className="size-3 shrink-0 text-primary ml-auto" />}
+            </SidebarMenuButton>
+          )}
+        </div>
+      </ActionContextMenu>
+
+      {!editing && (
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/study-item:opacity-100 transition-opacity">
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            title={isPinned ? "Unpin" : "Pin"}
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePin(notebook.id);
+            }}
+          >
+            {isPinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+          </button>
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+            title="Delete notebook"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`Delete notebook "${notebook.title}"?`)) {
+                deleteNotebook(notebook.id);
+              }
+            }}
+          >
+            <Trash2 className="size-3" />
+          </button>
+        </div>
+      )}
+    </SidebarMenuItem>
+  );
+}
+
 function StudyNotebooksSection() {
   const enabled = useStudyStore((state) => state.enabled);
   const notebooks = useStudyStore((state) => state.notebooks);
   const createNotebook = useStudyStore((state) => state.createNotebook);
   const navigate = useNavigate();
   const location = useLocation();
-  const active = React.useMemo(
-    () => notebooks.filter((notebook) => notebook.archivedAt === null),
-    [notebooks],
-  );
+  const active = React.useMemo(() => {
+    const list = notebooks.filter((notebook) => notebook.archivedAt === null);
+    return list.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.updatedAt - a.updatedAt;
+    });
+  }, [notebooks]);
+
   if (!enabled) return null;
   return (
     <SidebarGroup className="pb-0 pt-4" data-study-notebooks>
@@ -972,17 +1105,12 @@ function StudyNotebooksSection() {
         </div>
         <SidebarMenu>
           {active.map((notebook) => (
-            <SidebarMenuItem key={notebook.id}>
-              <SidebarMenuButton
-                type="button"
-                isActive={location.pathname === `/study/${notebook.id}`}
-                tooltip={notebook.title}
-                onClick={() => navigate(`/study/${notebook.id}`)}
-              >
-                <NotebookPen className="size-4" />
-                <span className="truncate">{notebook.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <StudyNotebookItem
+              key={notebook.id}
+              notebook={notebook}
+              isActive={location.pathname === `/study/${notebook.id}`}
+              onNavigate={() => navigate(`/study/${notebook.id}`)}
+            />
           ))}
           {active.length === 0 ? (
             <p className="px-3 py-1 text-xs text-sidebar-foreground/50">No notebooks yet</p>

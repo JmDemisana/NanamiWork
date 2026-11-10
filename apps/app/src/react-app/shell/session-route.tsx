@@ -4536,7 +4536,12 @@ export function SessionRoute() {
           ?? ({ providerID: "", modelID: "" } satisfies ModelRef)
       }
       onSelect={(next: ModelRef) => {
-        if (modelPickerNotebookId) { useStudyStore.getState().setNotebookModel(modelPickerNotebookId, next); return; }
+        if (modelPickerNotebookId) {
+          useStudyStore.getState().setNotebookModel(modelPickerNotebookId, next);
+          setModelPickerNotebookId(null);
+          modelPicker.setOpen(false);
+          return;
+        }
         applySessionRouteModelSelection(next, modelPickerSessionId);
         setModelPickerSessionId(null);
         modelPicker.setOpen(false);
@@ -4546,7 +4551,12 @@ export function SessionRoute() {
       gatewayConnectProviders={gatewayConnectProviders}
       onConnectGatewayProvider={(provider) => { void handleConnectGatewayProvider(provider); }}
       onBehaviorChange={(model, value) => {
-        if (modelPickerNotebookId) { useStudyStore.getState().setNotebookModel(modelPickerNotebookId, model, value); return; }
+        if (modelPickerNotebookId) {
+          useStudyStore.getState().setNotebookModel(modelPickerNotebookId, model, value);
+          setModelPickerNotebookId(null);
+          modelPicker.setOpen(false);
+          return;
+        }
         if (modelPickerSessionId) {
           const store = useSessionModelStore.getState();
           store.setModel(modelPickerSessionId, model, value);

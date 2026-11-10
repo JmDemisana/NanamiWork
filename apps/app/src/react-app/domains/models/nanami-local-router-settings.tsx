@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,17 +63,35 @@ function OrderButtons({
 }
 
 function ModeToggle({ mode, onChange }: { mode: LocalRouterMode; onChange: (mode: LocalRouterMode) => void }) {
-  return <div role="radiogroup" aria-label="Routing order" className="grid grid-cols-3 gap-0.5 rounded-lg border border-border p-0.5">
-    {MODE_OPTIONS.map((option) => (
-      <label key={option.value} className={`flex h-8 cursor-pointer items-center justify-center rounded-md px-2 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-ring ${
-          mode === option.value ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/50"
-        }`}>
-        <input type="radio" name="local-router-mode" value={option.value} checked={mode === option.value}
-          onChange={() => onChange(option.value)} className="sr-only" />
-        {option.label}
-      </label>
-    ))}
-  </div>;
+  return (
+    <div role="radiogroup" aria-label="Routing order" className="relative grid grid-cols-3 gap-0.5 rounded-lg border border-border p-0.5 bg-muted/20">
+      {MODE_OPTIONS.map((option) => (
+        <label
+          key={option.value}
+          className={`relative z-10 flex h-8 cursor-pointer items-center justify-center rounded-md px-2 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-ring ${
+            mode === option.value ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <input
+            type="radio"
+            name="local-router-mode"
+            value={option.value}
+            checked={mode === option.value}
+            onChange={() => onChange(option.value)}
+            className="sr-only"
+          />
+          {mode === option.value ? (
+            <motion.div
+              layoutId="local-router-mode-pill"
+              transition={{ type: "spring", stiffness: 450, damping: 35 }}
+              className="absolute inset-0 z-[-1] rounded-md bg-accent shadow-xs"
+            />
+          ) : null}
+          {option.label}
+        </label>
+      ))}
+    </div>
+  );
 }
 
 function RoutingRow({ strategy, label, description, enabled, onToggle }: {
@@ -82,13 +101,24 @@ function RoutingRow({ strategy, label, description, enabled, onToggle }: {
   enabled: boolean;
   onToggle: () => void;
 }) {
-  return <button type="button" data-testid={`router-strategy-${strategy}`} aria-pressed={enabled}
-    onClick={onToggle} className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${enabled ? "bg-accent text-foreground" : "hover:bg-accent/30"}`}>
-    <span className="min-w-0 flex-1">
-      <span className="block truncate text-sm font-medium">{label}</span>
-      <span className="block truncate text-xs text-muted-foreground" title={description}>{description}</span>
-    </span>
-  </button>;
+  return (
+    <motion.button
+      type="button"
+      data-testid={`router-strategy-${strategy}`}
+      aria-pressed={enabled}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.1 }}
+      onClick={onToggle}
+      className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+        enabled ? "bg-accent text-foreground border border-primary/20 shadow-xs" : "hover:bg-accent/40 text-muted-foreground"
+      }`}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-foreground">{label}</span>
+        <span className="block truncate text-xs text-muted-foreground" title={description}>{description}</span>
+      </span>
+    </motion.button>
+  );
 }
 
 export function LocalRouterSettingsPage({
@@ -129,7 +159,14 @@ export function LocalRouterSettingsPage({
 
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-dls-surface" data-testid="local-router-settings-page">
+    <motion.div
+      initial={{ opacity: 0, x: 14 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -14 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className="flex min-h-0 flex-1 flex-col bg-dls-surface"
+      data-testid="local-router-settings-page"
+    >
         <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
           <Button type="button" variant="ghost" size="sm" className="gap-1 px-2" onClick={onBack}>
             <ChevronLeft className="size-4" /> Models
@@ -295,6 +332,6 @@ export function LocalRouterSettingsPage({
           </Button>
           <span className="text-xs text-muted-foreground">Changes are saved locally</span>
         </footer>
-    </div>
+    </motion.div>
   );
 }
