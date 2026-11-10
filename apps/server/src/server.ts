@@ -5,6 +5,10 @@ import { managedDesktopPolicy } from "./managed-desktop-policy.js";
 import { createTaskRecovery, setTaskRecovery } from "./task-recovery.js";
 import { managedPolicyActionSchema } from "./managed-policy-rules.js";
 import { enterEngineMutation } from "./engine-switch-fence.js";
+import { acquireLocalRouterLease, enterLocalRouterLease, releaseLocalRouterLease } from "./local-router-lease.js";
+import { assessRouterAdmissions, beginRouterAdmission, routerAdmissionHasTerminalReply } from "./local-router-admissions.js";
+import { reconcileLocalRouterCodexAuth } from "./local-router-codex-auth.js";
+import { localRouterProfilePaths } from "./local-router-profile.js";
 import { beginOpencodeStop, opencodeSessionIsStopping } from "./opencode-stop-fence.js";
 import { readFile, realpath, writeFile, rm, stat } from "node:fs/promises";
 import { hostname } from "node:os";
@@ -977,7 +981,7 @@ export async function startServer(
             recoverySignal: taskRecovery?.owns(request) ? request.signal : undefined });
           const response = await sendWithOwnershipProof(ownership,
             () => taskRecovery ? taskRecovery.forward(workspace, "v1", mount.restPath, request, send) : send());
-          if (response.ok && engineV2Preview.status().chatRouting
+          if (response.ok && !request.headers.has("x-openwork-local-router-lease") && engineV2Preview.status().chatRouting
             && ((["PUT", "DELETE"].includes(request.method) && /^\/opencode\/auth\/[^/]+$/.test(mount.restPath))
               || (request.method === "POST" && /^\/opencode\/provider\/[^/]+\/oauth\/callback$/.test(mount.restPath)))) {
             // The ordinary local-provider form and provider sign-in write v1's
@@ -993,7 +997,7 @@ export async function startServer(
             // first was skipped. Never spawns an engine, and never while v1 is
             // running work.
             if (!await engineHasActiveSessions(config, workspace)) {
-              await reloadOpencodeEngineInPlace(config, workspace, engineMcpServerState, { awaitPostRefreshSync: false })
+              await reloadOpencodeEngineInPlaceFenced(config, workspace, engineMcpServerState, { awaitPostRefreshSync: false })
                 .catch((error) => logger.log("warn", "Could not refresh OpenCode v1 providers after a provider change.", {
                   error: error instanceof Error ? error.message : String(error),
                 }));
@@ -1963,6 +1967,25 @@ export async function proxyOpencodeRequest(input: Parameters<typeof forwardOpenc
   // weaken the verified organization policy. v2 keeps its native/plugin checks.
   await managedDesktopPolicy(input.config).assertLegacyExecutionRequest(input.request, input.proxyPath ?? input.url.pathname);
   if (["GET", "HEAD"].includes(input.request.method.toUpperCase())) return forwardOpencodeRequest(input);
+  const leaseId = input.request.headers.get("x-openwork-local-router-lease");
+  if (leaseId) {
+    requireHostToken(input.request, input.config);
+    if (!input.workspace || input.workspace.workspaceType !== "local") {
+      throw new ApiError(403, "local_router_workspace", "Local Router needs a local workspace.");
+    }
+    const finish = await enterLocalRouterLease(input.config, {
+      id: leaseId, workspaceId: input.workspace.id, method: input.request.method,
+      path: normalizeOpencodeProxyPath(input.proxyPath ?? input.url.pathname), request: input.request,
+    });
+    try {
+      const response = await forwardOpencodeRequest(input);
+      finish(response);
+      return response;
+    } catch (error) {
+      finish();
+      throw error;
+    }
+  }
   const release = await enterEngineMutation(input.config, "v1", input.request.signal);
   try { return await forwardOpencodeRequest(input); }
   finally { await release(); }
@@ -2001,6 +2024,7 @@ async function forwardOpencodeRequest(input: {
   let headers = new Headers(input.request.headers);
   headers.delete("authorization");
   headers.delete("x-openwork-host-token");
+  headers.delete("x-openwork-local-router-lease");
   headers.delete("x-openwork-client-id");
   headers.delete("host");
   headers.delete("origin");
@@ -2091,13 +2115,20 @@ async function forwardOpencodeRequest(input: {
         }, 409);
       }
     }
+    const sessionPart = /^\/session\/([^/]+)\/command$/.exec(normalizeOpencodeProxyPath(proxyPath))?.[1];
+    const pending = workspace && sessionPart ? beginRouterAdmission(input.config, {
+      workspaceId: workspace.id, sessionId: decodeURIComponent(sessionPart), messageId: commandAdmission?.messageId ?? null,
+    }) : null;
     void loopbackFetch(targetUrl, {
       method,
       headers,
       body,
-    }).then(() => {
+    }).then((response) => {
+      pending?.(response.status);
       enginePoolForConfig(input.config)?.reportRequestSuccess(baseUrl);
+      void response.body?.cancel().catch(() => undefined);
     }).catch((error: unknown) => {
+      pending?.();
       if (workspace) enginePoolForConfig(input.config)?.reportRequestFailure(baseUrl, error, workspace);
       // Command failures are surfaced through the OpenCode event stream.
     });
@@ -2138,8 +2169,21 @@ async function forwardOpencodeRequest(input: {
   const stoppedSession = method === "POST" ? /^\/session\/([^/]+)\/abort$/.exec(normalizeOpencodeProxyPath(proxyPath))?.[1] : undefined;
   const releaseStop = directory && stoppedSession
     ? beginOpencodeStop(input.config, directory, decodeURIComponent(stoppedSession)) : undefined;
+  const promptSession = method === "POST" ? /^\/session\/([^/]+)\/prompt_async$/.exec(normalizeOpencodeProxyPath(proxyPath))?.[1] : undefined;
+  let noReply = false;
+  if (body && promptSession) {
+    try { const value: unknown = JSON.parse(new TextDecoder().decode(body)); noReply = isRecord(value) && value.noReply === true; } catch { /* Body validation already runs at the proxy. */ }
+  }
+  const pendingPrompt = workspace && promptSession && !noReply ? beginRouterAdmission(input.config, {
+    workspaceId: workspace.id, sessionId: decodeURIComponent(promptSession), messageId: commandAdmissionFromBody(body)?.messageId ?? null,
+  }) : null;
   try {
-    return await forward();
+    const response = await forward();
+    pendingPrompt?.(response.status);
+    return response;
+  } catch (error) {
+    pendingPrompt?.();
+    throw error;
   } finally {
     releaseStop?.();
   }
@@ -2470,7 +2514,7 @@ function withCors(response: Response, request: Request, config: ServerConfig) {
   headers.set("Access-Control-Allow-Origin", allowOrigin);
   headers.set(
     "Access-Control-Allow-Headers",
-    "Authorization, Content-Type, X-OpenWork-Host-Token, X-OpenWork-Client-Id, X-OpenCode-Directory, X-Opencode-Directory, x-opencode-directory",
+    "Authorization, Content-Type, X-OpenWork-Host-Token, X-OpenWork-Local-Router-Lease, X-OpenWork-Client-Id, X-OpenCode-Directory, X-Opencode-Directory, x-opencode-directory",
   );
   headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   const exposed = headers.get("Access-Control-Expose-Headers");
@@ -3195,7 +3239,7 @@ function createRoutes(
           await requireWorkspaceRunModeIdle(config, workspace);
           // Directory-scoped disposal leaves other workspaces alone. The
           // detached MCP sync uses the same fence, so do not await it here.
-          await reloadOpencodeEngineInPlace(config, workspace, engineMcpServerState, { awaitPostRefreshSync: false });
+          await reloadOpencodeEngineInPlaceFenced(config, workspace, engineMcpServerState, { awaitPostRefreshSync: false });
           const opencode = createWorkspaceOpencodeClient(config, workspace, { boundedDiagnosticsReads: true });
           const [configResult, agentResult] = await Promise.all([opencode.config.get({}), opencode.app.agents({})]);
           const snapshot = validateEffectiveEngineSnapshot({
@@ -3380,6 +3424,54 @@ function createRoutes(
     const response = jsonResponse(await describeRuntimeActivity(config));
     response.headers.set("Cache-Control", "no-store");
     return response;
+  });
+
+  // The renderer prepares credentials through the normal v1 proxy while this
+  // short host-only lease holds the same fence used by every engine mutation.
+  addRoute(routes, "POST", "/runtime/local-router/acquire", "host-token", async (ctx) => {
+    ensureWritable(config);
+    const profile = localRouterProfilePaths(process.env);
+    if (!profile || config.externalOpencode || !enginePoolForConfig(config)?.connections().length) {
+      throw new ApiError(409, "local_router_runtime", "Local Router cannot safely switch accounts on this engine.");
+    }
+    const body = await readJsonBody(ctx.request);
+    const { workspaceId, sessionId, providerId, modelId } = body;
+    if (typeof workspaceId !== "string" || typeof sessionId !== "string" || !/^ses_[A-Za-z0-9_-]+$/.test(sessionId)
+      || typeof providerId !== "string" || !["google", "openai", "github-copilot"].includes(providerId)
+      || typeof modelId !== "string" || !modelId.trim() || modelId.length > 512
+      || Object.keys(body).some((key) => !["workspaceId", "sessionId", "providerId", "modelId"].includes(key))) {
+      throw new ApiError(400, "invalid_payload", "A local workspace, conversation and concrete model are required.");
+    }
+    const workspace = await resolveWorkspaceWithoutBootstrap(config, workspaceId);
+    if (workspace.workspaceType !== "local") throw new ApiError(403, "local_router_workspace", "Local Router needs a local workspace.");
+    const lease = await acquireLocalRouterLease(config, { workspaceId, sessionId, providerId, modelId, signal: ctx.request.signal,
+      ensureIdle: async () => {
+        const [activity, v2, runtime] = await Promise.all([
+          describeRuntimeActivity(config), describeV2EngineActivity(config, engineV2Preview.connection()), readGlobalRuntimeOpencodeConfig(config),
+        ]);
+        if (runtimeDisabledProviderList(runtime).includes(providerId)) {
+          throw new ApiError(409, "local_router_provider_disabled", "This provider is disabled in AI providers.");
+        }
+        if (activity.verdict === "busy" || v2?.verdict === "busy") {
+          throw new ApiError(409, "local_router_engine_busy", "Wait for other chats to finish before Local Router switches accounts.");
+        }
+        if (activity.verdict !== "idle" || (v2 && v2.verdict !== "idle")) {
+          throw new ApiError(409, "local_router_activity_unknown", "Could not verify whether other chats are active. Nothing was sent.");
+        }
+        const pending = await localRouterPendingActivity(config);
+        if (pending === "busy") throw new ApiError(409, "local_router_admission_busy", "Another message is still starting. Try again shortly.");
+        if (pending === "unknown") throw new ApiError(409, "local_router_admission_unknown", "Could not confirm that an earlier message finished. Nothing was sent.");
+        await reconcileLocalRouterCodexAuth(profile);
+      },
+    });
+    return jsonResponse(lease);
+  });
+
+  addRoute(routes, "POST", "/runtime/local-router/release", "host-token", async (ctx) => {
+    const body = await readJsonBody(ctx.request);
+    if (typeof body.id !== "string" || !/^[a-f0-9]{64}$/.test(body.id)) throw new ApiError(400, "invalid_payload", "Invalid Local Router lease.");
+    releaseLocalRouterLease(config, body.id);
+    return jsonResponse({ ok: true });
   });
 
   addRoute(routes, "PUT", "/den-session/identity", "host-token", async (ctx) => {
@@ -5196,6 +5288,24 @@ async function describeV1EngineActivity(config: ServerConfig): Promise<EngineAct
   return { verdict, busySessions, waitingRequests };
 }
 
+/** An HTTP acknowledgement can precede the engine's busy status. */
+async function localRouterPendingActivity(config: ServerConfig): Promise<"idle" | "busy" | "unknown"> {
+  const snapshots = new Map<string, Promise<unknown>>();
+  return assessRouterAdmissions(config, async (entry) => {
+    const owner = config.workspaces.find((item) => item.id === entry.workspaceId);
+    if (!owner) return false;
+    const key = JSON.stringify([entry.workspaceId, entry.sessionId]);
+    let snapshot = snapshots.get(key);
+    if (!snapshot) {
+      const client = createWorkspaceOpencodeClient(config, owner, { sessionId: entry.sessionId });
+      snapshot = client.session.messages({ sessionID: entry.sessionId, limit: 100 }, { signal: AbortSignal.timeout(5_000) })
+        .then((result) => unwrapOpencodeResult(result, "/session/messages"));
+      snapshots.set(key, snapshot);
+    }
+    return routerAdmissionHasTerminalReply(await snapshot, entry);
+  });
+}
+
 /** Running conversations on the v2 sidecar, or null while it is not running. */
 async function describeV2EngineActivity(
   config: ServerConfig,
@@ -5261,7 +5371,8 @@ async function engineHasActiveSessions(config: ServerConfig, workspace: Workspac
     const opencode = createWorkspaceOpencodeClient(config, workspace);
     const statuses: unknown = unwrapOpencodeResult(await opencode.session.status(), "/session/status");
     if (!isRecord(statuses)) return true;
-    return Object.values(statuses).some((status) => !isRecord(status) || status.type !== "idle");
+    if (Object.values(statuses).some((status) => !isRecord(status) || status.type !== "idle")) return true;
+    return await localRouterPendingActivity(config) !== "idle";
   } catch {
     return true;
   }
@@ -5368,8 +5479,24 @@ async function reloadOpencodeEngine(
       forceStandby: options?.forceStandby,
     });
   }
-  await reloadOpencodeEngineInPlace(config, workspace, serverState, options);
+  await reloadOpencodeEngineInPlaceFenced(config, workspace, serverState, options);
   return { action: "reloaded_in_place" };
+}
+
+async function reloadOpencodeEngineInPlaceFenced(
+  config: ServerConfig,
+  workspace: WorkspaceInfo,
+  serverState?: EngineMcpServerState,
+  options?: { awaitPostRefreshSync?: boolean },
+): Promise<void> {
+  const release = await enterEngineMutation(config, "v1");
+  try {
+    if (await engineHasActiveSessions(config, workspace)) {
+      throw new ApiError(409, "engine_busy", "Wait for active conversations to finish before refreshing the engine.");
+    }
+    await reloadOpencodeEngineInPlace(config, workspace, serverState, options);
+  }
+  finally { await release(); }
 }
 
 async function reloadOpencodeEngineInPlace(

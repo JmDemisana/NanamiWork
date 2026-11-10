@@ -23,9 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useModelPickerPageHost } from "@/react-app/domains/models/model-picker-page-host";
+import { parseStudyArtifact, studyArtifactRequest } from "./study-generation";
 import {
-  buildArtifact,
-  searchNotebook,
   useStudyStore,
   type StudyArtifact,
   type StudyArtifactKind,
@@ -53,7 +53,10 @@ function sourceKindForFile(file: File): StudySourceKind | null {
 }
 
 /** `/study` and `/study/:notebookId` share one dedicated learning surface. */
-export function StudySurface() {
+type StudyGenerate = (notebook: StudyNotebook, request: string) => Promise<string>;
+
+export function StudySurface({ onChooseModel, onGenerate }: { onChooseModel: (notebookId: string) => void; onGenerate: StudyGenerate }) {
+  const pickerHost = useModelPickerPageHost();
   const location = useLocation();
   const pathname = location.pathname;
   const match = pathname.match(/^\/study\/([^/]+)\/?$/);
@@ -82,9 +85,12 @@ export function StudySurface() {
     );
   }
 
-  return notebookId
-    ? <StudyNotebookView notebookId={notebookId} />
-    : <StudyHome />;
+  return <div className="flex h-full min-h-0 flex-col">
+    <div ref={pickerHost?.setHost} hidden={!pickerHost?.active} className="flex min-h-0 flex-1 flex-col" data-model-picker-page-host />
+    <div hidden={pickerHost?.active} inert={pickerHost?.active} className="min-h-0 flex-1">
+      {notebookId ? <StudyNotebookView notebookId={notebookId} onChooseModel={onChooseModel} onGenerate={onGenerate} /> : <StudyHome />}
+    </div>
+  </div>;
 }
 
 function StudyHome() {
@@ -153,7 +159,7 @@ function StudyHome() {
 
 type ChatEntry = { role: "you" | "study"; text: string; passages?: StudyPassage[] };
 
-function StudyNotebookView({ notebookId }: { notebookId: string }) {
+function StudyNotebookView({ notebookId, onChooseModel, onGenerate }: { notebookId: string; onChooseModel: (notebookId: string) => void; onGenerate: StudyGenerate }) {
   const notebook = useStudyStore((state) => state.notebooks.find((item) => item.id === notebookId) ?? null);
   const renameNotebook = useStudyStore((state) => state.renameNotebook);
   const navigate = useNavigate();
@@ -169,10 +175,10 @@ function StudyNotebookView({ notebookId }: { notebookId: string }) {
     );
   }
 
-  return <NotebookWorkspace key={notebook.id} notebook={notebook} onRename={(title) => renameNotebook(notebook.id, title)} />;
+  return <NotebookWorkspace key={notebook.id} notebook={notebook} onChooseModel={onChooseModel} onGenerate={onGenerate} onRename={(title) => renameNotebook(notebook.id, title)} />;
 }
 
-function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; onRename: (title: string) => void }) {
+function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { notebook: StudyNotebook; onRename: (title: string) => void; onChooseModel: (notebookId: string) => void; onGenerate: StudyGenerate }) {
   const addSource = useStudyStore((state) => state.addSource);
   const removeSource = useStudyStore((state) => state.removeSource);
   const addArtifact = useStudyStore((state) => state.addArtifact);
@@ -189,6 +195,8 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
   const [sourceText, setSourceText] = useState("");
   const [sourceError, setSourceError] = useState("");
   const [query, setQuery] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState("");
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(notebook.sources[0]?.id ?? null);
   const [highlight, setHighlight] = useState<string | null>(null);
@@ -197,20 +205,36 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
 
   const selectedSource = notebook.sources.find((source) => source.id === selectedSourceId) ?? notebook.sources[0] ?? null;
 
-  const ask = useCallback(() => {
+  const ask = useCallback(async () => {
     const question = query.trim();
-    if (!question) return;
-    const passages = searchNotebook(notebook, question);
-    const answer = passages.length === 0
-      ? "No passage in these sources matched that yet. Try a shorter phrase, or add another source."
-      : `${passages.length} passage${passages.length === 1 ? "" : "s"} from your sources mention that. The exact text is below with its citation.`;
-    setChat((current) => [...current, { role: "you", text: question }, { role: "study", text: answer, passages }]);
+    if (!question || generating) return;
+    setChat((current) => [...current, { role: "you", text: question }]);
     setQuery("");
-  }, [notebook, query]);
+    setGenerationError("");
+    setGenerating(true);
+    try {
+      const answer = await onGenerate(notebook, question);
+      const referenced = new Set([...answer.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])));
+      const passages = notebook.sources.flatMap((source, index) => referenced.has(index + 1)
+        ? [{ sourceId: source.id, sourceName: source.name, citation: index + 1, text: source.text, score: 0 }] : []);
+      setChat((current) => [...current, { role: "study", text: answer, passages }]);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Study could not answer. Try again.");
+      setQuery(question);
+    } finally { setGenerating(false); }
+  }, [generating, notebook, onGenerate, query]);
 
-  const createArtifact = (kind: StudyArtifactKind) => {
-    const artifact = addArtifact(notebook.id, buildArtifact(notebook, kind));
-    if (artifact) setOpenArtifact(artifact);
+  const createArtifact = async (kind: StudyArtifactKind) => {
+    if (generating) return;
+    setGenerationError("");
+    setGenerating(true);
+    try {
+      const text = await onGenerate(notebook, studyArtifactRequest(kind));
+      const artifact = addArtifact(notebook.id, parseStudyArtifact(kind, text));
+      if (artifact) setOpenArtifact(artifact);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Study could not create this. Try again.");
+    } finally { setGenerating(false); }
   };
 
   const addPastedSource = () => {
@@ -292,7 +316,7 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
             <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
           </button>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground">Stored locally · no account</span>
+        <Button variant="ghost" size="sm" className="ml-auto max-w-48 truncate" onClick={() => onChooseModel(notebook.id)}>{notebook.model?.modelID || "Choose model"}</Button>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -384,7 +408,7 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
                 <Search className="mx-auto size-7 text-muted-foreground" />
                 <h2 className="mt-3 text-base font-medium">Ask your sources</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Add a note or a text file, then ask a question. Answers cite the exact passage they came from.
+                  Add a note or a text file, then ask a question. Answers cite the sources they use.
                 </p>
               </div>
             )}
@@ -404,7 +428,7 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
                             key={passageIndex}
                             type="button"
                             className="rounded-lg border border-border/70 bg-background/50 p-2 text-left text-xs leading-5 transition-colors hover:border-foreground/25"
-                            onClick={() => { setSelectedSourceId(passage.sourceId); setHighlight(passage.text); }}
+                            onClick={() => { setSelectedSourceId(passage.sourceId); setHighlight(null); }}
                           >
                             <span className="mb-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                               <span className="flex size-4 items-center justify-center rounded bg-muted-foreground/15 text-[10px]">{passage.citation}</span>
@@ -427,16 +451,16 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); ask(); }
+                  if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(); }
                 }}
                 placeholder="Ask about your sources…"
                 className="min-h-10 resize-none"
                 rows={1}
               />
-              <Button onClick={ask} disabled={!query.trim()}>Ask</Button>
+              <Button onClick={() => void ask()} disabled={!query.trim() || generating || !notebook.sources.length}>{generating ? "Working…" : "Ask"}</Button>
             </div>
             <p className="mx-auto mt-1.5 max-w-2xl text-[11px] text-muted-foreground">
-              Local keyword search in this build. Model-grounded answers and the shared model picker land next.
+              {generationError || "Answers use your selected model and cite your sources."}
             </p>
           </div>
         </main>
@@ -448,7 +472,7 @@ function NotebookWorkspace({ notebook, onRename }: { notebook: StudyNotebook; on
           </div>
           <div className="flex flex-col gap-1 px-2">
             {ARTIFACT_OPTIONS.map((option) => (
-              <Button key={option.kind} variant="ghost" size="sm" className="justify-start" onClick={() => createArtifact(option.kind)} disabled={notebook.sources.length === 0}>
+              <Button key={option.kind} variant="ghost" size="sm" className="justify-start" onClick={() => void createArtifact(option.kind)} disabled={notebook.sources.length === 0 || generating}>
                 <option.icon className="size-3.5" />
                 {option.label}
               </Button>

@@ -769,6 +769,9 @@ export type SessionSurfaceProps = {
   openWorkModelsSyncing?: boolean;
   onRefreshOrganizationModels?: () => void | Promise<void>;
   modelOptions?: readonly ModelOption[];
+  localRouterEnabled?: boolean;
+  localRouterRestricted?: boolean;
+  localRouterWorkspace?: boolean;
   onModelPickerOpenChange: (open: boolean) => void;
   onModelChange: (model: ModelRef, variant?: string | null) => void;
   archived?: boolean;
@@ -1288,6 +1291,10 @@ export function SessionSurface(props: SessionSurfaceProps) {
         runtimeWorkspaceId: props.workspaceId, sessionId: props.sessionId }).owner,
       rejectedOwner,
       localRuntime: localRejectedRuntime,
+      localRouterEnabled: props.localRouterEnabled,
+      localRouterRestricted: props.localRouterRestricted,
+      localRouterWorkspace: props.localRouterWorkspace,
+      localRouterOptions: props.modelOptions,
       isCurrent: () => readDenSettings().authToken === identity.authToken && readDenSettings().activeOrgId === identity.activeOrgId
         && readDenSettings().baseUrl === identity.baseUrl && getComposerSessionDraftScope(props.sessionId) === persistedDraftKey,
       afterMessageId: () => queryClient.getQueryData<UIMessage[]>(reactTranscriptKey(props.workspaceId, props.sessionId))?.at(-1)?.id ?? null,
@@ -1306,6 +1313,10 @@ export function SessionSurface(props: SessionSurfaceProps) {
     props.draftScope,
     props.environmentRuntimeKey,
     props.modelVariant,
+    props.localRouterEnabled,
+    props.localRouterRestricted,
+    props.localRouterWorkspace,
+    props.modelOptions,
     props.opencodeBaseUrl,
     props.openworkToken,
     sessionAgent.selectedAgent,

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Client } from "@/app/types";
+import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import {
   desktopFetchViaMain,
   getCachedDesktopHomeDir,
@@ -8,7 +9,7 @@ import {
   writeOpencodeConfig,
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
-import { applyEdits, modify, parse } from "jsonc-parser";
+import { applyEdits, modify, parse, type ParseError } from "jsonc-parser";
 
 const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const OPENAI_CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback";
@@ -188,6 +189,7 @@ type ChatGptAccountsStore = {
   activeEmail: string | null;
   account: ChatGptAccountInfo | null;
   loading: boolean;
+  hasLoadedAccounts: boolean;
   isConnecting: boolean;
   authUrl: string | null;
   error: string | null;
@@ -197,7 +199,7 @@ type ChatGptAccountsStore = {
   loadAccounts: (client?: Client | null) => Promise<void>;
   selectAccount: (email: string, client?: Client | null) => Promise<void>;
   deleteAccount: (email: string, client?: Client | null) => Promise<void>;
-  refreshQuotas: (email?: string) => Promise<void>;
+  refreshQuotas: (email?: string, options?: { allowTokenRefresh?: boolean }) => Promise<void>;
   confirmAndRefresh: () => Promise<boolean>;
   connectApiKey: (apiKey: string) => Promise<boolean>;
   startBrowserLogin: () => Promise<void>;
@@ -205,6 +207,9 @@ type ChatGptAccountsStore = {
 };
 
 let latestClient: Client | null = null;
+let pendingAccountsLoad: Promise<void> | null = null;
+let pendingCodexMetadataWrite: Promise<void> = Promise.resolve();
+const pendingQuotaRefreshes = new Map<string, Promise<void>>();
 
 async function getNanamiConfigDir(): Promise<string> {
   try {
@@ -215,7 +220,7 @@ async function getNanamiConfigDir(): Promise<string> {
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
-async function readNanamiCodexMeta(): Promise<{
+async function readNanamiCodexMeta(strict = false): Promise<{
   configDir: string;
   meta: NanamiCodexMeta;
 }> {
@@ -223,15 +228,20 @@ async function readNanamiCodexMeta(): Promise<{
   let meta: NanamiCodexMeta = {};
   try {
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    if (strict && res?.exists && !res.content?.trim()) throw new Error("Account settings are empty.");
     if (res?.content?.trim()) {
-      const parsed = (parse(res.content) ?? {}) as {
+      const errors: ParseError[] = [];
+      const parsed = (parse(res.content, errors) ?? {}) as {
         x_nanami_codex?: NanamiCodexMeta;
       };
+      if (strict && errors.length) throw new Error("Account settings are invalid.");
       if (parsed.x_nanami_codex && typeof parsed.x_nanami_codex === "object") {
         meta = parsed.x_nanami_codex;
       }
     }
-  } catch {}
+  } catch (error) {
+    if (strict) throw new Error("Could not read ChatGPT account settings.", { cause: error });
+  }
   return { configDir, meta };
 }
 
@@ -326,20 +336,25 @@ const CODEX_PROVIDER_MODELS_CONFIG = {
 
 async function writeNanamiCodexMeta(
   updater: (prev: NanamiCodexMeta) => NanamiCodexMeta,
+  strict = false,
 ): Promise<void> {
+  const operation = pendingCodexMetadataWrite.then(async () => {
   try {
     const configDir = await getNanamiConfigDir();
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    if (strict && !res?.content?.trim()) throw new Error("ChatGPT account storage is unavailable.");
     let raw = res?.content?.trim()
       ? res.content
       : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
-    const parsed = (parse(raw) ?? {}) as {
+    const errors: ParseError[] = [];
+    const parsed = (parse(raw, errors) ?? {}) as {
       enabled_providers?: string[];
       provider?: Record<string, unknown>;
       x_nanami_codex?: NanamiCodexMeta;
     };
+    if (strict && errors.length) throw new Error("ChatGPT account storage could not be read safely.");
     const enabled = Array.isArray(parsed.enabled_providers) ? parsed.enabled_providers : ["nanami", "google"];
-    if (!enabled.includes("openai")) {
+    if (!strict && !enabled.includes("openai")) {
       raw = applyEdits(
         raw,
         modify(raw, ["enabled_providers"], [...enabled, "openai"], {
@@ -348,7 +363,7 @@ async function writeNanamiCodexMeta(
       );
     }
     const existingOpenai = parsed.provider?.openai as { options?: { apiKey?: string } } | undefined;
-    if (!existingOpenai?.options?.apiKey) {
+    if (!strict && !existingOpenai?.options?.apiKey) {
       raw = applyEdits(
         raw,
         modify(
@@ -363,10 +378,17 @@ async function writeNanamiCodexMeta(
     const edits = modify(raw, ["x_nanami_codex"], nextMeta, {
       formattingOptions: { insertSpaces: true, tabSize: 2 },
     });
-    await writeOpencodeConfig("project", configDir, applyEdits(raw, edits));
+    const result: unknown = await writeOpencodeConfig("project", configDir, applyEdits(raw, edits));
+    if (strict && (!result || typeof result !== "object" || Reflect.get(result, "ok") !== true)) {
+      throw new Error("Could not update ChatGPT account settings safely.");
+    }
   } catch (err) {
+    if (strict) throw new Error("Could not update ChatGPT account settings safely.", { cause: err });
     console.warn("Could not write x_nanami_codex metadata:", err);
   }
+  });
+  pendingCodexMetadataWrite = operation.then(() => undefined, () => undefined);
+  return operation;
 }
 
 function buildQuotaWindow(raw?: {
@@ -434,6 +456,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
   activeEmail: null,
   account: null,
   loading: false,
+  hasLoadedAccounts: false,
   isConnecting: false,
   authUrl: null,
   error: null,
@@ -446,12 +469,14 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
       ...(open ? {} : { isConnecting: false }),
     }),
 
-  loadAccounts: async (client) => {
+  loadAccounts: (client) => {
     if (client) latestClient = client;
+    if (pendingAccountsLoad) return pendingAccountsLoad;
+    const operation = (async () => {
     try {
-      set({ loading: true, error: null });
+      set({ loading: true, hasLoadedAccounts: false, error: null });
 
-      const { meta } = await readNanamiCodexMeta();
+      const { meta } = await readNanamiCodexMeta(true);
       let rawAccounts: StoredCodexAccount[] = Array.isArray(meta.accounts) ? [...meta.accounts] : [];
       const activeEmail: string | null = meta.activeEmail || null;
       const deletedMap = meta.deletedAtByEmail ?? {};
@@ -466,7 +491,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
       });
 
       if (rawAccounts.length === 0) {
-        set({ accounts: [], activeEmail: null, account: null, loading: false });
+        set({ accounts: [], activeEmail: null, account: null, loading: false, hasLoadedAccounts: true });
         return;
       }
 
@@ -515,30 +540,20 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
         loading: false,
       });
 
-      // Ensure active account's OAuth credentials are registered in OpenCode engine
-      if (activeAcc?.accessToken && latestClient) {
-        try {
-          await latestClient.auth.set({
-            providerID: "openai",
-            auth: {
-              type: "oauth",
-              refresh: activeAcc.refreshToken || "",
-              access: activeAcc.accessToken,
-              expires: Date.now() + 3600_000,
-              ...(activeAcc.accountId ? { accountId: activeAcc.accountId } : {}),
-            } as unknown as Parameters<Client["auth"]["set"]>[0]["auth"],
-          });
-        } catch {}
-      }
-
-      // Fetch live limits and models for each account independently (no pooling)
+      // Loading the picker must not change credentials while another chat is
+      // running. Account activation is a separate, explicit operation.
       void get().refreshQuotas();
+      set({ hasLoadedAccounts: true });
     } catch (e) {
-      set({ loading: false, error: e instanceof Error ? e.message : String(e) });
+      set({ loading: false, hasLoadedAccounts: false, error: e instanceof Error ? e.message : String(e) });
     }
+    })();
+    pendingAccountsLoad = operation;
+    void operation.finally(() => { if (pendingAccountsLoad === operation) pendingAccountsLoad = null; });
+    return operation;
   },
 
-  selectAccount: async (email: string, client) => {
+  selectAccount: (email: string, client) => modelAdmissionFence.regular(async () => {
     if (client) latestClient = client;
     const activeClient = client ?? latestClient;
     const lower = email.toLowerCase();
@@ -584,9 +599,9 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
     }
 
     void get().refreshQuotas(target.email);
-  },
+  }),
 
-  deleteAccount: async (email: string, client) => {
+  deleteAccount: (email: string, client) => modelAdmissionFence.regular(async () => {
     if (client) latestClient = client;
     const lower = email.toLowerCase();
     const remaining = get().accounts.filter((a) => a.email.toLowerCase() !== lower);
@@ -612,9 +627,9 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
       },
       accounts: (prev.accounts ?? []).filter((a) => a?.email?.toLowerCase() !== lower),
     }));
-  },
+  }),
 
-  refreshQuotas: async (targetEmail?: string) => {
+  refreshQuotas: async (targetEmail?: string, options?: { allowTokenRefresh?: boolean }) => {
     const { accounts } = get();
     if (accounts.length === 0) return;
 
@@ -624,6 +639,17 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
 
     await Promise.all(
       targets.map(async (acc) => {
+        const key = acc.email.toLowerCase();
+        const pending = pendingQuotaRefreshes.get(key);
+        if (pending) {
+          await pending;
+          const latest = get().accounts.find((account) => account.email.toLowerCase() === key);
+          if (options?.allowTokenRefresh !== true || latest?.quotaError !== "Quota HTTP 401") return;
+          const newer = pendingQuotaRefreshes.get(key);
+          if (newer && newer !== pending) return newer;
+          acc = latest;
+        }
+        const operation = (async () => {
         if (!acc.accessToken) {
           set((state) => ({
             accounts: state.accounts.map((item) =>
@@ -645,6 +671,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
 
         try {
           let accessToken = acc.accessToken;
+          let refreshToken = acc.refreshToken;
           let accountId = acc.accountId;
 
           const fetchUsage = (token: string) =>
@@ -663,7 +690,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
           let res = await fetchUsage(accessToken);
 
           // Auto-refresh expired OAuth access token if refreshToken is present
-          if (res.status === 401 && acc.refreshToken) {
+          if (res.status === 401 && acc.refreshToken && options?.allowTokenRefresh === true) {
             const refreshRes = await desktopFetchViaMain(
               "https://auth.openai.com/oauth/token",
               {
@@ -683,7 +710,25 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
                 refresh_token?: string;
               };
               if (refreshed.access_token) {
-                accessToken = refreshed.access_token;
+                const nextAccess = refreshed.access_token;
+                const nextRefresh = refreshed.refresh_token || refreshToken;
+                accessToken = nextAccess;
+                refreshToken = nextRefresh;
+                // Keep a rotated token in memory even if disk persistence fails.
+                set((state) => {
+                  const accounts = state.accounts.map((item) => item.email.toLowerCase() === acc.email.toLowerCase()
+                    ? { ...item, accessToken, refreshToken } : item);
+                  return { accounts, account: accounts.find((item) => item.isActive) ?? null };
+                });
+                // OAuth refresh tokens may rotate. Persist the replacement
+                // before another picker load or engine rebuild can restore the
+                // old credentials, and serialize concurrent account refreshes.
+                await writeNanamiCodexMeta((previous) => {
+                  const saved = previous.accounts?.find((item) => item.email?.toLowerCase() === acc.email.toLowerCase());
+                  if (!saved || saved.refreshToken !== acc.refreshToken) throw new Error("ChatGPT account changed during refresh.");
+                  return { ...previous, accounts: previous.accounts?.map((item) => item === saved
+                    ? { ...item, accessToken: nextAccess, refreshToken: nextRefresh } : item) };
+                }, true);
                 res = await fetchUsage(accessToken);
               }
             }
@@ -775,6 +820,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
                   email: data.email || item.email,
                   accountId: data.account_id || accountId,
                   accessToken,
+                  refreshToken,
                   planType,
                   primaryWindow,
                   secondaryWindow,
@@ -820,6 +866,10 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
             ),
           }));
         }
+        })();
+        pendingQuotaRefreshes.set(key, operation);
+        try { await operation; }
+        finally { if (pendingQuotaRefreshes.get(key) === operation) pendingQuotaRefreshes.delete(key); }
       }),
     );
   },
@@ -937,6 +987,94 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
     }
   },
 }));
+
+function accessTokenExpiry(token: string): number {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return Date.now() + 60_000;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded: unknown = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
+    const expiry = decoded && typeof decoded === "object" ? Reflect.get(decoded, "exp") : null;
+    return typeof expiry === "number" && Number.isFinite(expiry) ? expiry * 1000 : Date.now() + 60_000;
+  } catch {
+    return Date.now() + 60_000;
+  }
+}
+
+export function chatGptProviderHasConflictingOverride(config: unknown, apiKey?: string): boolean {
+  if (!config || typeof config !== "object") return true;
+  const providers: unknown = Reflect.get(config, "provider");
+  const provider: unknown = providers && typeof providers === "object" ? Reflect.get(providers, "openai") : null;
+  if (!provider || typeof provider !== "object") return false;
+  const npm: unknown = Reflect.get(provider, "npm");
+  if (typeof npm === "string" && npm.trim() && npm !== "@ai-sdk/openai") return true;
+  const options: unknown = Reflect.get(provider, "options");
+  if (!options || typeof options !== "object") return false;
+  const key: unknown = Reflect.get(options, "apiKey");
+  if (typeof key === "string" && key.trim() && key !== apiKey) return true;
+  const baseURL: unknown = Reflect.get(options, "baseURL");
+  if (typeof baseURL === "string" && baseURL.trim() && baseURL.replace(/\/+$/, "") !== "https://api.openai.com/v1") return true;
+  const headers: unknown = Reflect.get(options, "headers");
+  return Boolean(headers && typeof headers === "object" && Object.keys(headers).some((name) => name.toLowerCase() === "authorization"));
+}
+
+/** Called only after the router has confirmed that the local engine is idle. */
+export async function activateChatGptRouterAccount(email: string, modelID: string, client: Client): Promise<void> {
+  let state = useChatGptAccountsStore.getState();
+  let target = state.accounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+  if (!target || !target.models.some((model) => model.modelID === modelID)) {
+    throw new Error("The selected ChatGPT account or model is no longer available.");
+  }
+  // The server may just have recovered a newer token from the engine. Wait for
+  // any older read-only quota request, then take credentials from disk again.
+  await pendingQuotaRefreshes.get(target.email.toLowerCase());
+  const { meta: latestMeta } = await readNanamiCodexMeta(true);
+  const latestSaved = latestMeta.accounts?.find((account) => account.email?.toLowerCase() === email.toLowerCase());
+  if (!latestSaved) throw new Error("The selected ChatGPT account is missing from local storage.");
+  useChatGptAccountsStore.setState((current) => {
+    const accounts = current.accounts.map((account) => account.email.toLowerCase() === email.toLowerCase()
+      ? { ...account, accessToken: latestSaved.accessToken, refreshToken: latestSaved.refreshToken,
+          accountId: latestSaved.accountId, apiKey: latestSaved.apiKey } : account);
+    return { accounts, account: accounts.find((account) => account.isActive) ?? null };
+  });
+  state = useChatGptAccountsStore.getState();
+  target = state.accounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+  if (!target) throw new Error("The selected ChatGPT account is no longer available.");
+  // Only the idle, fenced routing path may rotate OAuth refresh tokens.
+  await state.refreshQuotas(target.email, { allowTokenRefresh: true });
+  state = useChatGptAccountsStore.getState();
+  target = state.accounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+  if (!target || !target.models.some((model) => model.modelID === modelID)) {
+    throw new Error("The selected ChatGPT account or model is no longer available.");
+  }
+  if (target.quotaError === "Quota HTTP 401" || target.quotaError?.includes("Could not update ChatGPT account settings")) {
+    throw new Error("The selected ChatGPT account needs to sign in again or refresh its credentials.");
+  }
+  const selected = target;
+  const engineConfig = await client.config.get();
+  if (engineConfig.error || !engineConfig.data || chatGptProviderHasConflictingOverride(engineConfig.data, selected.planType === "api" ? selected.apiKey : undefined)) {
+    throw new Error("OpenAI provider settings would override the selected account. Check AI providers before routing.");
+  }
+  let auth: Parameters<Client["auth"]["set"]>[0]["auth"] | null = null;
+  await writeNanamiCodexMeta((previous) => {
+    const saved = previous.accounts?.find((account) => account.email?.toLowerCase() === email.toLowerCase());
+    if (!saved) throw new Error("The selected ChatGPT account is missing from local storage.");
+    if (saved.planType === "api" && saved.apiKey) auth = { type: "api", key: saved.apiKey };
+    else if (saved.accessToken) auth = { type: "oauth", refresh: saved.refreshToken || "", access: saved.accessToken,
+      expires: accessTokenExpiry(saved.accessToken), ...(saved.accountId ? { accountId: saved.accountId } : {}) };
+    else throw new Error("The selected ChatGPT account needs to sign in again.");
+    return { ...previous, activeEmail: selected.email };
+  }, true);
+  if (!auth) throw new Error("Could not prepare the selected ChatGPT account.");
+  const authResult = await client.auth.set({ providerID: "openai", auth });
+  if (authResult.error || authResult.data !== true) throw new Error("Could not activate the ChatGPT account.");
+  const disposed = await client.instance.dispose();
+  if (disposed.error || disposed.data !== true) throw new Error("Could not refresh the ChatGPT provider.");
+  useChatGptAccountsStore.setState((current) => {
+    const accounts = current.accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === selected.email.toLowerCase() }));
+    return { accounts, activeEmail: selected.email, account: accounts.find((account) => account.isActive) ?? null };
+  });
+}
 
 async function startLocalCodexCallbackServerViaTerminal(
   verifier: string,

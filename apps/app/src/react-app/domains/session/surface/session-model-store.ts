@@ -8,6 +8,7 @@ import { create } from "zustand";
 
 import { getModelBehaviorSummary } from "@/app/lib/model-behavior";
 import type { ModelRef } from "@/app/types";
+import { isLocalRouterModel, LOCAL_ROUTER_TITLE } from "@/app/lib/local-router-ref";
 
 type BehaviorOption = { value: string | null; label: string };
 import { resolveModelDisplayName } from "@/app/utils";
@@ -161,7 +162,7 @@ export function useSessionModelSelection(input: UseSessionModelSelectionInput): 
     const summary = getModelBehaviorSummary(selection.model.providerID, providerModel, selection.variant);
     return {
       selectedModel: selection.model,
-      modelLabel: providerModel?.name || resolveModelDisplayName(selection.model.modelID),
+      modelLabel: isLocalRouterModel(selection.model) ? LOCAL_ROUTER_TITLE : providerModel?.name || resolveModelDisplayName(selection.model.modelID),
       modelVariant: summary.value,
       modelVariantLabel: summary.label,
       modelBehaviorOptions: summary.options,

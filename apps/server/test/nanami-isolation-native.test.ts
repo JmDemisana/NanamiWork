@@ -55,7 +55,11 @@ test("both managed engines retain isolated fixture sessions across restart", { s
       return response.json();
     };
     try {
-      const created = await fetchV1(engine, "POST", "/session", { title: "v1 fixture" });
+      const ids = await fetchV1(engine, "GET", "/experimental/tool/ids");
+      assert.ok(Array.isArray(ids) && ids.every((id: unknown) => typeof id === "string"));
+      const permission = [{ permission: "*", pattern: "*", action: "deny" }];
+      const created = await fetchV1(engine, "POST", "/session", { title: "v1 fixture", permission });
+      assert.deepEqual(created.permission, permission, "Study requires the engine to retain deny-all permissions");
       const id = created.id;
       assert.ok(id);
       await engine.close();

@@ -2,6 +2,7 @@ import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 
 import { desktopFetch, desktopFetchViaMain, isPermissionReplyRequest } from "./desktop";
 import { isDesktopRuntime } from "./runtime-env";
+import { assertConcreteModel, LOCAL_ROUTER_PROVIDER_ID } from "./local-router-ref";
 
 export type FieldsResult<T> =
   | ({ data: T; error?: undefined } & { request: Request; response: Response })
@@ -358,9 +359,16 @@ export function unwrap<T>(result: { data: T; error?: undefined } | { data?: unde
   throw new Error(message || "Unknown error");
 }
 
-export function createClient(baseUrl: string, directory?: string, auth?: OpencodeAuth, options?: { desktopTransport: "main" }) {
+export function createClient(baseUrl: string, directory?: string, auth?: OpencodeAuth, options?: {
+  desktopTransport?: "main";
+  localRouterLease?: { id: string; hostToken: string };
+}) {
   const normalizedDirectory = directory ? directory.replace(/\\/g, "/") : undefined;
   const headers: Record<string, string> = {};
+  if (options?.localRouterLease) {
+    headers["X-OpenWork-Host-Token"] = options.localRouterLease.hostToken;
+    headers["X-OpenWork-Local-Router-Lease"] = options.localRouterLease.id;
+  }
   if (!isDesktopRuntime()) {
     const authHeader = resolveAuthHeader(auth);
     if (authHeader) {
@@ -389,6 +397,7 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
   };
 
   sessionOverrides.promptAsync = async (parameters: PromptAsyncParameters, options?: { throwOnError?: boolean }) => {
+    assertConcreteModel(parameters.model);
     const { sessionID, directory: requestDirectory, ...body } = parameters;
     try {
       // Keep the tagged transport failure intact instead of serializing it
@@ -409,6 +418,9 @@ export function createClient(baseUrl: string, directory?: string, auth?: Opencod
 
   const commandOriginal = sessionOverrides.command.bind(session);
   sessionOverrides.command = (parameters: CommandParameters, options?: { throwOnError?: boolean }) => {
+    if (parameters.model?.startsWith(`${LOCAL_ROUTER_PROVIDER_ID}/`)) {
+      throw new Error("Local Router must resolve a model before sending.");
+    }
     if (!openworkMount && !("reasoning_effort" in parameters)) {
       return commandOriginal(parameters, options);
     }

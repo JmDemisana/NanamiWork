@@ -149,3 +149,37 @@ test("reads and another profile remain available while a profile switch is fence
   finish.resolve();
   await switching;
 });
+
+test("a cancelled switch waiting for active mutations does not stall new admissions", async () => {
+  const config = {};
+  const existing = await enterEngineMutation(config, "v1");
+  const controller = new AbortController();
+  let started = false;
+  const switching = withEngineSwitchFence(config, { from: "v1", to: "v1", signal: controller.signal, operation: async () => { started = true; } });
+  const rejected = assert.rejects(switching, /cancelled/);
+  controller.abort(new Error("cancelled"));
+  await rejected;
+  await (await enterEngineMutation(config, "v1"))();
+  assert.equal(started, false);
+  await existing();
+});
+
+test("cancelling a queued switch cannot let a later switch overtake its predecessor", async () => {
+  const config = {};
+  const hold = deferred();
+  const started = deferred();
+  const first = withEngineSwitchFence(config, { from: "v1", to: "v2", operation: async () => { started.resolve(); await hold.promise; } });
+  await started.promise;
+  const controller = new AbortController();
+  const second = withEngineSwitchFence(config, { from: "v2", to: "v1", signal: controller.signal, operation: async () => {} });
+  const rejected = assert.rejects(second, /cancelled/);
+  let thirdStarted = false;
+  const third = withEngineSwitchFence(config, { from: "v2", to: "v1", operation: async () => { thirdStarted = true; } });
+  controller.abort(new Error("cancelled"));
+  await rejected;
+  await tick();
+  assert.equal(thirdStarted, false);
+  hold.resolve();
+  await Promise.all([first, third]);
+  assert.equal(thirdStarted, true);
+});

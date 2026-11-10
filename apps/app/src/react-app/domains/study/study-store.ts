@@ -43,6 +43,7 @@ export type StudyNotebook = {
   updatedAt: number;
   archivedAt: number | null;
   model: ModelRef | null;
+  modelVariant?: string | null;
   sources: StudySource[];
   artifacts: StudyArtifact[];
 };
@@ -74,7 +75,7 @@ type StudyState = {
   renameNotebook: (notebookId: string, title: string) => void;
   archiveNotebook: (notebookId: string, archived: boolean) => void;
   deleteNotebook: (notebookId: string) => void;
-  setNotebookModel: (notebookId: string, model: ModelRef | null) => void;
+  setNotebookModel: (notebookId: string, model: ModelRef | null, variant?: string | null) => void;
   addSource: (notebookId: string, source: Omit<StudySource, "id" | "addedAt">) => StudySource | null;
   removeSource: (notebookId: string, sourceId: string) => void;
   addArtifact: (notebookId: string, artifact: Omit<StudyArtifact, "id" | "createdAt">) => StudyArtifact | null;
@@ -164,9 +165,9 @@ export const useStudyStore = create<StudyState>()(
       deleteNotebook: (notebookId) => set((state) => ({
         notebooks: state.notebooks.filter((notebook) => notebook.id !== notebookId),
       })),
-      setNotebookModel: (notebookId, model) => set((state) => ({
+      setNotebookModel: (notebookId, model, variant = null) => set((state) => ({
         notebooks: state.notebooks.map((notebook) => notebook.id === notebookId
-          ? touch({ ...notebook, model })
+          ? touch({ ...notebook, model, modelVariant: variant })
           : notebook),
       })),
       addSource: (notebookId, source) => {

@@ -1,6 +1,7 @@
 import { AUTO_ROUTER_PROVIDER_ID, autoRouterIdFromModel } from "@openwork/types/den/auto-router";
 import type { ModelOption, ModelRef } from "@/app/types";
 import type { CloudImportedProvider } from "@/app/cloud/import-state";
+import { isLocalRouterModel, LOCAL_ROUTER_TITLE } from "@/app/lib/local-router-ref";
 import { modelRefKey, nextFavoriteModel } from "../session/models/model-collections-store";
 
 export type ModelPickerCatalogState = {
@@ -53,7 +54,7 @@ export function isAutoRouterModel(model: ModelRef | null | undefined) {
 
 /** Models that choose their own settings, so they offer no effort, fast mode or inherited behavior. */
 export function managesOwnBehavior(model: ModelRef | null | undefined) {
-  return isAutoModel(model) || isAutoRouterModel(model);
+  return isAutoModel(model) || isAutoRouterModel(model) || isLocalRouterModel(model);
 }
 export const EXPLICIT_MODEL_CHOICE_KEY = "openwork.modelChoice.explicit";
 export function shouldSelectInitialAuto(input: { available: readonly ModelRef[]; current: ModelRef | null; empty: boolean; explicit: boolean }) {
@@ -107,6 +108,7 @@ export function isAutoModel(model: ModelRef | null | undefined) {
  * otherwise.
  */
 export function fixedModelTitle(model: ModelRef & { title?: string }, display: ModelDisplayOptions = {}): string | undefined {
+  if (isLocalRouterModel(model)) return LOCAL_ROUTER_TITLE;
   if (isAutoModel(model)) return display.plainFreeModel ? (model.title?.trim() && model.title.trim() !== model.modelID ? undefined : FREE_MODEL_ENGINE_TITLE) : FREE_MODEL_NAME;
   if (isAutoRouterModel(model)) {
     const title = model.title?.trim();

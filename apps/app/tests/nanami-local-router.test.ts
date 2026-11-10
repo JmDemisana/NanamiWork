@@ -37,10 +37,19 @@ describe("local router", () => {
       disabledProviders: ["openai"],
       options: [model("google", "g1"), model("google", "hidden-tier"), model("openai", "hidden-openai"), model("github-copilot", "hidden-copilot"), model("nanami", "router"), model("other", "m1"), { ...model("other", "disabled"), disabled: true }],
     });
-    expect(result.flatMap((account) => account.models.map((item) => item.modelID))).toEqual(["g1", "o1", "c1", "router", "m1"]);
+    expect(result.flatMap((account) => account.models.map((item) => item.modelID))).toEqual(["g1", "o1", "c1", "m1"]);
+    expect(result.some((account) => account.providerID === "nanami")).toBe(false);
     expect(result.find((account) => account.kind === "chatgpt")?.unavailableReason).toContain("disabled");
     const blocked = result.find((account) => account.kind === "chatgpt");
     expect(blocked && resolveLocalRouterChoice([blocked], settings)).toBeNull();
+  });
+
+  test("an unverified Copilot provider cannot bypass account discovery", () => {
+    const result = buildLocalRouterAccounts({ options: [{
+      providerID: "github-copilot", modelID: "gpt-4.1", title: "Copilot", description: "Copilot",
+      behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null, isFree: false,
+    }] });
+    expect(result).toEqual([]);
   });
 
   test("list modes follow displayed default and saved order", () => {
@@ -59,7 +68,7 @@ describe("local router", () => {
     const result = buildLocalRouterAccounts({
       chatgpt: [{
         email: "chat@example.invalid",
-        primaryWindow: { remainingFraction: 0, resetTimeIso: "2026-11-10T00:00:00Z" },
+        primaryWindow: { remainingFraction: 0, resetTimeIso: "2099-11-10T00:00:00Z" },
         secondaryWindow: { remainingFraction: 0.9, resetTimeIso: null },
         models: [{ modelID: "gpt", displayName: "GPT", remainingFraction: 0.9, resetTime: null }],
       }],
@@ -72,10 +81,28 @@ describe("local router", () => {
     expect(resolveLocalRouterChoice(result, settings)).toBeNull();
   });
 
-  test("unknown reset times tie and fall through to the next priority", () => {
-    const next = resolveLocalRouterChoice(accounts, { ...settings, strategies: ["nearest-reset", "lowest-quota"] });
-    expect(next?.account.key).toBe("a");
-    expect(next?.model.key).toBe("m1");
+  test("a cached empty quota after its reset becomes eligible for a fresh check", () => {
+    const result = buildLocalRouterAccounts({ antigravity: [{ email: "test@example.invalid", models: [
+      { modelID: "g1", displayName: "G1", remainingFraction: 0, resetTime: "2000-01-01T00:00:00Z" },
+    ] }] });
+    expect(result[0]?.models[0]?.remainingFraction).toBeNull();
+    expect(resolveLocalRouterChoice(result, settings)?.model.modelID).toBe("g1");
+  });
+
+  test("unknown reset times use round robin to break ties", () => {
+    const next = resolveLocalRouterChoice(accounts, { ...settings, strategies: ["nearest-reset"], usage: { "b|m2": { count: 1, lastUsedAt: 1 } } });
+    expect(next?.model.modelID).not.toBe("m2");
+  });
+
+  test("earliest and latest reset choose the corresponding known reset", () => {
+    const withResets: LocalRouterAccount[] = [{ ...accounts[0]!, models: [
+      { ...accounts[0]!.models[0]!, resetTime: "2099-01-01T00:00:00Z" },
+      { ...accounts[0]!.models[1]!, resetTime: "2099-02-01T00:00:00Z" },
+    ] }];
+    expect(resolveLocalRouterChoice(withResets, { ...settings, strategies: ["nearest-reset"] })?.model.modelID).toBe("m2");
+    expect(resolveLocalRouterChoice(withResets, { ...settings, strategies: ["never-used"] })?.model.modelID).toBe("m1");
+    withResets[0]!.models[0]!.resetTime = "invalid";
+    expect(resolveLocalRouterChoice(withResets, { ...settings, strategies: ["never-used"] })?.model.modelID).toBe("m1");
   });
 
   test("quota priorities put unknown quota after known quota", () => {
@@ -90,22 +117,14 @@ describe("local router", () => {
     expect(useLocalRouterStore.getState().accountOrder).toEqual(["a", "local", "b"]);
   });
 
-  test("round robin and random lock all later priorities while keeping earlier ones", () => {
+  test("strategy toggles select one option or turn routing off", () => {
     useLocalRouterStore.setState(settings);
     useLocalRouterStore.getState().toggleStrategy("highest-quota");
-    expect(useLocalRouterStore.getState().strategies).toEqual(["round-robin"]);
-    useLocalRouterStore.getState().toggleStrategy("round-robin");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota"]);
+    useLocalRouterStore.getState().toggleStrategy("random");
+    expect(useLocalRouterStore.getState().strategies).toEqual(["random"]);
+    useLocalRouterStore.getState().toggleStrategy("random");
+    expect(useLocalRouterStore.getState().strategies).toEqual([]);
     expect(resolveLocalRouterChoice(accounts, useLocalRouterStore.getState())).toBeNull();
-    useLocalRouterStore.getState().toggleStrategy("highest-quota");
-    useLocalRouterStore.getState().toggleStrategy("lowest-quota");
-    useLocalRouterStore.getState().toggleStrategy("random");
-    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
-    useLocalRouterStore.getState().moveStrategy("random", -1);
-    useLocalRouterStore.getState().moveStrategy("lowest-quota", 1);
-    useLocalRouterStore.getState().toggleStrategy("round-robin");
-    useLocalRouterStore.getState().toggleStrategy("nearest-reset");
-    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota", "random"]);
-    useLocalRouterStore.getState().toggleStrategy("random");
-    expect(useLocalRouterStore.getState().strategies).toEqual(["highest-quota", "lowest-quota"]);
   });
 });

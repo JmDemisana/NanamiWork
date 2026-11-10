@@ -26,6 +26,8 @@ import { downloadTextAsFile } from "@/app/lib/download";
 import { canCreateWorkspaces } from "@/app/lib/workspace-creation-policy";
 import { createClient, isPromptAdmissionUnknown, unwrap } from "@/app/lib/opencode";
 import { sendWithModelUnavailableRetry } from "@/react-app/domains/session/sync/model-unavailable-retry";
+import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
+import { dispatchConfiguredLocalRouterTurn } from "@/react-app/domains/models/local-router-runtime";
 import { createClientV2, isOpencodeV2BaseUrl, v2AcknowledgementText } from "@/app/lib/opencode-v2-adapter";
 import { abortSessionSafe, forkSession, listCommands, revertSession, shellInSession, unrevertSession } from "@/app/lib/opencode-session";
 import { composeNativeSessionHistory } from "@/app/lib/opencode-session-native";
@@ -291,6 +293,8 @@ import { getReactQueryClient } from "@/react-app/infra/query-client";
 import { useSessionControlActions } from "@/react-app/domains/session/control/session-control-actions";
 import { useSessionArchive } from "@/react-app/domains/session/sidebar/use-session-archive";
 import { StudySurface } from "@/react-app/domains/study/study-surface";
+import { useStudyStore } from "@/react-app/domains/study/study-store";
+import { generateStudyText } from "@/react-app/domains/study/study-generation";
 import { openComposerConfigure, isLibraryAgent, type ComposerSettingsSection } from "@/react-app/domains/settings/library";
 import {
   globalExtensionsRoute,
@@ -307,6 +311,7 @@ import type { OpenTarget } from "@/react-app/domains/session/artifacts/open-targ
 import { SettingsSurface } from "./settings-route";
 import { readStoredDefaultModel, readWorkspaceDefaultModel, setWorkspaceDefaultModel, useWorkspaceDefaultModel, workspaceModelScope, writeStoredDefaultModel } from "@/react-app/kernel/model-config";
 import { useWorkspaceDefaultModelSync } from "@/react-app/kernel/workspace-default-model-sync";
+import { isLocalRouterModel } from "@/app/lib/local-router-ref";
 import { useWorkspaceModelProfile } from "@/react-app/kernel/use-workspace-model-default";
 import {
   ensureProviderListQuery,
@@ -604,7 +609,7 @@ export function SessionRoute() {
   const newTaskModel = modelForNewTask(configuredNewTaskModel, observedAutoStatus, autoChecking);
   const newTaskVariant = newChatDefault.variant;
   // Background callers (automations, remote sessions) read this from the workspace's server.
-  useWorkspaceDefaultModelSync({ endpoint: selectedWorkspaceEndpoint, connected: !selectedWorkspaceError,
+  useWorkspaceDefaultModelSync({ endpoint: selectedWorkspaceEndpoint, connected: !selectedWorkspaceError && !isLocalRouterModel(newTaskModel),
     model: newTaskModel, variant: newTaskVariant, pending: autoChecking });
   const changeNewTaskModel = useCallback((model: ModelRef, variant: string | null = null) => {
     local.setPrefs((previous) => ({ ...previous, defaultModel: model, modelVariant: variant }));
@@ -697,7 +702,7 @@ export function SessionRoute() {
     })) return;
     void refreshRouteState({ supersede: true });
   }, [cloudWorkspace.gatewayMode, cloudWorkspace.viewModel.variant, cloudWorkspace.visible, refreshRouteState]);
-  const cloudMcpProviderModel = useMemo(() => local.prefs.defaultModel
+  const cloudMcpProviderModel = useMemo(() => local.prefs.defaultModel && !isLocalRouterModel(local.prefs.defaultModel)
     ? {
         provider: local.prefs.defaultModel.providerID,
         model: local.prefs.defaultModel.modelID,
@@ -1317,12 +1322,15 @@ export function SessionRoute() {
   // the picker edits the global default (e.g. opened from the new-providers
   // toast). Composer "All models" carries the session id on the open event.
   const [modelPickerSessionId, setModelPickerSessionId] = useState<string | null>(null);
+  const [modelPickerNotebookId, setModelPickerNotebookId] = useState<string | null>(null);
+  const pickerNotebook = useStudyStore((state) => state.notebooks.find((item) => item.id === modelPickerNotebookId) ?? null);
   const modelPickerSelection = useSessionModelStore((state) =>
     modelPickerSessionId ? state.bySessionId[modelPickerSessionId] ?? null : null,
   );
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
+      setModelPickerNotebookId(null);
       setModelPickerSessionId(typeof detail?.sessionId === "string" ? detail.sessionId : null);
     };
     window.addEventListener(openModelPickerEvent, handler);
@@ -1402,6 +1410,7 @@ export function SessionRoute() {
       cloudProviderList,
       liveProviderSync,
       providerList: providerListQuery.data,
+      localRouterAvailable: localModelPickerEnabled && isDesktopRuntime() && !restrictToCloudProviders,
     })), [
     // The tick only forces re-evaluation of denials tracked by the gate.
     availabilityRecheckTick,
@@ -1414,6 +1423,7 @@ export function SessionRoute() {
     opencodeClient,
     openWorkModelsSyncing,
     liveProviderSync,
+    localModelPickerEnabled,
     providerListQuery.isPlaceholderData,
     providerListQuery.isError,
     providerListQuery.data,
@@ -1442,6 +1452,7 @@ export function SessionRoute() {
         cloudProviderSyncReady, openWorkModelsSyncing: false,
         restrictToCloud: restrictToCloudProviders, checkRestriction: checkDesktopRestriction,
         cloudProviderList: refreshed.data, providerList: refreshed.data,
+        localRouterAvailable: localModelPickerEnabled && isDesktopRuntime() && !restrictToCloudProviders,
       }).status === "unavailable";
     },
   });
@@ -1449,6 +1460,8 @@ export function SessionRoute() {
   const hasAntigravityAccounts = useAntigravityAccountsStore((s) => s.accounts.length > 0);
   const resolveModelAvailability = useCallback((model: ModelRef | null): ModelAvailability => {
     if (!model) return { status: "pending" };
+    if (isLocalRouterModel(model)) return localModelPickerEnabled && isDesktopRuntime() && !restrictToCloudProviders
+      ? { status: "available" } : { status: "unavailable", reason: "provider_blocked" };
     if (isDesktopRuntime() || model.providerID === "nanami" || model.providerID === "google" || model.providerID === "openai" || model.providerID === "github-copilot" || model.modelID.startsWith("antigravity-") || model.modelID.startsWith("copilot-") || model.modelID.startsWith("codex-")) return { status: "available" };
     if (model && model.providerID === "google" && model.modelID.startsWith("antigravity-") && (hasAntigravityAccounts || useAntigravityAccountsStore.getState().accounts.length > 0)) {
       return { status: "available" };
@@ -1461,7 +1474,7 @@ export function SessionRoute() {
       && !(organizationRemovalConfirmed && activeComposerModel?.providerID === model.providerID
         && activeComposerModel.modelID === model.modelID)) return { status: "pending" };
     return verdict;
-  }, [resolveCatalogModelAvailability, organizationRemovalConfirmed, activeComposerModel, hasAntigravityAccounts]);
+  }, [resolveCatalogModelAvailability, organizationRemovalConfirmed, activeComposerModel, hasAntigravityAccounts, localModelPickerEnabled, restrictToCloudProviders]);
   const organizationModelsEmpty = catalogOrganizationModelsEmpty
     && (!activeComposerModel || !isCloudManagedProviderKey(activeComposerModel.providerID) || organizationRemovalConfirmed);
   const selectedModelUnavailable =
@@ -1767,6 +1780,9 @@ export function SessionRoute() {
       gatewayUsageProviderScope: sessionProviderAuthSnapshot.gatewayUsageProviderScope ?? null,
       modelPickerOpen: modelPicker.compactOpen,
       modelOptions: modelPicker.options,
+      localRouterEnabled: localModelPickerEnabled,
+      localRouterRestricted: restrictToCloudProviders,
+      localRouterWorkspace: (selectedWorkspace?.workspaceType ?? "local") === "local",
       // Legacy fallback only; each surface resolves availability for its own
       // effective session model through `resolveModelAvailability`.
       modelUnavailable: selectedModelUnavailable,
@@ -1838,6 +1854,21 @@ export function SessionRoute() {
                 throw new Error("This session is archived. Restore it before sending.");
               }
               assertCurrent();
+              const routerContext = {
+                selected: sendModel ?? null,
+                variant: sendVariant ?? null,
+                sessionId: targetSessionId,
+                opencodeClient: promptClient,
+                opencodeBaseUrl,
+                openworkClient: selectedWorkspaceEndpoint?.client ?? client,
+                workspaceId: selectedWorkspaceEndpoint?.workspaceId ?? selectedWorkspaceId,
+                workspaceRoot: selectedWorkspaceRoot,
+                options: modelPicker.actionOptions,
+                localWorkspace: (selectedWorkspace?.workspaceType ?? "local") === "local",
+                restrictToCloud: restrictToCloudProviders,
+                enabled: localModelPickerEnabled,
+                assertCurrent,
+              };
               await sendWithRevertRollback({
                 assertCurrent,
                 revertMessageId: draft.revertMessageId,
@@ -1889,22 +1920,25 @@ export function SessionRoute() {
 
                   if (draft.mode === "shell") {
                     onPrepared?.();
-                    await shellInSession(opencodeClient, targetSessionId, text, { messageID: draft.messageId });
+                    await modelAdmissionFence.regular(() => shellInSession(opencodeClient, targetSessionId, text, { messageID: draft.messageId }), assertCurrent);
                     return;
                   }
 
                   if (draft.command) {
                     onPrepared?.();
-                    const result = await sendSessionCommand(opencodeBaseUrl, opencodeClient, {
-                      sessionID: targetSessionId,
-                      messageID: draft.messageId,
-                      command: draft.command.name,
-                      arguments: draft.command.arguments,
-                      ...(sendModel && isAutoModel(sendModel) ? { model: `${sendModel.providerID}/${sendModel.modelID}` } : {}),
-                    });
-                    if (result.error) {
-                      throw new Error(serializeSDKError(result.error));
-                    }
+                    const command = draft.command;
+                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                      const result = await sendSessionCommand(opencodeBaseUrl, turnClient, {
+                        sessionID: targetSessionId,
+                        messageID: draft.messageId,
+                        command: command.name,
+                        arguments: command.arguments,
+                        ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+                        ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+                      });
+                      if (result.error) throw new Error(serializeSDKError(result.error));
+                      return result;
+                    } });
                     return;
                   }
 
@@ -1918,32 +1952,32 @@ export function SessionRoute() {
                   });
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  const result = await sendWithModelUnavailableRetry({
-                    request: {
-                      sessionID: targetSessionId,
-                      messageID: draft.messageId,
-                      parts,
-                      model: sendModel ?? undefined,
-                      agent: sendAgent ?? undefined,
-                      ...(sendVariant ? { variant: sendVariant } : {}),
-                      system,
-                    },
-                    send: (request) => promptClient.session.promptAsync(request),
-                    refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
-                      client: promptClient,
-                      baseUrl: opencodeBaseUrl,
-                      directory: selectedWorkspaceRoot,
-                      force: true,
-                    }),
-                    assertCurrent,
-                  });
-                  if (result.error) {
-                    if (isPromptAdmissionUnknown(result.error)) throw result.error;
-                    throw new Error(serializeSDKError(result.error));
-                  }
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                    const result = await sendWithModelUnavailableRetry({
+                      request: {
+                        sessionID: targetSessionId,
+                        messageID: draft.messageId,
+                        parts,
+                        model: model ?? undefined,
+                        agent: sendAgent ?? undefined,
+                        ...(variant ? { variant } : {}),
+                        system,
+                      },
+                      send: (request) => turnClient.session.promptAsync(request),
+                      refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
+                        client: promptClient, baseUrl: opencodeBaseUrl, directory: selectedWorkspaceRoot, force: true,
+                      }),
+                      assertCurrent,
+                    });
+                    if (result.error) {
+                      if (isPromptAdmissionUnknown(result.error)) throw result.error;
+                      throw new Error(serializeSDKError(result.error));
+                    }
+                    return result;
+                  } });
                   // Remember what this conversation used last so returning to it
                   // (or splitting it beside another session) keeps its own model.
-                  if (sendModel && getQueuedSendGeneration(targetSessionId) === generation) {
+                  if (sendModel && !isLocalRouterModel(sendModel) && getQueuedSendGeneration(targetSessionId) === generation) {
                     useSessionModelStore.getState().setModel(targetSessionId, sendModel, sendVariant ?? null);
                   }
                 },
@@ -2067,6 +2101,7 @@ export function SessionRoute() {
   }, [
     client,
     modelPicker.options,
+    modelPicker.actionOptions,
     modelPicker.compactOpen,
     handleOpenExtensions,
     handleOpenSettings,
@@ -2106,11 +2141,14 @@ export function SessionRoute() {
     sessionDraftScope,
     selectedModelUnavailable,
     selectedWorkspace,
+    selectedWorkspaceEndpoint,
     selectedWorkspaceId,
     selectedWorkspaceRoot,
     selectedWorkspaceServerToken,
     sessionsByWorkspaceId,
     submitWithCloudMcpReadiness,
+    localModelPickerEnabled,
+    restrictToCloudProviders,
     token,
   ]);
   const resolvePaneRuntime = useCallback((session: OpenSessionTab): SessionPagePaneRuntime => {
@@ -2164,6 +2202,7 @@ export function SessionRoute() {
     const scopedSurface = {
       ...surfaceProps,
       workspaceRoot,
+      localRouterWorkspace: (workspace.workspaceType ?? "local") === "local",
       modelRecoveryScope: JSON.stringify([sessionDraftScope, endpoint.opencodeBaseUrl, workspace.id]),
       modelUnavailable: false,
       modelUnavailableMessage: null,
@@ -2228,6 +2267,21 @@ export function SessionRoute() {
                 throw new Error("This session is archived. Restore it before sending.");
               }
               assertCurrent();
+              const routerContext = {
+                selected: sendModel ?? null,
+                variant: sendVariant ?? null,
+                sessionId: targetSessionId,
+                opencodeClient: promptClient,
+                opencodeBaseUrl: endpoint.opencodeBaseUrl,
+                openworkClient: endpoint.client,
+                workspaceId: endpoint.workspaceId,
+                workspaceRoot,
+                options: surfaceProps?.modelOptions ?? [],
+                localWorkspace: (workspace.workspaceType ?? "local") === "local",
+                restrictToCloud: restrictToCloudProviders,
+                enabled: localModelPickerEnabled,
+                assertCurrent,
+              };
               await sendWithRevertRollback({
                 assertCurrent,
                 revertMessageId: draft.revertMessageId,
@@ -2268,19 +2322,24 @@ export function SessionRoute() {
                   noteActivationRunStarted(targetSessionId, draft.parts);
                   if (draft.mode === "shell") {
                     onPrepared?.();
-                    await shellInSession(workspaceOpencodeClient, targetSessionId, text, { messageID: draft.messageId });
+                    await modelAdmissionFence.regular(() => shellInSession(workspaceOpencodeClient, targetSessionId, text, { messageID: draft.messageId }), assertCurrent);
                     return;
                   }
                   if (draft.command) {
                     onPrepared?.();
-                    const result = await sendSessionCommand(endpoint.opencodeBaseUrl, workspaceOpencodeClient, {
-                      sessionID: targetSessionId,
-                      messageID: draft.messageId,
-                      command: draft.command.name,
-                      arguments: draft.command.arguments,
-                      ...(sendModel && isAutoModel(sendModel) ? { model: `${sendModel.providerID}/${sendModel.modelID}` } : {}),
-                    });
-                    if (result.error) throw new Error(serializeSDKError(result.error));
+                    const command = draft.command;
+                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                      const result = await sendSessionCommand(endpoint.opencodeBaseUrl, turnClient, {
+                        sessionID: targetSessionId,
+                        messageID: draft.messageId,
+                        command: command.name,
+                        arguments: command.arguments,
+                        ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+                        ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+                      });
+                      if (result.error) throw new Error(serializeSDKError(result.error));
+                      return result;
+                    } });
                     return;
                   }
                   const parts = await draftToParts(draft, workspaceRoot, targetSessionId, endpoint);
@@ -2293,30 +2352,30 @@ export function SessionRoute() {
                   });
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  const result = await sendWithModelUnavailableRetry({
-                    request: {
-                      sessionID: targetSessionId,
-                      messageID: draft.messageId,
-                      parts,
-                      model: sendModel ?? undefined,
-                      agent: sendAgent ?? undefined,
-                      ...(sendVariant ? { variant: sendVariant } : {}),
-                      system,
-                    },
-                    send: (request) => promptClient.session.promptAsync(request),
-                    refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
-                      client: promptClient,
-                      baseUrl: endpoint.opencodeBaseUrl,
-                      directory: workspaceRoot,
-                      force: true,
-                    }),
-                    assertCurrent,
-                  });
-                  if (result.error) {
-                    if (isPromptAdmissionUnknown(result.error)) throw result.error;
-                    throw new Error(serializeSDKError(result.error));
-                  }
-                  if (sendModel && getQueuedSendGeneration(targetSessionId) === generation) {
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                    const result = await sendWithModelUnavailableRetry({
+                      request: {
+                        sessionID: targetSessionId,
+                        messageID: draft.messageId,
+                        parts,
+                        model: model ?? undefined,
+                        agent: sendAgent ?? undefined,
+                        ...(variant ? { variant } : {}),
+                        system,
+                      },
+                      send: (request) => turnClient.session.promptAsync(request),
+                      refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
+                        client: promptClient, baseUrl: endpoint.opencodeBaseUrl, directory: workspaceRoot, force: true,
+                      }),
+                      assertCurrent,
+                    });
+                    if (result.error) {
+                      if (isPromptAdmissionUnknown(result.error)) throw result.error;
+                      throw new Error(serializeSDKError(result.error));
+                    }
+                    return result;
+                  } });
+                  if (sendModel && !isLocalRouterModel(sendModel) && getQueuedSendGeneration(targetSessionId) === generation) {
                     useSessionModelStore.getState().setModel(targetSessionId, sendModel, sendVariant ?? null);
                   }
                 },
@@ -2408,12 +2467,14 @@ export function SessionRoute() {
     handleOpenExtensions,
     handleOpenSettings,
     local.prefs.defaultModel,
+    localModelPickerEnabled,
     modelVariantValue,
     navigateToWorkspaceSession,
     refreshRouteState,
     reloadWorkspaceSessions,
     rememberPendingCreatedSession,
     reloadCoordinator.withEngineReady,
+    restrictToCloudProviders,
     newTaskAgent,
     selectedWorkspaceId,
     selectedWorkspaceRoot,
@@ -4098,7 +4159,29 @@ export function SessionRoute() {
           />
         </WorkspaceProvider>,
       } : undefined}
-      primarySlot={studyRouteActive ? <StudySurface /> : activityRouteActive ? <ActivityPage onTrySkill={trySkillInNewSession} /> : remoteTaskRouteActive && remoteThreadKey ? (
+      primarySlot={studyRouteActive ? <StudySurface onChooseModel={(id) => { setModelPickerSessionId(null); setModelPickerNotebookId(id); modelPicker.setOpen(true); }} onGenerate={async (notebook, request) => {
+        if (!notebook.model) throw new Error("Choose a model for this notebook first.");
+        if (!opencodeClient || !selectedWorkspaceId || !selectedWorkspaceEndpoint || !selectedWorkspace || (selectedWorkspace.workspaceType ?? "local") !== "local") {
+          throw new Error("Connect a local workspace to use your selected model.");
+        }
+        if (isOpencodeV2BaseUrl(opencodeBaseUrl)) throw new Error("Study cannot verify tool restrictions on this engine yet. Nothing was sent.");
+        return generateStudyText({ client: opencodeClient, notebook, request,
+          send: async (sessionId, messageID, tools, system, text) => {
+            await dispatchConfiguredLocalRouterTurn({
+              selected: notebook.model, variant: notebook.modelVariant ?? null, sessionId,
+              opencodeClient, opencodeBaseUrl, openworkClient: selectedWorkspaceEndpoint.client,
+              workspaceId: selectedWorkspaceEndpoint.workspaceId, workspaceRoot: selectedWorkspaceRoot,
+              options: modelPicker.actionOptions, localWorkspace: true, restrictToCloud: restrictToCloudProviders,
+              enabled: localModelPickerEnabled,
+              send: async ({ model, variant, client: turnClient }) => {
+                const result = await turnClient.session.promptAsync({ sessionID: sessionId, messageID, model: model ?? undefined,
+                  ...(variant ? { variant } : {}), tools, system, parts: [{ type: "text", text }] });
+                return unwrap(result);
+              },
+            });
+          },
+        });
+      }} /> : activityRouteActive ? <ActivityPage onTrySkill={trySkillInNewSession} /> : remoteTaskRouteActive && remoteThreadKey ? (
         <RemoteSessionSurface key={remoteThreadKey} threadKey={remoteThreadKey} navigation={remoteHelperNavigation} />
       ) : pendingConversation ? <PendingConversationView conversation={pendingConversation} composer={newTaskComposerContext} /> : appsRouteActive ? (
         <WorkspaceProvider
@@ -4442,16 +4525,18 @@ export function SessionRoute() {
           ? MODEL_PICKER_UNAVAILABLE_SUBTITLE
           : undefined
       }
-      target={modelPickerSessionId ? "session" : "default"}
-      currentBehaviorValue={modelPickerSelection
+      target={modelPickerSessionId || modelPickerNotebookId ? "session" : "default"}
+      disableWorkspaceDefault={Boolean(modelPickerNotebookId)}
+      currentBehaviorValue={modelPickerNotebookId ? pickerNotebook?.modelVariant ?? null : modelPickerSelection
         ? modelPickerSelection.variant
         : modelPickerSessionId ? modelVariantValue : newTaskVariant}
       current={
-        modelPickerSelection?.model
+        (modelPickerNotebookId ? pickerNotebook?.model : modelPickerSelection?.model)
           ?? (modelPickerSessionId ? local.prefs.defaultModel : newTaskModel)
           ?? ({ providerID: "", modelID: "" } satisfies ModelRef)
       }
       onSelect={(next: ModelRef) => {
+        if (modelPickerNotebookId) { useStudyStore.getState().setNotebookModel(modelPickerNotebookId, next); return; }
         applySessionRouteModelSelection(next, modelPickerSessionId);
         setModelPickerSessionId(null);
         modelPicker.setOpen(false);
@@ -4461,6 +4546,7 @@ export function SessionRoute() {
       gatewayConnectProviders={gatewayConnectProviders}
       onConnectGatewayProvider={(provider) => { void handleConnectGatewayProvider(provider); }}
       onBehaviorChange={(model, value) => {
+        if (modelPickerNotebookId) { useStudyStore.getState().setNotebookModel(modelPickerNotebookId, model, value); return; }
         if (modelPickerSessionId) {
           const store = useSessionModelStore.getState();
           store.setModel(modelPickerSessionId, model, value);
@@ -4501,7 +4587,7 @@ export function SessionRoute() {
         modelPicker.setOpen(false);
         handleOpenSettings("/settings/general");
       }}
-      onClose={() => { modelPicker.setOpen(false); modelPicker.setRecentProviderIds(new Set()); setModelPickerSessionId(null); }}
+      onClose={() => { modelPicker.setOpen(false); modelPicker.setRecentProviderIds(new Set()); setModelPickerSessionId(null); setModelPickerNotebookId(null); }}
       openWorkModelsEntitled={openWorkModelsEntitled}
       openWorkModelsSyncing={openWorkModelsSyncing}
       onRefreshOrganizationModels={refreshOrganizationModelAccess}

@@ -11,6 +11,7 @@ import { isolateNanamiEngineEnvironment } from "../src/nanami-engine-environment
 import { hasNanamiV1SignIns } from "../src/nanami-v1-accounts.js";
 import { createEngineV2Preview } from "../src/engine-v2-preview.js";
 import type { ServerConfig } from "../src/types.js";
+import { parse } from "jsonc-parser";
 
 const installedPlugin = join(process.env.USERPROFILE || process.env.HOME || "", ".cache", "opencode", "packages", "opencode-antigravity-auth@latest", "node_modules", "opencode-antigravity-auth", "dist", "src", "plugin", "storage.js");
 
@@ -107,6 +108,137 @@ test("account sync uses only the selected private data and config", async () => 
     assert.equal(JSON.parse(await readFile(authPath, "utf8")).openai.refresh, "private-refresh");
     assert.equal(JSON.parse(await readFile(other, "utf8")).provider.nanami.options.apiKey, "other-app-key");
   } finally {
+    for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("provider reload preserves a refreshed ChatGPT credential instead of restoring an older token", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nanami-refreshed-auth-"));
+  const config = join(root, "config"), data = join(config, "data"), engineData = join(data, "opencode");
+  const env = { NANAMIWORK_ISOLATED: "1", OPENCODE_CONFIG_DIR: config, XDG_DATA_HOME: data };
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+  const jwt = (exp: number) => `fixture.${Buffer.from(JSON.stringify({ exp })).toString("base64url")}.fixture`;
+  try {
+    await mkdir(config, { recursive: true });
+    await mkdir(engineData, { recursive: true });
+    await writeFile(join(config, "opencode.jsonc"), JSON.stringify({ x_nanami_codex: { activeEmail: "one@example.invalid", accounts: [
+      { email: "one@example.invalid", accountId: "one", accessToken: jwt(100), refreshToken: "old-refresh" },
+    ] } }));
+    await writeFile(join(engineData, "auth.json"), JSON.stringify({ openai: { type: "oauth", accountId: "one", access: jwt(200), refresh: "new-refresh", expires: 200_000 } }));
+    Object.assign(process.env, env);
+    await (await OpenWorkGatewayQuota()).config({});
+    const auth = JSON.parse(await readFile(join(engineData, "auth.json"), "utf8"));
+    const meta = JSON.parse(await readFile(join(config, "opencode.jsonc"), "utf8"));
+    assert.equal(auth.openai.access, jwt(200));
+    assert.equal(auth.openai.refresh, "new-refresh");
+    assert.equal(auth.openai.expires, 200_000);
+    assert.equal(meta.x_nanami_codex.accounts[0].refreshToken, "new-refresh");
+  } finally {
+    for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("provider reload preserves JSONC comments and unrelated Antigravity account metadata", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nanami-antigravity-meta-"));
+  const config = join(root, "config"), data = join(config, "data");
+  const env = { NANAMIWORK_ISOLATED: "1", OPENCODE_CONFIG_DIR: config, XDG_DATA_HOME: data };
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+  try {
+    await mkdir(config, { recursive: true });
+    await writeFile(join(config, "opencode.jsonc"), `{
+      // Keep this private preference comment.
+      "custom": { "keep": true },
+      "x_nanami_antigravity": { "activeEmail": "two@example.invalid", "accounts": [
+        { "email": "one@example.invalid", "refreshToken": "one-token", "verificationRequired": true, "customMarker": "keep" },
+        { "email": "two@example.invalid", "refreshToken": "two-token" },
+        { "email": "missing@example.invalid", "refreshToken": "missing-token", "customMarker": "keep-too" }
+      ] }
+    }`);
+    await writeFile(join(config, "antigravity-accounts.json"), JSON.stringify({ activeIndex: 0, accounts: [
+      { email: "one@example.invalid", refreshToken: "one-token", enabled: false, verificationRequired: true },
+      { email: "two@example.invalid", refreshToken: "two-token", enabled: true },
+    ] }));
+    Object.assign(process.env, env);
+    await (await OpenWorkGatewayQuota()).config({});
+    const raw = await readFile(join(config, "opencode.jsonc"), "utf8");
+    const saved = parse(raw);
+    assert.match(raw, /Keep this private preference comment/);
+    assert.equal(saved.custom.keep, true);
+    assert.equal(saved.x_nanami_antigravity.accounts[0].verificationRequired, true);
+    assert.equal(saved.x_nanami_antigravity.accounts[0].customMarker, "keep");
+    assert.equal(saved.x_nanami_antigravity.accounts[2].customMarker, "keep-too");
+    const disk = JSON.parse(await readFile(join(config, "antigravity-accounts.json"), "utf8"));
+    assert.equal(disk.activeIndex, 1);
+    assert.deepEqual(disk.accounts.map((account: { enabled: boolean }) => account.enabled), [false, true]);
+  } finally {
+    for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an already configured Copilot login exchanges its token for inference without importing an account", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nanami-configured-copilot-"));
+  const configDir = join(root, "config"), data = join(configDir, "data");
+  const env = { NANAMIWORK_ISOLATED: "1", OPENCODE_CONFIG_DIR: configDir, XDG_DATA_HOME: data };
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+  const originalFetch = globalThis.fetch;
+  const seen: Array<string | null> = [];
+  try {
+    await mkdir(configDir, { recursive: true });
+    Object.assign(process.env, env);
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      seen.push(request.headers.get("authorization"));
+      return request.url.includes("copilot_internal")
+        ? Response.json({ token: "session-fixture", expires_at: Math.floor(Date.now() / 1000) + 3600 })
+        : Response.json({ ok: true });
+    }, { preconnect: originalFetch.preconnect });
+    const configured = { provider: { "github-copilot": { options: { apiKey: "gho_fixture", baseURL: "https://api.githubcopilot.com" } } } };
+    await (await OpenWorkGatewayQuota()).config(configured);
+    const options = configured.provider["github-copilot"].options;
+    assert.ok("fetch" in options && typeof options.fetch === "function");
+    await options.fetch("https://api.githubcopilot.com/chat/completions");
+    assert.deepEqual(seen, ["token gho_fixture", "Bearer session-fixture"]);
+    assert.equal(existsSync(join(configDir, "opencode.jsonc")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Copilot provider refreshes only the account selected in private metadata", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nanami-copilot-account-"));
+  const configDir = join(root, "config"), data = join(configDir, "data");
+  const env = { NANAMIWORK_ISOLATED: "1", OPENCODE_CONFIG_DIR: configDir, XDG_DATA_HOME: data };
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+  const originalFetch = globalThis.fetch;
+  const seen: Array<string | null> = [];
+  try {
+    await mkdir(configDir, { recursive: true });
+    await writeFile(join(configDir, "opencode.jsonc"), JSON.stringify({ x_nanami_copilot: { activeUsername: "two", accounts: [
+      { username: "one", oauthToken: "gho_one", copilotToken: "old-one", expiresAt: 1 },
+      { username: "two", oauthToken: "gho_two", copilotToken: "old-two", expiresAt: 1 },
+    ] } }));
+    Object.assign(process.env, env);
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      seen.push(request.headers.get("authorization"));
+      return request.url.includes("copilot_internal")
+        ? Response.json({ token: "session-two", expires_at: Math.floor(Date.now() / 1000) + 3600 })
+        : Response.json({ ok: true });
+    }, { preconnect: originalFetch.preconnect });
+    const configured: { provider: Record<string, unknown> } = { provider: {} };
+    await (await OpenWorkGatewayQuota()).config(configured);
+    const provider = configured.provider["github-copilot"];
+    assert.ok(provider && typeof provider === "object" && "options" in provider && provider.options && typeof provider.options === "object"
+      && "fetch" in provider.options && typeof provider.options.fetch === "function");
+    await provider.options.fetch("https://api.githubcopilot.com/chat/completions");
+    assert.deepEqual(seen, ["token gho_two", "Bearer session-two"]);
+  } finally {
+    globalThis.fetch = originalFetch;
     for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     await rm(root, { recursive: true, force: true });
   }

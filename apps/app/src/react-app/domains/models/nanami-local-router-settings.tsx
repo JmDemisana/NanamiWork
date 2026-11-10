@@ -3,14 +3,11 @@ import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
 import { ProviderIcon } from "@/react-app/design-system/provider-icon";
+import { modelMakerId } from "./model-catalog";
 import {
   LOCAL_ROUTER_STRATEGIES,
-  isExclusiveFirstStrategy,
-  terminalRoutingStrategy,
   localRouterModels,
-  localRouterSummary,
   orderByLocalRouterOrder,
   orderLocalRouterAccounts,
   useLocalRouterStore,
@@ -22,7 +19,7 @@ import {
 const MODE_OPTIONS: readonly { value: LocalRouterMode; label: string }[] = [
   { value: "model", label: "Model order" },
   { value: "account", label: "Account order" },
-  { value: "priority", label: "Priority" },
+  { value: "priority", label: "Strategy" },
 ];
 
 function OrderButtons({
@@ -78,82 +75,20 @@ function ModeToggle({ mode, onChange }: { mode: LocalRouterMode; onChange: (mode
   </div>;
 }
 
-function RoutingRow({
-  strategy,
-  label,
-  description,
-  enabled,
-  priority,
-  canMoveUp,
-  canMoveDown,
-  disabled,
-  disabledReason,
-  onToggle,
-  onMove,
-}: {
+function RoutingRow({ strategy, label, description, enabled, onToggle }: {
   strategy: LocalRouterStrategy;
   label: string;
   description: string;
   enabled: boolean;
-  priority: number | null;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  disabled: boolean;
-  disabledReason?: string;
   onToggle: () => void;
-  onMove: (direction: -1 | 1) => void;
 }) {
-  return <div
-    data-testid={`router-strategy-${strategy}`}
-    className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${disabled ? "opacity-50" : enabled ? "bg-accent/45" : "hover:bg-accent/30"}`}
-    title={disabledReason}
-  >
-    <Switch
-      aria-label={`${label} routing`}
-      checked={enabled}
-      disabled={disabled}
-      onCheckedChange={onToggle}
-    />
+  return <button type="button" data-testid={`router-strategy-${strategy}`} aria-pressed={enabled}
+    onClick={onToggle} className={`flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${enabled ? "bg-accent text-foreground" : "hover:bg-accent/30"}`}>
     <span className="min-w-0 flex-1">
-      <span className="flex items-center gap-1.5">
-        <span className="truncate text-sm font-medium">{label}</span>
-        {enabled && priority !== null ? (
-          <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-            {priority}
-          </span>
-        ) : null}
-      </span>
-      <span className="block truncate text-xs text-muted-foreground" title={disabledReason ?? description}>{disabledReason ?? description}</span>
+      <span className="block truncate text-sm font-medium">{label}</span>
+      <span className="block truncate text-xs text-muted-foreground" title={description}>{description}</span>
     </span>
-    {enabled ? (
-      <span className="flex shrink-0 items-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="size-6 text-muted-foreground"
-          disabled={disabled || !canMoveUp}
-          onClick={() => onMove(-1)}
-          aria-label={`Move ${label} earlier`}
-          title="Move earlier"
-        >
-          <ChevronUp className="size-3.5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="size-6 text-muted-foreground"
-          disabled={disabled || !canMoveDown}
-          onClick={() => onMove(1)}
-          aria-label={`Move ${label} later`}
-          title="Move later"
-        >
-          <ChevronDown className="size-3.5" />
-        </Button>
-      </span>
-    ) : null}
-  </div>;
+  </button>;
 }
 
 export function LocalRouterSettingsPage({
@@ -167,7 +102,6 @@ export function LocalRouterSettingsPage({
   const setMode = useLocalRouterStore((state) => state.setMode);
   const strategies = useLocalRouterStore((state) => state.strategies);
   const toggleStrategy = useLocalRouterStore((state) => state.toggleStrategy);
-  const moveStrategy = useLocalRouterStore((state) => state.moveStrategy);
   const excludedAccounts = useLocalRouterStore((state) => state.excludedAccounts);
   const toggleAccount = useLocalRouterStore((state) => state.toggleAccount);
   const moveAccount = useLocalRouterStore((state) => state.moveAccount);
@@ -177,8 +111,6 @@ export function LocalRouterSettingsPage({
   const moveModel = useLocalRouterStore((state) => state.moveModel);
   const modelOrder = useLocalRouterStore((state) => state.modelOrder);
   const resetUsage = useLocalRouterStore((state) => state.resetUsage);
-  const summary = localRouterSummary(accounts, { excludedAccounts, excludedModels });
-  const unavailableCount = accounts.filter((account) => account.unavailableReason && !excludedAccounts.includes(account.key)).length;
 
   const modelEntries = useMemo(
     () => localRouterModels(accounts).flatMap((group) =>
@@ -194,12 +126,7 @@ export function LocalRouterSettingsPage({
     && modelEntries.every((entry) => !excludedModels.includes(entry.model.key));
   const allAccountsIncluded = accounts.length > 0
     && accounts.every((account) => !excludedAccounts.includes(account.key));
-  const terminal = terminalRoutingStrategy(strategies);
-  const terminalLabel = terminal === "round-robin" ? "Round robin" : "Random";
-  const orderedStrategies = [
-    ...strategies.flatMap((strategy) => LOCAL_ROUTER_STRATEGIES.filter((entry) => entry.value === strategy)),
-    ...LOCAL_ROUTER_STRATEGIES.filter((entry) => !strategies.includes(entry.value)),
-  ];
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-dls-surface" data-testid="local-router-settings-page">
@@ -211,7 +138,6 @@ export function LocalRouterSettingsPage({
           <h1 className="text-sm font-semibold">
             NanamiWorks Local Router
           </h1>
-          <p className="text-xs text-muted-foreground">{summary.accountCount} accounts · {summary.modelCount} models{unavailableCount ? ` · ${unavailableCount} unavailable` : ""} · Unknown quotas are treated as available</p>
           </div>
         </header>
 
@@ -221,7 +147,6 @@ export function LocalRouterSettingsPage({
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Model Selection</h3>
-                <p className="text-xs text-muted-foreground">Every model is selected by default. Use the arrows to arrange routing order.</p>
               </div>
               <Button
                 type="button"
@@ -247,6 +172,7 @@ export function LocalRouterSettingsPage({
               <div tabIndex={0} aria-label="Router models" className="grid max-h-[min(45vh,24rem)] grid-cols-1 gap-x-4 gap-y-0.5 overflow-y-auto [scrollbar-width:thin] focus-visible:outline-2 focus-visible:outline-ring @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
                 {orderedModels.map((entry, index) => {
                   const included = !excludedModels.includes(entry.model.key);
+                  const maker = modelMakerId({ providerID: entry.providerID, modelID: entry.model.modelID, title: entry.model.label }) ?? entry.providerID;
                   return (
                     <div
                       key={entry.model.key}
@@ -257,8 +183,8 @@ export function LocalRouterSettingsPage({
                         checked={included}
                         onCheckedChange={() => toggleModel(entry.model.key)}
                       />
-                      <span className="flex size-4 shrink-0 items-center justify-center">
-                        <ProviderIcon providerId={entry.providerID} size={16} />
+                      <span data-model-maker={maker} className="flex size-4 shrink-0 items-center justify-center">
+                        <ProviderIcon providerId={maker} size={16} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate" title={entry.model.label}>{entry.model.label}</span>
@@ -281,7 +207,6 @@ export function LocalRouterSettingsPage({
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-sm font-medium">Included Accounts</h3>
-                <p className="text-xs text-muted-foreground">Every connected account is included by default. Use the arrows to arrange routing order.</p>
               </div>
               <Button
                 type="button"
@@ -343,36 +268,14 @@ export function LocalRouterSettingsPage({
           <section className="min-w-0 rounded-xl border border-border/70 bg-card/35 p-4">
             <div className="mb-2">
               <h3 className="text-sm font-medium">Routing</h3>
-              <p className="text-xs text-muted-foreground">
-                {mode === "priority"
-                  ? terminal
-                    ? `${terminalLabel} must be last. Turn it off to add priorities; any above it stay active.`
-                    : strategies.length === 0 ? "Choose at least one priority before routing." : "Round robin and Random always come last; earlier priorities resolve first."
-                  : `Routing follows the ${mode === "model" ? "model" : "account"} order above. Priority strategies are paused.`}
-              </p>
             </div>
             <div className="max-w-md"><ModeToggle mode={mode} onChange={setMode} /></div>
             {mode === "priority" ? (
               <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
-                {orderedStrategies.map((entry) => {
-                  const priority = strategies.indexOf(entry.value);
-                  const disabled = Boolean(terminal && priority < 0);
-                  const disabledReason = disabled ? `${terminalLabel} already decides the choice; nothing can follow it.` : undefined;
-                  return <RoutingRow
-                    key={entry.value}
-                    strategy={entry.value}
-                    label={entry.label}
-                    description={entry.description}
-                    enabled={priority >= 0}
-                    priority={priority >= 0 ? priority + 1 : null}
-                    canMoveUp={priority > 0 && !isExclusiveFirstStrategy(entry.value)}
-                    canMoveDown={priority >= 0 && priority < strategies.length - 1 && !isExclusiveFirstStrategy(strategies[priority + 1])}
-                    disabled={disabled}
-                    disabledReason={disabledReason}
-                    onToggle={() => toggleStrategy(entry.value)}
-                    onMove={(direction) => moveStrategy(entry.value, direction)}
-                  />;
-                })}
+                {LOCAL_ROUTER_STRATEGIES.map((entry) => <RoutingRow
+                  key={entry.value} strategy={entry.value} label={entry.label} description={entry.description}
+                  enabled={strategies[0] === entry.value} onToggle={() => toggleStrategy(entry.value)}
+                />)}
               </div>
             ) : null}
           </section>

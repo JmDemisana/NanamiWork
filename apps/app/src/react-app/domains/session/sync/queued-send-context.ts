@@ -1,5 +1,5 @@
 import type { OpenworkServerClient } from "@/app/lib/openwork-server";
-import type { ModelRef } from "@/app/types";
+import type { ModelOption, ModelRef } from "@/app/types";
 import type { RejectedTurnOwner } from "./draft-store";
 
 export type QueuedSendContext = {
@@ -15,6 +15,10 @@ export type QueuedSendContext = {
   environmentRuntimeKey: string | null;
   rejectedOwner?: RejectedTurnOwner;
   localRuntime?: boolean;
+  localRouterEnabled?: boolean;
+  localRouterRestricted?: boolean;
+  localRouterWorkspace?: boolean;
+  localRouterOptions?: readonly ModelOption[];
   isCurrent?: () => boolean;
   afterMessageId?: () => string | null;
 };

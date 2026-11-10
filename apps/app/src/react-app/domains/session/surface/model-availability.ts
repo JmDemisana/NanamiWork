@@ -16,6 +16,7 @@ import type { ModelRef } from "@/app/types";
 import { isCloudManagedProviderKey } from "@/react-app/domains/connections/provider-auth/cloud-provider-config";
 import { isManagedModelAvailabilityPending } from "@/react-app/domains/connections/provider-auth/managed-models-recovery";
 import { isModelAvailableInConnectedProviders } from "@/react-app/infra/provider-list-query";
+import { isLocalRouterModel } from "@/app/lib/local-router-ref";
 
 export type ModelUnavailableReason =
   | "provider_blocked"
@@ -52,6 +53,8 @@ export type ModelAvailabilityContext = {
    * here because the query key changes with the workspace.
    */
   providerList: ProviderListResponse | null | undefined;
+  /** The local router is a client-side choice, not an engine catalog entry. */
+  localRouterAvailable?: boolean;
 };
 
 export function computeModelAvailability(
@@ -63,6 +66,9 @@ export function computeModelAvailability(
     // No selection to validate: never claim a model is unavailable.
     return { status: "pending" };
   }
+  if (isLocalRouterModel(model)) return context.localRouterAvailable
+    ? { status: "available" }
+    : { status: "unavailable", reason: "provider_blocked" };
 
   const providerId = model.providerID.trim();
   const usesCloudProvider = isCloudManagedProviderKey(providerId);

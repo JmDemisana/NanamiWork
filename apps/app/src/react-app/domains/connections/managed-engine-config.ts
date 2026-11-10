@@ -46,6 +46,8 @@ export type ReadManagedDisabledProvidersOptions = {
   workspaceId?: string | null;
   workspaceType?: WorkspaceType | null;
   directory?: string;
+  /** Account routing must not guess that providers are enabled on a failed read. */
+  requireRuntime?: boolean;
 };
 
 /**
@@ -61,9 +63,15 @@ export async function readManagedDisabledProviders(
   const workspaceId = options.workspaceId?.trim() ?? "";
   const openworkClient = options.openworkClient;
   const managedRuntime = Boolean(openworkClient && workspaceId && options.workspaceType === "local");
-  const readRuntime = async () => openworkClient && managedRuntime
-    ? normalizeDisabledProviders((await openworkClient.getRuntimeDisabledProviders(workspaceId)).disabledProviders)
-    : [];
+  const readRuntime = async () => {
+    if (!openworkClient || !managedRuntime) {
+      if (options.requireRuntime) throw new Error("Could not verify provider settings.");
+      return [];
+    }
+    const result = await openworkClient.getRuntimeDisabledProviders(workspaceId);
+    if (options.requireRuntime && !Array.isArray(result.disabledProviders)) throw new Error("Could not verify provider settings.");
+    return normalizeDisabledProviders(result.disabledProviders);
+  };
   if (client && isOpencodeV2Client(client)) return readRuntime();
   if (!client) return [];
   const config = unwrap(await client.config.get(options.directory ? { directory: options.directory } : undefined));
@@ -72,7 +80,7 @@ export async function readManagedDisabledProviders(
   // updateManagedDisabledProviders writes this list on the server. v1 only
   // reads it after an engine reload, which v2 chat routing never runs, so its
   // config alone misses a provider that was just disabled (ENG-994).
-  const fromRuntime = await readRuntime().catch(() => []);
+  const fromRuntime = options.requireRuntime ? await readRuntime() : await readRuntime().catch(() => []);
   return normalizeDisabledProviders([...fromConfig, ...fromRuntime]);
 }
 

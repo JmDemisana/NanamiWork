@@ -11,6 +11,9 @@ import { hasTerminalSessionReply, sendSessionCommand, sessionHasPendingSubmissio
 import { createClientV2, isOpencodeV2BaseUrl } from "@/app/lib/opencode-v2-adapter";
 import type { ComposerDraft, ModelRef } from "@/app/types";
 import { isAutoModel } from "@/react-app/domains/models/model-catalog";
+import { isLocalRouterModel } from "@/app/lib/local-router-ref";
+import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
+import { dispatchConfiguredLocalRouterTurn } from "@/react-app/domains/models/local-router-runtime";
 import { AutoAccessRejected, autoAccessWallFromError, preflightAutoSubmission } from "@/app/lib/inference-access";
 import { rejectedTurnOwnerKey } from "./draft-store";
 import { retainRejectedTurn } from "./rejected-turn";
@@ -76,6 +79,10 @@ function sameContext(left: QueuedSendContext, right: QueuedSendContext) {
     && left.model?.providerID === right.model?.providerID
     && left.model?.modelID === right.model?.modelID
     && left.environmentRuntimeKey === right.environmentRuntimeKey
+    && left.localRouterEnabled === right.localRouterEnabled
+    && left.localRouterRestricted === right.localRouterRestricted
+    && left.localRouterWorkspace === right.localRouterWorkspace
+    && JSON.stringify(left.localRouterOptions ?? []) === JSON.stringify(right.localRouterOptions ?? [])
     && (left.rejectedOwner ? rejectedTurnOwnerKey(left.rejectedOwner) : "") === (right.rejectedOwner ? rejectedTurnOwnerKey(right.rejectedOwner) : "");
 }
 
@@ -126,10 +133,29 @@ async function performQueuedDraftSend(
     { token: context.openworkToken, mode: "openwork" },
     transport,
   );
+  const assertCurrent = () => {
+    assertQueuedSendCurrent(sessionId, generation);
+    if (sessionWorkHeld(context.opencodeBaseUrl, sessionId) || context.isCurrent?.() === false) throw new Error("Send context changed.");
+  };
+  const routerContext = {
+    selected: sendModel ?? null,
+    variant: sendVariant ?? null,
+    sessionId,
+    opencodeClient,
+    opencodeBaseUrl: context.opencodeBaseUrl,
+    openworkClient: context.client,
+    workspaceId: context.workspaceId,
+    workspaceRoot: context.workspaceRoot,
+    options: context.localRouterOptions ?? [],
+    localWorkspace: context.localRouterWorkspace === true,
+    restrictToCloud: context.localRouterRestricted !== false,
+    enabled: context.localRouterEnabled === true,
+    assertCurrent,
+  };
 
   if (context.isCurrent?.() === false) return "cancelled";
   if (draft.mode === "shell") {
-    await shellInSession(opencodeClient, sessionId, text, { messageID: draft.messageId });
+    await modelAdmissionFence.regular(() => shellInSession(opencodeClient, sessionId, text, { messageID: draft.messageId }), assertCurrent);
     return "sent";
   }
 
@@ -143,14 +169,19 @@ async function performQueuedDraftSend(
   }
   try {
     if (draft.command) {
-      const result = await sendSessionCommand(context.opencodeBaseUrl, opencodeClient, {
-        sessionID: sessionId,
-        messageID: draft.messageId,
-        command: draft.command.name,
-        arguments: draft.command.arguments,
-        ...(sendModel && isAutoModel(sendModel) ? { model: `${sendModel.providerID}/${sendModel.modelID}` } : {}),
-      });
-      if (result.error) throw new Error(serializeSDKError(result.error));
+      const command = draft.command;
+      await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+        const result = await sendSessionCommand(context.opencodeBaseUrl, turnClient, {
+          sessionID: sessionId,
+          messageID: draft.messageId,
+          command: command.name,
+          arguments: command.arguments,
+          ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+          ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+        });
+        if (result.error) throw new Error(serializeSDKError(result.error));
+        return result;
+      } });
       return "sent";
     }
 
@@ -167,36 +198,31 @@ async function performQueuedDraftSend(
     });
     assertQueuedSendCurrent(sessionId, generation);
     if (sessionWorkHeld(context.opencodeBaseUrl, sessionId) || context.isCurrent?.() === false) return "cancelled";
-    const result = await sendWithModelUnavailableRetry({
-      request: {
-        sessionID: sessionId,
-        messageID: draft.messageId,
-        parts,
-        model: sendModel ?? undefined,
-        agent: context.agent ?? undefined,
-        ...(sendVariant ? { variant: sendVariant } : {}),
-        system,
-      },
-      send: (request) => opencodeClient.session.promptAsync(request),
-      refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
-        client: opencodeClient,
-        baseUrl: context.opencodeBaseUrl,
-        directory: context.workspaceRoot,
-        force: true,
-      }),
-      assertCurrent: () => {
-        assertQueuedSendCurrent(sessionId, generation);
-        if (sessionWorkHeld(context.opencodeBaseUrl, sessionId) || context.isCurrent?.() === false) {
-          throw new Error("Send context changed.");
-        }
-      },
-    });
-    if (result.error) {
-      if (isPromptAdmissionUnknown(result.error)) throw result.error;
-      throw new Error(serializeSDKError(result.error));
-    }
+    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+      const result = await sendWithModelUnavailableRetry({
+        request: {
+          sessionID: sessionId,
+          messageID: draft.messageId,
+          parts,
+          model: model ?? undefined,
+          agent: context.agent ?? undefined,
+          ...(variant ? { variant } : {}),
+          system,
+        },
+        send: (request) => turnClient.session.promptAsync(request),
+        refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
+          client: opencodeClient, baseUrl: context.opencodeBaseUrl, directory: context.workspaceRoot, force: true,
+        }),
+        assertCurrent,
+      });
+      if (result.error) {
+        if (isPromptAdmissionUnknown(result.error)) throw result.error;
+        throw new Error(serializeSDKError(result.error));
+      }
+      return result;
+    } });
     assertQueuedSendCurrent(sessionId, generation);
-    if (sendModel) {
+    if (sendModel && !isLocalRouterModel(sendModel)) {
       useSessionModelStore.getState().setModel(sessionId, sendModel, sendVariant ?? null);
     }
     return "sent";

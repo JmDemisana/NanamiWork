@@ -8,6 +8,7 @@ import { filterCloudManagedModelOptions, markDisabledModelOptions, mergeModelOpt
 import { isCloudManagedProviderKey } from "../connections/provider-auth/cloud-provider-config";
 import { filterEntitledModelOptions, hideBuiltInZenFallback, isProviderAllowedByDesktopPolicy } from "../connections/provider-auth/provider-policy";
 import { modelRefKey } from "../session/models/model-collections-store";
+import { isLocalRouterModel } from "@/app/lib/local-router-ref";
 import { freeAutoCoveredByOpenWorkModels, isAutoModel, isFreeAutoModel, withAutoDefaultPin, withImportedModelMetadata, type ModelCatalogOption, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
 
 // Every model picker (composer popover, "All models" dialog, command palette,
@@ -162,6 +163,7 @@ export type RetainedSelectionInput = {
 /** Why the current model is not selectable here, or undefined when it is (or nothing was chosen). */
 export function resolveRetainedSelection(input: RetainedSelectionInput): RetainedModelSelection | undefined {
   const { current } = input;
+  if (isLocalRouterModel(current)) return undefined;
   if (!current.providerID || !current.modelID) return undefined;
   if (current.providerID === "google" && current.modelID.startsWith("antigravity-")) return undefined;
   const key = modelRefKey(current);

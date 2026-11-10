@@ -23,6 +23,7 @@ import type { DenResourceSnapshot } from "./den-types";
 import type { CloudImportedMarketplace, CloudImportedPlugin, CloudImportedProvider } from "../cloud/import-state";
 import { desktopFreeAccessStatusSchema } from "./inference-access";
 import { claudeImportItemsSchema, claudeImportResultsSchema } from "./claude-import";
+import { assertConcreteModel } from "./local-router-ref";
 
 const desktopFreePreferencesSchema = z.object({ enabled: z.boolean(), available: z.boolean(), canEnable: z.boolean(), refresh: z.enum(["reloaded", "deferred"]).optional() });
 export type DesktopFreePreferences = z.infer<typeof desktopFreePreferencesSchema>;
@@ -1709,6 +1710,10 @@ export function createOpenworkServerClient(options: { baseUrl: string; token?: s
       requestJson<{ ok: boolean; version: string; uptimeMs: number }>(baseUrl, "/health", { token, hostToken, timeoutMs: timeouts.health }),
     runtimeVersions: () =>
       requestJson<OpenworkRuntimeSnapshot>(baseUrl, "/runtime/versions", { token, hostToken, timeoutMs: timeouts.status }),
+    acquireLocalRouterLease: (input: { workspaceId: string; sessionId: string; providerId: string; modelId: string }) =>
+      requestJson<{ id: string }>(baseUrl, "/runtime/local-router/acquire", { hostToken, method: "POST", body: input, timeoutMs: 30_000, desktopTransport: "main" }),
+    releaseLocalRouterLease: (id: string) =>
+      requestJson<{ ok: boolean }>(baseUrl, "/runtime/local-router/release", { hostToken, method: "POST", body: { id }, timeoutMs: 10_000, desktopTransport: "main" }),
     status: () => requestJson<OpenworkServerDiagnostics>(baseUrl, "/status", { token, hostToken, timeoutMs: timeouts.status }),
     capabilities: () => requestJson<OpenworkServerCapabilities>(baseUrl, "/capabilities", { token, hostToken, timeoutMs: timeouts.capabilities }),
     getConnectState: (workspaceId?: string | null) => {
@@ -1763,12 +1768,14 @@ export function createOpenworkServerClient(options: { baseUrl: string; token?: s
         `/workspace/${encodeURIComponent(workspaceId)}/default-model`,
         { token, hostToken, timeoutMs: timeouts.config },
       )),
-    setWorkspaceDefaultModel: async (workspaceId: string, model: WorkspaceDefaultModelRef | null): Promise<WorkspaceDefaultModelState> =>
-      parseWorkspaceDefaultModelState(await requestJson<unknown>(
+    setWorkspaceDefaultModel: async (workspaceId: string, model: WorkspaceDefaultModelRef | null): Promise<WorkspaceDefaultModelState> => {
+      assertConcreteModel(model);
+      return parseWorkspaceDefaultModelState(await requestJson<unknown>(
         baseUrl,
         `/workspace/${encodeURIComponent(workspaceId)}/default-model`,
         { token, hostToken, method: "PUT", body: { model }, timeoutMs: timeouts.config },
-      )),
+      ));
+    },
     switchOpencodeEngine: async (engine: "v1" | "v2"): Promise<EngineV2PreviewStatus> =>
       parseEngineV2PreviewStatus(await requestJson<unknown>(baseUrl, "/experimental/engine-v2-preview", {
         token, method: "PUT", body: { enabled: engine === "v2", chatRouting: engine === "v2" }, timeoutMs: timeouts.config,

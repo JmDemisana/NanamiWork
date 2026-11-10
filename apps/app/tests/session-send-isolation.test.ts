@@ -8,6 +8,10 @@ import { useOpeningSessionHistory } from "../src/react-app/domains/session/surfa
 import { createOpenworkServerClient } from "../src/app/lib/openwork-server";
 import { composeNativeSessionHistory } from "../src/app/lib/opencode-session-native";
 import { createClient } from "../src/app/lib/opencode";
+import { LOCAL_ROUTER_MODEL } from "../src/app/lib/local-router-ref";
+import { ModelAdmissionFence } from "../src/app/lib/model-admission-fence";
+import { dispatchLocalRouterTurn } from "../src/react-app/domains/models/local-router-dispatch";
+import type { LocalRouterAccount, LocalRouterSettings } from "../src/react-app/domains/models/nanami-local-router";
 import { createSessionInterruptionClient, interruptSessionTurn, submitImmediateSessionTurn } from "../src/app/lib/opencode-interruption";
 import { createClientV2 } from "../src/app/lib/opencode-v2-adapter";
 import { buildOpenworkSessionSystemContext, clearOpenworkEnvSystemContextCache } from "../src/react-app/domains/session/sync/env-context";
@@ -60,6 +64,65 @@ function fixture(options: { renderer?: () => Promise<void> } = {}) {
   } } });
   return { main, renderer, directory, base: "http://127.0.0.1:8788/workspace/ws_fixture/opencode" };
 }
+
+test("each router turn reaches the engine client as only a concrete model", async () => {
+  const requests: Request[] = [];
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { __OPENWORK_ELECTRON__: {
+    invokeDesktop: async (_command: string, url: string, init: RequestInit) => {
+      requests.push(new Request(url, init));
+      return { status: 204, statusText: "No Content", headers: [], body: "" };
+    },
+  } } });
+  const client = createClient("http://127.0.0.1:8788/workspace/ws_fixture/opencode", "/fixture",
+    { token: "client-fixture", mode: "openwork" }, { desktopTransport: "main" });
+  const accounts: LocalRouterAccount[] = ["one", "two"].map((id) => ({
+    key: id, kind: "local", providerID: "example", accountID: id, label: id, providerLabel: "Example",
+    models: [{ key: id, modelID: `model-${id}`, label: id, remainingFraction: null, resetTime: null }],
+  }));
+  let settings: LocalRouterSettings = { mode: "priority", strategies: ["round-robin"], modelOrder: [], accountOrder: [], excludedAccounts: [], excludedModels: [], usage: {} };
+  let tick = 0;
+  const input = {
+    selected: LOCAL_ROUTER_MODEL, variant: null, localRuntime: true, fence: new ModelAdmissionFence(),
+    settings: () => settings, accounts: async () => accounts,
+    ensureIdle: async () => {}, activate: async () => {},
+    record: (candidate: { key: string }) => { settings = { ...settings, usage: { ...settings.usage, [candidate.key]: { count: 1, lastUsedAt: ++tick } } }; },
+    send: async ({ model }: { model: { providerID: string; modelID: string } | null }) => client.session.promptAsync({
+      sessionID: "ses_fixture", model: model ?? undefined, parts: [{ type: "text", text: "hello" }],
+    }),
+  };
+  await dispatchLocalRouterTurn(input);
+  await dispatchLocalRouterTurn(input);
+  const bodies = await Promise.all(requests.map((request) => request.json()));
+  expect(bodies.map((body) => body.model)).toEqual([
+    { providerID: "example", modelID: "model-one" },
+    { providerID: "example", modelID: "model-two" },
+  ]);
+  expect(JSON.stringify(bodies)).not.toContain("nanami-local-router");
+  expect(input.selected).toEqual(LOCAL_ROUTER_MODEL);
+});
+
+test("a router lease reaches account preparation and the concrete prompt through desktop transport", async () => {
+  const requests: Request[] = [];
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { __OPENWORK_ELECTRON__: {
+    invokeDesktop: async (command: string, url: string, init: RequestInit) => {
+      expect(command).toBe("__fetch");
+      const request = new Request(url, init);
+      requests.push(request);
+      return { status: url.endsWith("/prompt_async") ? 204 : 200, statusText: "OK", headers: [["content-type", "application/json"]], body: url.endsWith("/prompt_async") ? "" : "true" };
+    },
+  } } });
+  const base = "http://127.0.0.1:8788/workspace/ws_fixture/opencode";
+  const client = createClient(base, "/fixture", { token: "client-fixture", mode: "openwork" },
+    { desktopTransport: "main", localRouterLease: { id: "lease-fixture", hostToken: "host-fixture" } });
+  await client.auth.set({ providerID: "google", auth: { type: "oauth", refresh: "fixture", access: "", expires: 0 } });
+  await client.instance.dispose();
+  await client.session.promptAsync({ sessionID: "ses_fixture", messageID: "msg_fixture", model: { providerID: "google", modelID: "model-a" }, parts: [{ type: "text", text: "fixture" }] });
+  expect(requests).toHaveLength(3);
+  expect(requests.every((request) => request.headers.get("x-openwork-local-router-lease") === "lease-fixture"
+    && request.headers.get("x-openwork-host-token") === "host-fixture"
+    && request.headers.get("authorization") === "Bearer client-fixture")).toBe(true);
+  expect((await requests[2]!.json()).model).toEqual({ providerID: "google", modelID: "model-a" });
+});
 
 test("only the uncached send-history preflight requests isolated transport; cached sends and background refresh keep their contracts", async () => {
   GlobalRegistrator.register({ url: "http://localhost/" });

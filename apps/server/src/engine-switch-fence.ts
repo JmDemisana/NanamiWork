@@ -76,15 +76,24 @@ export async function withEngineSwitchFence<T>(config: object, options: {
   from: Engine;
   to: Engine;
   operation: () => Promise<T>;
+  signal?: AbortSignal;
 }): Promise<T> {
   const state = stateFor(config);
   const previous = state.tail;
   let finish: () => void = () => {};
   state.tail = new Promise<void>(resolve => { finish = resolve; });
   state.pending++;
+  let previousFinished = false;
   try {
-    await previous;
-    if (state.active) await new Promise<void>(resolve => state.drained.add(resolve));
+    await waitFor(previous, options.signal);
+    previousFinished = true;
+    if (state.active) {
+      let drained: () => void = () => {};
+      const wait = new Promise<void>((resolve) => { drained = resolve; state.drained.add(resolve); });
+      try { await waitFor(wait, options.signal); }
+      finally { state.drained.delete(drained); }
+    }
+    options.signal?.throwIfAborted();
     const result = await options.operation();
     if (options.from !== options.to) {
       state.selected = options.to;
@@ -93,6 +102,9 @@ export async function withEngineSwitchFence<T>(config: object, options: {
     return result;
   } finally {
     state.pending--;
-    finish();
+    // A cancelled queued switch must not let its successor overtake the
+    // earlier switch it was waiting for.
+    if (previousFinished) finish();
+    else void previous.then(finish, finish);
   }
 }

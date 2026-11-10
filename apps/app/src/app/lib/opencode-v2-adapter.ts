@@ -22,6 +22,7 @@ import { createClient, createDesktopFetch, type FieldsResult } from "./opencode"
 import { AUTO_ROUTER_SESSION_ROUTES_KEY, autoRouterReplyRoutes } from "@openwork/types/den/auto-router";
 import type { OpenworkSessionHistory } from "./openwork-server";
 import { isDesktopRuntime } from "./runtime-env";
+import { assertConcreteModel } from "./local-router-ref";
 import type { McpStatusMap, OpencodeEvent } from "../types";
 import { normalizeDirectoryPath } from "../utils";
 import { dispatchProviderCatalogChanged } from "./provider-events";
@@ -2712,6 +2713,7 @@ export function createClientV2(
       parameters: SetSessionModelParameters,
       options?: RequestOptions,
     ): Promise<FieldsResult<Record<string, never>>> => {
+      assertConcreteModel(parameters.model);
       const modelResult = await request(
         "POST",
         `/api/session/${encodeURIComponent(parameters.sessionID)}/model`,
@@ -2728,6 +2730,7 @@ export function createClientV2(
       parameters: PromptParameters,
       options?: RequestOptions,
     ): Promise<FieldsResult<Record<string, never>>> => {
+      assertConcreteModel(parameters.model);
       if (!parameters.model) {
         return {
           error: { name: "ModelRequiredInV2Preview" },
@@ -2948,6 +2951,7 @@ export function createClientV2(
       options?: RequestOptions,
     ): Promise<FieldsResult<Record<string, never>>> => {
       const model = parseCommandModel(parameters.model);
+      assertConcreteModel(model);
       const [modelResult, agentResolution] = await Promise.all([
         model
           ? request("POST", `/api/session/${encodeURIComponent(parameters.sessionID)}/model`, { model: {

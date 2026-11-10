@@ -29,6 +29,7 @@ import {
 } from "./engine-registry.js";
 import { createManagedOpencodeServer, type ManagedOpencodeServer } from "./managed-opencode.js";
 import { loopbackFetch } from "./server-fetch.js";
+import { enterEngineMutation } from "./engine-switch-fence.js";
 import type { ServerConfig, WorkspaceInfo } from "./types.js";
 
 export type EnginePoolLogger = {
@@ -684,7 +685,13 @@ export class EnginePool {
     }
     const waiters = this.pendingWaiters;
     this.pendingWaiters = [];
-    const run = this.runRollover(request);
+    const run = (async () => {
+      // A Local Router account switch and its admission must see the same
+      // primary and credentials; background rollovers join that fence too.
+      const release = await enterEngineMutation(this.config, "v1");
+      try { return await this.runRollover(request); }
+      finally { await release(); }
+    })();
     this.inFlight = run;
     try {
       const outcome = await run;
@@ -1199,7 +1206,11 @@ export class EnginePool {
   private async recoverDeadPrimary(workspace: WorkspaceInfo): Promise<void> {
     if (this.disposed) return;
     if (this.recoveryInFlight) return this.recoveryInFlight;
-    const recovery = this.runDeadPrimaryRecovery(workspace);
+    const recovery = (async () => {
+      const release = await enterEngineMutation(this.config, "v1");
+      try { await this.runDeadPrimaryRecovery(workspace); }
+      finally { await release(); }
+    })();
     this.recoveryInFlight = recovery;
     try {
       await recovery;

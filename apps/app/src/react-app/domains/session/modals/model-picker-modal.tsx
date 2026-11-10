@@ -49,6 +49,7 @@ export type ModelPickerModalProps = {
   onConnectGatewayProvider?: (provider: GatewayConnectProvider) => void | Promise<void>;
   catalogState?: ModelPickerCatalogState;
   retainedSelection?: RetainedModelSelection;
+  disableWorkspaceDefault?: boolean;
   onSetWorkspaceDefault?: (model: ModelRef, variant?: string | null) => void | boolean | Promise<void | boolean>;
   onOpenProviderSettings?: () => void;
   onReloadWorkspace?: () => void | Promise<unknown>;
@@ -109,7 +110,7 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
         onConnectProvider={!restrictToCloud ? () => { props.onClose(); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
         onConnectCodex={!restrictToCloud ? () => { props.onClose(); window.dispatchEvent(new Event(openCodexAuthEvent)); } : undefined}
         onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? openSettings : undefined}
-        onSetWorkspaceDefault={props.onSetWorkspaceDefault ?? setWorkspaceDefault}
+        onSetWorkspaceDefault={props.disableWorkspaceDefault ? undefined : props.onSetWorkspaceDefault ?? setWorkspaceDefault}
         openWorkModelsSyncing={props.openWorkModelsSyncing} autoVisible={autoVisible} onReloadWorkspace={props.onReloadWorkspace}
         footerExtra={pendingProviders.length ? <div className="border-t border-border p-1.5">{pendingProviders.map((provider) => <div key={gatewayConnectProviderKey(provider)} className="flex h-9 items-center gap-2.5 px-2 text-sm">
           <Cloud className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} /><span className="min-w-0 flex-1 truncate">{gatewayConnectCopy(provider.name)}</span>

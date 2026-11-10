@@ -1,11 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, Pencil, Search, X } from "lucide-react";
+import { Check, ChevronLeft, Pencil, Search, X } from "lucide-react";
 
 import type { ModelOption, ModelRef } from "@/app/types";
 import { markFeatureUsed } from "@/app/lib/den";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { ModelPickerPanel } from "@/react-app/domains/models/model-picker-panel";
 import { ModelProviderLoginBar } from "@/react-app/domains/models/model-picker-list";
 import { buildModelCatalog, resolveRetainedSelection, withoutBlockedSelection } from "@/react-app/domains/models/catalog";
@@ -19,33 +18,36 @@ import { openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-lis
 import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 import { useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-accounts-store";
 import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
-import { useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import type { ModelPickerModalProps } from "@/react-app/domains/session/modals/model-picker-modal";
 import { LocalRouterSettingsPage } from "./nanami-local-router-settings";
 import { useModelPickerPageHost } from "./model-picker-page-host";
 import {
   buildLocalRouterAccounts,
+  hasLocalRouterRouting,
   localRouterSummary,
-  recordLocalRouterUse,
   resolveLocalRouterChoice,
   useLocalRouterStore,
-  type LocalRouterCandidate,
 } from "./nanami-local-router";
+import { isLocalRouterModel, LOCAL_ROUTER_MODEL, LOCAL_ROUTER_TITLE } from "@/app/lib/local-router-ref";
 
 function RouterRow({
   onUse,
   onEdit,
   notice,
+  needsRouting,
+  selected,
 }: {
   onUse: () => void;
   onEdit: () => void;
   notice: string | null;
+  needsRouting: boolean;
+  selected: boolean;
 }) {
   return <div data-testid="nanami-local-router">
     <div className="flex min-h-9 items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-accent">
       <span className="size-4 shrink-0" aria-hidden="true" />
-      <button type="button" onClick={onUse} className="min-w-0 flex-1 cursor-pointer text-left">
-        <span className="block truncate">NanamiWorks Local Router</span>
+      <button type="button" onClick={onUse} disabled={needsRouting} title={needsRouting ? "Choose a routing strategy in settings first." : undefined} className="min-w-0 flex-1 cursor-pointer text-left disabled:cursor-not-allowed disabled:opacity-60">
+        <span className="block truncate">{LOCAL_ROUTER_TITLE}</span>
         <span className="block truncate text-xs text-muted-foreground">Route Local Models</span>
       </button>
       <Button
@@ -59,8 +61,9 @@ function RouterRow({
       >
         <Pencil className="size-3.5" />
       </Button>
+      {selected ? <Check aria-label="Current model" className="size-4 shrink-0" /> : <span className="size-4 shrink-0" aria-hidden="true" />}
     </div>
-    {notice ? <p role="status" className="mt-2 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-500">{notice}</p> : null}
+    {needsRouting || notice ? <p role="status" className="mt-2 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-500">{needsRouting ? "Choose a routing strategy in settings first." : notice}</p> : null}
   </div>;
 }
 
@@ -82,11 +85,9 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
   const setPageActive = pageHost?.setActive;
   const [routerSettingsOpen, setRouterSettingsOpen] = useState(false);
   const [routerNotice, setRouterNotice] = useState<string | null>(null);
-  const [routing, setRouting] = useState(false);
-  const [pinTarget, setPinTarget] = useState<LocalRouterCandidate | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [pinChecking, setPinChecking] = useState(false);
+  const routerMode = useLocalRouterStore((state) => state.mode);
+  const routerStrategies = useLocalRouterStore((state) => state.strategies);
+  const needsRouting = !hasLocalRouterRouting({ mode: routerMode, strategies: routerStrategies });
   const choice = useModelChoice(JSON.stringify([props.open, props.current, props.currentBehaviorValue]));
   const restrictToCloud = props.restrictToCloud || checkRestriction({ restriction: "allowCustomProviders" });
   const catalogState = props.catalogState ?? { state: "ready", onRetry: props.onRefreshOrganizationModels } satisfies ModelPickerCatalogState;
@@ -116,6 +117,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
   const behaviorValue = props.currentBehaviorValue !== undefined ? props.currentBehaviorValue : selected?.behaviorValue ?? null;
   const autoVisible = retained?.reason !== "policy" && retained?.reason !== "disabled" && (options.some(isAutoModel) || isAutoModel(props.current));
   const antigravityAccounts = useAntigravityAccountsStore((state) => state.accounts);
+  const thinkingTier = useAntigravityAccountsStore((state) => state.thinkingTier);
   const chatGptAccounts = useChatGptAccountsStore((state) => state.accounts);
   const copilotAccounts = useCopilotAccountsStore((state) => state.accounts);
   const routerAccounts = useMemo(() => buildLocalRouterAccounts({
@@ -123,9 +125,10 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
     chatgpt: chatGptAccounts,
     copilot: copilotAccounts,
     options: routerOptions,
+    thinkingTier,
     disabledProviders: props.disabledProviders,
     restrictToCloud,
-  }), [antigravityAccounts, chatGptAccounts, copilotAccounts, routerOptions, restrictToCloud, props.disabledProviders]);
+  }), [antigravityAccounts, chatGptAccounts, copilotAccounts, routerOptions, thinkingTier, restrictToCloud, props.disabledProviders]);
   const pendingProviders = props.gatewayConnectProviders?.filter((provider) => !provider.models?.length) ?? [];
 
   useLayoutEffect(() => {
@@ -145,14 +148,14 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
   useEffect(() => {
     if (!props.open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || choice.loginOpen || pinTarget) return;
+      if (event.key !== "Escape" || choice.loginOpen) return;
       event.preventDefault();
       if (routerSettingsOpen) setRouterSettingsOpen(false);
       else props.onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [props.open, props.onClose, choice.loginOpen, routerSettingsOpen, pinTarget]);
+  }, [props.open, props.onClose, choice.loginOpen, routerSettingsOpen]);
 
   const commit = (option: { providerID: string; modelID: string }, behavior?: { variant: string | null }) => {
     if (auth.isSignedIn) markFeatureUsed("localModelPicker");
@@ -175,19 +178,12 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
     });
   };
 
-  const commitRouted = (next: LocalRouterCandidate) => {
-    recordLocalRouterUse(next.key);
-    useModelCollectionsStore.getState().recordRecent(next.ref);
-    commit(next.ref);
-  };
-
-  const useRouter = async () => {
-    if (routing) return;
+  const useRouter = () => {
     const state = useLocalRouterStore.getState();
     const next = resolveLocalRouterChoice(routerAccounts, state);
     if (!next) {
-      if (state.mode === "priority" && state.strategies.length === 0) {
-        setRouterNotice("Choose a routing priority in router settings first.");
+      if (!hasLocalRouterRouting(state)) {
+        setRouterNotice("Choose a routing strategy in router settings first.");
         return;
       }
       const summary = localRouterSummary(routerAccounts, state);
@@ -199,63 +195,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         : "Every included account is out of quota right now. Wait for a reset or include another account.");
       return;
     }
-    if (next.ref.providerID === "nanami") {
-      setPin("");
-      setPinError(null);
-      setPinTarget(next);
-      return;
-    }
-    if (next.account.kind === "local") {
-      const option = routerOptions.find((item) => item.providerID === next.ref.providerID && item.modelID === next.ref.modelID && !item.disabled);
-      if (!option) {
-        setRouterNotice("That model is no longer available. Refresh the model list and try again.");
-        return;
-      }
-      choice.choose(option, () => commitRouted(next));
-      return;
-    }
-    setRouting(true);
-    try {
-      if (next.account.kind === "antigravity") {
-        await useAntigravityAccountsStore.getState().selectAccount(next.account.accountID);
-        useAntigravityAccountsStore.getState().setSelectedModel(next.ref);
-      } else if (next.account.kind === "chatgpt") await useChatGptAccountsStore.getState().selectAccount(next.account.accountID);
-      else if (next.account.kind === "copilot") await useCopilotAccountsStore.getState().selectAccount(next.account.accountID);
-      commitRouted(next);
-    } catch {
-      setRouterNotice("Could not switch accounts. Try again or select a model directly.");
-    } finally {
-      setRouting(false);
-    }
-  };
-
-  const confirmRouterPin = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!pinTarget || pinChecking) return;
-    if (!pin.trim()) {
-      setPinError("Enter the Gate PIN.");
-      return;
-    }
-    setPinChecking(true);
-    setPinError(null);
-    try {
-      const response = await fetch("https://nanami-ai.pages.dev/api/shared-chats", {
-        method: "GET",
-        headers: { "x-nanami-gate-pin": pin.trim() },
-      });
-      if (!response.ok) {
-        setPinError("Incorrect Gate PIN. Try again.");
-        return;
-      }
-      const next = pinTarget;
-      setPinTarget(null);
-      setPin("");
-      commitRouted(next);
-    } catch {
-      setPinError("Could not reach Nanami gate server. Check your connection.");
-    } finally {
-      setPinChecking(false);
-    }
+    commit(LOCAL_ROUTER_MODEL, { variant: null });
   };
 
   if (!props.open || !host) return null;
@@ -304,7 +244,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         onQueryChange={props.setQuery}
         searchInputRef={searchInputRef}
         leading={!props.query.trim() || "nanamiworks local router route local models".includes(props.query.trim().toLowerCase())
-          ? <RouterRow onUse={useRouter} onEdit={() => setRouterSettingsOpen(true)} notice={routerNotice} /> : null}
+          ? <RouterRow onUse={useRouter} onEdit={() => setRouterSettingsOpen(true)} notice={routerNotice} needsRouting={needsRouting} selected={isLocalRouterModel(props.current)} /> : null}
         options={options}
         current={props.current}
         behaviorValue={behaviorValue}
@@ -316,7 +256,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         onConnectProvider={!restrictToCloud ? () => { window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); } : undefined}
         onConnectCodex={undefined}
         onOpenProviderSettings={!checkRestriction({ restriction: "allowControlSettings" }) ? () => { props.onClose({ restorePromptFocus: false }); (props.onOpenProviderSettings ?? openAutoProviderSettings)(); } : undefined}
-        onSetWorkspaceDefault={props.onSetWorkspaceDefault ?? setWorkspaceDefault}
+        onSetWorkspaceDefault={props.disableWorkspaceDefault ? undefined : props.onSetWorkspaceDefault ?? setWorkspaceDefault}
         openWorkModelsSyncing={props.openWorkModelsSyncing}
         autoVisible={autoVisible}
         onReloadWorkspace={props.onReloadWorkspace}
@@ -338,17 +278,5 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
       </div>
     </footer>
     </>}
-    <Dialog open={Boolean(pinTarget)} onOpenChange={(open) => { if (!open && !pinChecking) { setPinTarget(null); setPin(""); } }}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle>Nanami Gate PIN required</DialogTitle>
-        <DialogDescription>Enter the PIN to route to {pinTarget?.model.label}.</DialogDescription>
-        <form onSubmit={confirmRouterPin} className="flex flex-col gap-3">
-          <input autoFocus type="password" value={pin} onChange={(event) => { setPin(event.target.value); setPinError(null); }}
-            disabled={pinChecking} aria-label="Gate PIN" className="h-10 rounded-md border border-border bg-background px-3 text-sm" />
-          {pinError ? <p role="alert" className="text-xs text-destructive">{pinError}</p> : null}
-          <Button type="submit" disabled={pinChecking}>{pinChecking ? "Verifying…" : "Unlock and route"}</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
   </div>, host);
 }

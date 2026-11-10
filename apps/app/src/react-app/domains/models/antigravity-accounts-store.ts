@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Client } from "@/app/types";
+import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import {
   desktopFetchViaMain,
   getCachedDesktopHomeDir,
@@ -9,7 +10,7 @@ import {
   writeNanamiConfigFile,
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
-import { applyEdits, modify, parse } from "jsonc-parser";
+import { applyEdits, modify, parse, type ParseError } from "jsonc-parser";
 
 const ANTIGRAVITY_CLIENT_ID =
   "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
@@ -191,7 +192,7 @@ async function getNanamiConfigDir(): Promise<string> {
   return home ? `${home.replace(/\\/g, "/")}/.config/nanamiwork` : ".config/nanamiwork";
 }
 
-async function readNanamiMetaAndConfigDir(): Promise<{
+async function readNanamiMetaAndConfigDir(strict = false): Promise<{
   configDir: string;
   meta: NanamiAntigravityMeta;
 }> {
@@ -199,19 +200,24 @@ async function readNanamiMetaAndConfigDir(): Promise<{
   let meta: NanamiAntigravityMeta = {};
   try {
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
+    if (strict && res?.exists && !res.content?.trim()) throw new Error("Account settings are empty.");
     if (res?.content?.trim()) {
-      const parsed = (parse(res.content) ?? {}) as {
+      const errors: ParseError[] = [];
+      const parsed = (parse(res.content, errors) ?? {}) as {
         x_nanami_antigravity?: NanamiAntigravityMeta;
       };
+      if (strict && errors.length) throw new Error("Account settings are invalid.");
       if (parsed.x_nanami_antigravity && typeof parsed.x_nanami_antigravity === "object") {
         meta = parsed.x_nanami_antigravity;
       }
     }
-  } catch {}
+  } catch (error) {
+    if (strict) throw new Error("Could not read Antigravity account settings.", { cause: error });
+  }
   return { configDir, meta };
 }
 
-async function writeNanamiMeta(updater: (prev: NanamiAntigravityMeta) => NanamiAntigravityMeta): Promise<void> {
+async function writeNanamiMeta(updater: (prev: NanamiAntigravityMeta) => NanamiAntigravityMeta, strict = false): Promise<void> {
   try {
     const configDir = await getNanamiConfigDir();
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
@@ -225,27 +231,105 @@ async function writeNanamiMeta(updater: (prev: NanamiAntigravityMeta) => NanamiA
     const edits = modify(raw, ["x_nanami_antigravity"], nextMeta, {
       formattingOptions: { insertSpaces: true, tabSize: 2 },
     });
-    await writeOpencodeConfig("project", configDir, applyEdits(raw, edits));
+    const result: unknown = await writeOpencodeConfig("project", configDir, applyEdits(raw, edits));
+    if (strict && (!result || typeof result !== "object" || Reflect.get(result, "ok") !== true)) {
+      throw new Error("The desktop could not save the account selection.");
+    }
   } catch (err) {
+    if (strict) throw new Error("Could not update the Antigravity account selection.", { cause: err });
     console.warn("Could not write x_nanami_antigravity metadata:", err);
   }
 }
 
-export async function syncAntigravityDiskState(email?: string, modelId?: string): Promise<void> {
+const ROUTER_PIN_FILE = "nanami-local-router-antigravity.json";
+type RouterPin = { version: 1; selectedEmail: string; originalEnabled: Record<string, boolean | null> };
+
+async function readRouterPin(): Promise<RouterPin | null> {
+  const saved = await readNanamiConfigFile(ROUTER_PIN_FILE);
+  if (!saved.exists || !saved.content?.trim()) return null;
+  const parsed: unknown = JSON.parse(saved.content);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0) return null;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Reflect.get(parsed, "version") !== 1
+    || typeof Reflect.get(parsed, "selectedEmail") !== "string") throw new Error("Could not safely read the previous Local Router account state.");
+  const flags: unknown = Reflect.get(parsed, "originalEnabled");
+  if (!flags || typeof flags !== "object" || Array.isArray(flags)
+    || Object.values(flags).some((value) => value !== null && typeof value !== "boolean")) {
+    throw new Error("Could not safely read the previous Local Router account state.");
+  }
+  return { version: 1, selectedEmail: Reflect.get(parsed, "selectedEmail"), originalEnabled: flags as Record<string, boolean | null> };
+}
+
+function matchesRouterPin(accounts: Array<Record<string, unknown>>, pin: RouterPin): boolean {
+  const seen = new Set<string>();
+  const valid = accounts.every((account) => {
+    const email = String(account.email ?? "").trim().toLowerCase();
+    if (!email || seen.has(email)) return false;
+    seen.add(email);
+    return account.enabled === (email === pin.selectedEmail);
+  });
+  return valid && seen.has(pin.selectedEmail);
+}
+
+/** Restore only the flags the router pinned, without replacing account records. */
+export async function restoreAntigravityRouterPin(): Promise<void> {
+  const pin = await readRouterPin();
+  if (!pin) return;
+  const saved = await readNanamiConfigFile("antigravity-accounts.json");
+  if (!saved.exists || !saved.content) throw new Error("Antigravity account storage is unavailable.");
+  const data = JSON.parse(saved.content) as { accounts?: Array<Record<string, unknown>> };
+  if (!Array.isArray(data.accounts) || !matchesRouterPin(data.accounts, pin)) {
+    throw new Error("Antigravity accounts changed while Local Router was active. Choose an account manually and retry.");
+  }
+  for (const account of data.accounts) {
+    const email = String(account.email ?? "").trim().toLowerCase();
+    if (!Object.hasOwn(pin.originalEnabled, email)) continue;
+    const original = pin.originalEnabled[email];
+    if (original === null) delete account.enabled;
+    else account.enabled = original;
+  }
+  const accountWrite = await writeNanamiConfigFile("antigravity-accounts.json", JSON.stringify(data, null, 2) + "\n");
+  if (!accountWrite.ok) throw new Error("Could not restore Antigravity account settings.");
+  const pinWrite = await writeNanamiConfigFile(ROUTER_PIN_FILE, "{}\n");
+  if (!pinWrite.ok) throw new Error("Could not finish restoring Antigravity account settings.");
+}
+
+export async function syncAntigravityDiskState(email?: string, modelId?: string, options?: { exactAccount?: boolean; strict?: boolean; expectedRefreshToken?: string; skipIfRouterPinned?: boolean }): Promise<void> {
   try {
     const accRes = await readNanamiConfigFile("antigravity-accounts.json");
-    if (!accRes.exists || !accRes.content) return;
+    if (!accRes.exists || !accRes.content) {
+      if (options?.strict) throw new Error("Antigravity account storage is unavailable.");
+      return;
+    }
     const data = JSON.parse(accRes.content) as {
       accounts?: Array<Record<string, unknown>>;
       activeIndex?: number;
       activeIndexByFamily?: Record<string, number>;
     };
-    if (!Array.isArray(data.accounts) || data.accounts.length === 0) return;
+    if (!Array.isArray(data.accounts) || data.accounts.length === 0) {
+      if (options?.strict) throw new Error("No Antigravity accounts are available.");
+      return;
+    }
 
     const lowerTarget = (email ?? "").toLowerCase();
     let targetIndex = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() === lowerTarget);
     if (targetIndex < 0) {
+      if (options?.strict) throw new Error("The selected Antigravity account is no longer available.");
       targetIndex = Math.min(Math.max(0, data.activeIndex ?? 0), data.accounts.length - 1);
+    }
+    if (options?.exactAccount && (data.accounts[targetIndex]?.verificationRequired
+      || (options.expectedRefreshToken && data.accounts[targetIndex]?.refreshToken !== options.expectedRefreshToken))) {
+      throw new Error("The selected Antigravity account changed or needs verification.");
+    }
+    if (options?.exactAccount) {
+      const emails = data.accounts.map((account) => String(account.email ?? "").trim().toLowerCase());
+      if (emails.some((value) => !value) || new Set(emails).size !== emails.length) {
+        throw new Error("Antigravity account identities cannot be matched safely.");
+      }
+    }
+    const previousPin = await readRouterPin();
+    if (!options?.exactAccount && previousPin && options?.skipIfRouterPinned) return;
+    if (options?.exactAccount && previousPin && !matchesRouterPin(data.accounts, previousPin)) {
+      throw new Error("Antigravity accounts changed while Local Router was active.");
     }
 
     const currentModel = modelId ?? "";
@@ -253,10 +337,10 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string)
     const isClaude46 = currentModel.includes("4-6");
 
     // If Claude 5.5, ensure active account is Plus
-    if (isClaude55) {
+    if (!options?.exactAccount && isClaude55) {
       const plusIdx = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() === "jmdems01@gmail.com" || (a.cachedQuota as any)?.claude?.modelCount === 6);
       if (plusIdx >= 0) targetIndex = plusIdx;
-    } else if (isClaude46) {
+    } else if (!options?.exactAccount && isClaude46) {
       // If Claude 4.6, ensure active account is Free
       if (String(data.accounts[targetIndex]?.email ?? "").toLowerCase() === "jmdems01@gmail.com") {
         const freeIdx = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() !== "jmdems01@gmail.com");
@@ -267,8 +351,28 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string)
     data.activeIndex = targetIndex;
     data.activeIndexByFamily = { claude: targetIndex, gemini: targetIndex };
 
+    if (options?.exactAccount) {
+      const originalEnabled = { ...(previousPin?.originalEnabled ?? {}) };
+      for (const account of data.accounts) {
+        const key = String(account.email ?? "").trim().toLowerCase();
+        if (!key || Object.hasOwn(originalEnabled, key)) continue;
+        if (account.enabled !== undefined && typeof account.enabled !== "boolean") throw new Error("Antigravity account state is invalid.");
+        originalEnabled[key] = typeof account.enabled === "boolean" ? account.enabled : null;
+      }
+      const pin: RouterPin = { version: 1, selectedEmail: String(data.accounts[targetIndex]?.email ?? "").trim().toLowerCase(), originalEnabled };
+      const pinWrite = await writeNanamiConfigFile(ROUTER_PIN_FILE, JSON.stringify(pin, null, 2) + "\n");
+      if (!pinWrite.ok) throw new Error("Could not preserve Antigravity account settings.");
+    }
+
     // Set enabled flag per account based on model eligibility
     data.accounts.forEach((a, i) => {
+      if (options?.exactAccount) {
+        // The upstream plugin otherwise rotates to another account after a
+        // 429, even if the router excluded that account. One enabled account
+        // makes its fallback fail closed instead of bypassing the router.
+        a.enabled = i === targetIndex && !a.verificationRequired;
+        return;
+      }
       const isPlusAcc = String(a.email ?? "").toLowerCase() === "jmdems01@gmail.com" || (a.cachedQuota as any)?.claude?.modelCount === 6;
       if (isClaude55) {
         a.enabled = isPlusAcc;
@@ -279,15 +383,22 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string)
       }
     });
 
-    await writeNanamiConfigFile("antigravity-accounts.json", JSON.stringify(data, null, 2) + "\n");
+    const accountWrite = await writeNanamiConfigFile("antigravity-accounts.json", JSON.stringify(data, null, 2) + "\n");
+    if (options?.strict && !accountWrite.ok) throw new Error("Could not save the Antigravity account selection.");
+    if (!options?.exactAccount && previousPin) {
+      const pinWrite = await writeNanamiConfigFile(ROUTER_PIN_FILE, "{}\n");
+      if (options?.strict && !pinWrite.ok) throw new Error("Could not clear the previous Local Router account state.");
+    }
 
     // Also enforce sticky selection in antigravity.json
     const cfgRes = await readNanamiConfigFile("antigravity.json");
     const cfg = cfgRes.content ? JSON.parse(cfgRes.content) : {};
     cfg.account_selection_strategy = "sticky";
     cfg.soft_quota_threshold_percent = 100;
-    await writeNanamiConfigFile("antigravity.json", JSON.stringify(cfg, null, 2) + "\n");
+    const configWrite = await writeNanamiConfigFile("antigravity.json", JSON.stringify(cfg, null, 2) + "\n");
+    if (options?.strict && !configWrite.ok) throw new Error("Could not save Antigravity routing settings.");
   } catch (err) {
+    if (options?.strict) throw new Error("Could not prepare the selected Antigravity account.", { cause: err });
     console.warn("Could not sync Antigravity disk state:", err);
   }
 }
@@ -808,6 +919,7 @@ type AntigravityAccountsState = {
 };
 
 let latestClient: Client | null = null;
+let pendingAccountsLoad: Promise<AntigravityAccountInfo[]> | null = null;
 
 export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set, get) => ({
   accounts: [],
@@ -829,7 +941,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     set({ selectedModel: model });
     if (model?.providerID === "google") {
       const active = get().accounts.find((a) => a.isActive);
-      void syncAntigravityDiskState(active?.email, model.modelID);
+      void modelAdmissionFence.regular(() => syncAntigravityDiskState(active?.email, model.modelID, { skipIfRouterPinned: true }));
     }
   },
 
@@ -850,12 +962,14 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     }));
   },
 
-  loadAccounts: async (client) => {
+  loadAccounts: (client) => {
     if (client) latestClient = client;
-    set({ loading: true });
+    if (pendingAccountsLoad) return pendingAccountsLoad;
+    const operation = (async () => {
+    set({ loading: true, lastLoadedAt: null });
 
     try {
-      let { meta } = await readNanamiMetaAndConfigDir();
+      let { meta } = await readNanamiMetaAndConfigDir(true);
 
       const savedTier: ThinkingTier =
         meta.thinkingTier === "low" || meta.thinkingTier === "medium" || meta.thinkingTier === "high"
@@ -933,6 +1047,10 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       set({ loading: false });
       return get().accounts;
     }
+    })();
+    pendingAccountsLoad = operation;
+    void operation.finally(() => { if (pendingAccountsLoad === operation) pendingAccountsLoad = null; });
+    return operation;
   },
 
   refreshQuotas: async () => {
@@ -959,6 +1077,9 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
                       modelID: resolveAntigravityModelForTier(m, state.thinkingTier),
                     })),
                     quotas: result.quotas,
+                    verificationRequired: Boolean(result.verificationRequired),
+                    verificationUrl: result.verificationUrl,
+                    verificationReason: result.verificationReason,
                     quotaLoading: false,
                     quotaError: null,
                   }
@@ -982,7 +1103,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     );
   },
 
-  selectAccount: async (email, client) => {
+  selectAccount: (email, client) => modelAdmissionFence.regular(async () => {
     if (client) latestClient = client;
     const activeClient = client ?? latestClient;
     const lower = email.toLowerCase();
@@ -1021,7 +1142,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       })),
     }));
 
-    void syncAntigravityDiskState(target.email, get().selectedModel?.modelID);
+    await syncAntigravityDiskState(target.email, get().selectedModel?.modelID);
 
     if (!wasAlreadyActive) {
       try {
@@ -1074,9 +1195,9 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
           ),
         }));
       });
-  },
+  }),
 
-  deleteAccount: async (email, client) => {
+  deleteAccount: (email, client) => modelAdmissionFence.regular(async () => {
     if (client) latestClient = client;
     const activeClient = client ?? latestClient;
     const lower = email.toLowerCase();
@@ -1120,5 +1241,45 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     try {
       await activeClient?.instance.dispose();
     } catch {}
-  },
+  }),
 }));
+
+/** Called only after the router has confirmed that the local engine is idle. */
+export async function activateAntigravityRouterAccount(email: string, modelID: string, client: Client): Promise<void> {
+  const state = useAntigravityAccountsStore.getState();
+  const target = state.accounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+  if (!target || target.verificationRequired || !findAntigravityModelItem(target.models, modelID)) {
+    throw new Error("The selected Antigravity account or model is no longer available.");
+  }
+  const fresh = await fetchAccountModelsAndQuota(target, state.thinkingTier);
+  const freshModels = fresh.models.map((model) => ({ ...model, modelID: resolveAntigravityModelForTier(model, state.thinkingTier) }));
+  const freshModel = findAntigravityModelItem(freshModels, modelID);
+  useAntigravityAccountsStore.setState((current) => ({ accounts: current.accounts.map((account) =>
+    account.email.toLowerCase() === email.toLowerCase() ? { ...account, isPlus: fresh.isPlus, models: freshModels,
+      quotas: fresh.quotas, quotaLoading: false, quotaError: null, verificationRequired: Boolean(fresh.verificationRequired),
+      verificationUrl: fresh.verificationUrl, verificationReason: fresh.verificationReason } : account) }));
+  if (fresh.verificationRequired || !freshModel || (freshModel.remainingFraction !== null && freshModel.remainingFraction <= 0)) {
+    throw new Error("The selected Antigravity account or model is unavailable or out of quota.");
+  }
+  const { meta } = await readNanamiMetaAndConfigDir(true);
+  const index = (meta.accounts ?? []).findIndex((account) => account.email?.toLowerCase() === email.toLowerCase());
+  if (index < 0) throw new Error("The selected Antigravity account is missing from local storage.");
+  await writeNanamiMeta((previous) => ({ ...previous, activeEmail: target.email, activeIndex: index }), true);
+  await syncAntigravityDiskState(target.email, modelID, { exactAccount: true, strict: true, expectedRefreshToken: target.refreshToken });
+  const auth = await client.auth.set({
+    providerID: "google",
+    auth: {
+      type: "oauth",
+      refresh: `${target.refreshToken}|${target.projectId || ""}|${target.managedProjectId || ""}`,
+      access: "",
+      expires: 0,
+    },
+  });
+  if (auth.error || auth.data !== true) throw new Error("Could not activate the Antigravity account.");
+  const disposed = await client.instance.dispose();
+  if (disposed.error || disposed.data !== true) throw new Error("Could not refresh the Antigravity provider.");
+  useAntigravityAccountsStore.setState({
+    selectedModel: { providerID: "google", modelID },
+    accounts: useAntigravityAccountsStore.getState().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === target.email.toLowerCase() })),
+  });
+}

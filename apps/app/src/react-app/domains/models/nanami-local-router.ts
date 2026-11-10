@@ -1,10 +1,10 @@
 import { create } from "zustand";
 
 import type { ModelOption, ModelRef } from "@/app/types";
+import { modelSource } from "./model-catalog";
 import { modelRefKey } from "@/react-app/domains/session/models/model-collections-store";
-
-export const LOCAL_ROUTER_PROVIDER_ID = "nanami-local-router";
-export const LOCAL_ROUTER_MODEL_ID = "route-local-models";
+import { LOCAL_ROUTER_PROVIDER_ID } from "@/app/lib/local-router-ref";
+export { LOCAL_ROUTER_PROVIDER_ID, LOCAL_ROUTER_MODEL_ID, isLocalRouterModel } from "@/app/lib/local-router-ref";
 
 export type LocalRouterStrategy =
   | "round-robin"
@@ -26,12 +26,12 @@ export const LOCAL_ROUTER_STRATEGIES: readonly {
   },
   {
     value: "never-used",
-    label: "Quota reset (never used)",
-    description: "Prefer full quotas, then models this router has not picked yet.",
+    label: "Latest to reset",
+    description: "Use the account whose quota resets last.",
   },
   {
     value: "nearest-reset",
-    label: "Quota about to reset",
+    label: "Earliest to reset",
     description: "Use whichever account refreshes soonest.",
   },
   {
@@ -68,6 +68,7 @@ export type LocalRouterModel = {
   label: string;
   remainingFraction: number | null;
   resetTime: string | null;
+  variant?: string | null;
 };
 
 export type LocalRouterAccount = {
@@ -94,7 +95,7 @@ export type LocalRouterCandidate = {
 export type LocalRouterSettings = {
   /** `model`/`account` follow those sorted lists; `priority` uses the strategies. */
   mode: LocalRouterMode;
-  /** Enabled strategies in priority order; the first one decides ties. */
+  /** The selected strategy, or an empty list when routing is off. */
   strategies: LocalRouterStrategy[];
   /** Routing order for models, edited by the arrows in Model Selection. */
   modelOrder: string[];
@@ -105,10 +106,15 @@ export type LocalRouterSettings = {
   usage: Record<string, LocalRouterUsage>;
 };
 
+/** Model and account order are routing choices; priority mode needs a strategy. */
+export function hasLocalRouterRouting(settings: Pick<LocalRouterSettings, "mode" | "strategies">): boolean {
+  return settings.mode === "model" || settings.mode === "account"
+    || (settings.mode === "priority" && settings.strategies.length > 0);
+}
+
 type LocalRouterStore = LocalRouterSettings & {
   setMode: (mode: LocalRouterMode) => void;
   toggleStrategy: (strategy: LocalRouterStrategy) => void;
-  moveStrategy: (strategy: LocalRouterStrategy, direction: -1 | 1) => void;
   toggleAccount: (accountKey: string) => void;
   /** `orderedKeys` is the picker's current display order, so the first move starts from it. */
   moveAccount: (accountKey: string, direction: -1 | 1, orderedKeys: readonly string[]) => void;
@@ -133,21 +139,8 @@ export function localRouterModelKey(providerID: string, modelID: string) {
   return modelRefKey({ providerID, modelID });
 }
 
-export function isLocalRouterModel(model: ModelRef | null | undefined) {
-  return model?.providerID === LOCAL_ROUTER_PROVIDER_ID;
-}
-
 function isStrategy(value: unknown): value is LocalRouterStrategy {
   return LOCAL_ROUTER_STRATEGIES.some((entry) => entry.value === value);
-}
-
-export function isExclusiveFirstStrategy(strategy: LocalRouterStrategy | undefined): boolean {
-  return strategy === "round-robin" || strategy === "random";
-}
-
-/** Round robin and random settle the choice; neither can have a later priority. */
-export function terminalRoutingStrategy(strategies: readonly LocalRouterStrategy[]): LocalRouterStrategy | undefined {
-  return strategies.find(isExclusiveFirstStrategy);
 }
 
 function readStoredSettings(): LocalRouterSettings {
@@ -167,11 +160,10 @@ function readStoredSettings(): LocalRouterSettings {
     const enabled = Array.isArray(strategies)
       ? strategies.filter(isStrategy).filter((value, index, list) => list.indexOf(value) === index)
       : [];
-    const terminalIndex = enabled.findIndex(isExclusiveFirstStrategy);
     return {
       mode: mode === "model" || mode === "account" ? mode : "priority",
       strategies: Array.isArray(strategies)
-        ? (terminalIndex >= 0 ? enabled.slice(0, terminalIndex + 1) : enabled)
+        ? enabled.slice(0, 1)
         : DEFAULT_SETTINGS.strategies,
       modelOrder: Array.isArray(modelOrder)
         ? modelOrder.filter((entry): entry is string => typeof entry === "string")
@@ -233,22 +225,7 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
   }),
   toggleStrategy: (strategy) => set((state) => {
     if (!isStrategy(strategy)) return state;
-    const enabled = state.strategies.includes(strategy);
-    const terminal = terminalRoutingStrategy(state.strategies);
-    if (!enabled && terminal) return state;
-    const strategies = enabled ? state.strategies.filter((entry) => entry !== strategy)
-      : [...state.strategies, strategy];
-    writeStoredSettings({ ...settingsOf(state), strategies });
-    return { strategies };
-  }),
-  moveStrategy: (strategy, direction) => set((state) => {
-    const index = state.strategies.indexOf(strategy);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= state.strategies.length) return state;
-    const strategies = [...state.strategies];
-    [strategies[index], strategies[target]] = [strategies[target]!, strategies[index]!];
-    const terminalIndex = strategies.findIndex(isExclusiveFirstStrategy);
-    if (terminalIndex >= 0 && terminalIndex !== strategies.length - 1) return state;
+    const strategies = state.strategies[0] === strategy ? [] : [strategy];
     writeStoredSettings({ ...settingsOf(state), strategies });
     return { strategies };
   }),
@@ -322,6 +299,7 @@ export function buildLocalRouterAccounts(input: {
       displayName: string;
       remainingFraction: number | null;
       resetTime: string | null;
+      supportsThinkingTier?: boolean;
     }[];
   }[];
   chatgpt?: readonly {
@@ -348,6 +326,7 @@ export function buildLocalRouterAccounts(input: {
   }[];
   /** The selectable provider models shown by the model picker. */
   options?: readonly ModelOption[];
+  thinkingTier?: string | null;
   disabledProviders?: readonly string[];
   restrictToCloud?: boolean;
 }): LocalRouterAccount[] {
@@ -358,8 +337,17 @@ export function buildLocalRouterAccounts(input: {
     if (verificationRequired) return "Complete account verification before routing.";
     return undefined;
   };
+  const currentQuota = (remainingFraction: number | null | undefined, resetTime: string | null | undefined) => {
+    const resetAt = resetTime ? Date.parse(resetTime) : Number.NaN;
+    // A cached zero after its reset is unknown, not proof the new window is
+    // empty. The chosen account is refreshed before its turn is submitted.
+    return typeof remainingFraction === "number" && Number.isFinite(remainingFraction)
+      && !(remainingFraction <= 0 && Number.isFinite(resetAt) && resetAt <= Date.now())
+      ? remainingFraction : null;
+  };
   const strictestQuota = (quotas: readonly { remainingFraction: number | null | undefined; resetTime: string | null | undefined }[]) => {
-    const known = quotas.filter((quota): quota is { remainingFraction: number; resetTime: string | null | undefined } =>
+    const known = quotas.map((quota) => ({ ...quota, remainingFraction: currentQuota(quota.remainingFraction, quota.resetTime) }))
+      .filter((quota): quota is { remainingFraction: number; resetTime: string | null | undefined } =>
       typeof quota.remainingFraction === "number" && Number.isFinite(quota.remainingFraction));
     if (known.length === 0) return { remainingFraction: null, resetTime: null };
     const strictest = known.reduce((left, right) => left.remainingFraction <= right.remainingFraction ? left : right);
@@ -379,8 +367,9 @@ export function buildLocalRouterAccounts(input: {
         key: localRouterModelKey("google", model.modelID),
         modelID: model.modelID,
         label: model.displayName,
-        remainingFraction: model.remainingFraction,
+        remainingFraction: currentQuota(model.remainingFraction, model.resetTime),
         resetTime: model.resetTime,
+        variant: model.supportsThinkingTier ? input.thinkingTier ?? null : null,
       })),
     });
   }
@@ -398,6 +387,7 @@ export function buildLocalRouterAccounts(input: {
         key: localRouterModelKey("openai", model.modelID),
         modelID: model.modelID,
         label: model.displayName,
+        variant: input.thinkingTier ?? null,
         ...strictestQuota([
           model,
           { remainingFraction: account.primaryWindow?.remainingFraction, resetTime: account.primaryWindow?.resetTimeIso },
@@ -430,13 +420,16 @@ export function buildLocalRouterAccounts(input: {
 
   const localProviders = new Map<string, { label: string; models: LocalRouterModel[] }>();
   for (const option of input.options ?? []) {
-    if (option.disabled || option.providerID === LOCAL_ROUTER_PROVIDER_ID) continue;
+    if (option.disabled || option.providerID === LOCAL_ROUTER_PROVIDER_ID || option.providerID === "nanami") continue;
+    if (modelSource(option) !== "local") continue;
     // The picker shows these providers through account rows instead of raw
     // catalog rows. Match that presentation, including when an account has no
     // quota or needs verification, rather than reintroducing hidden variants.
     if (option.providerID === "google") continue;
     if (option.providerID === "openai" && (input.chatgpt?.length ?? 0) > 0) continue;
-    if (option.providerID === "github-copilot" && (input.copilot?.length ?? 0) > 0) continue;
+    // Never bypass Copilot identity/entitlement verification through its raw
+    // provider row when a saved credential could not be recovered.
+    if (option.providerID === "github-copilot") continue;
     const group = localProviders.get(option.providerID) ?? {
       label: option.description?.trim() || option.providerID,
       models: [],
@@ -461,6 +454,7 @@ export function buildLocalRouterAccounts(input: {
       accountID: providerID,
       label: group.label,
       providerLabel: group.label,
+      unavailableReason: unavailableReason(providerID),
       models: group.models,
     });
   }
@@ -504,10 +498,13 @@ function compareByStrategy(
     case "nearest-reset":
       return compareRanks(resetValue(left.model), resetValue(right.model));
     case "never-used":
-      return Number(right.model.remainingFraction !== null && right.model.remainingFraction >= 1)
-        - Number(left.model.remainingFraction !== null && left.model.remainingFraction >= 1)
-        || (leftUsage?.count ?? 0) - (rightUsage?.count ?? 0)
-        || (leftUsage?.lastUsedAt ?? 0) - (rightUsage?.lastUsedAt ?? 0);
+      {
+        const leftReset = resetValue(left.model);
+        const rightReset = resetValue(right.model);
+        if (!Number.isFinite(leftReset)) return Number.isFinite(rightReset) ? 1 : 0;
+        if (!Number.isFinite(rightReset)) return -1;
+        return compareRanks(rightReset, leftReset);
+      }
     case "random":
       return (context.randomScores.get(left.key) ?? 0) - (context.randomScores.get(right.key) ?? 0);
     case "round-robin":
@@ -552,6 +549,7 @@ export function resolveLocalRouterChoice(
   accounts: readonly LocalRouterAccount[],
   settings: Pick<LocalRouterSettings, "mode" | "strategies" | "modelOrder" | "accountOrder" | "excludedAccounts" | "excludedModels" | "usage">,
 ): LocalRouterCandidate | null {
+  if (!hasLocalRouterRouting(settings)) return null;
   const excludedAccounts = new Set(settings.excludedAccounts);
   const excludedModels = new Set(settings.excludedModels);
   const orderedAccounts = orderLocalRouterAccounts(accounts, settings.accountOrder);
@@ -577,14 +575,11 @@ export function resolveLocalRouterChoice(
   const usable = candidates.filter((candidate) =>
     candidate.model.remainingFraction === null || candidate.model.remainingFraction > 0);
   if (usable.length === 0) return null;
-  if (settings.mode === "priority" && settings.strategies.length === 0) return null;
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.mode !== "priority"
     ? []
-    : (() => {
-        const terminalIndex = settings.strategies.findIndex(isExclusiveFirstStrategy);
-        return terminalIndex >= 0 ? settings.strategies.slice(0, terminalIndex + 1) : settings.strategies;
-      })();
+    : settings.strategies.slice(0, 1).flatMap((strategy) =>
+      strategy === "round-robin" || strategy === "random" ? [strategy] : [strategy, "round-robin"]);
   const context = {
     mode: settings.mode,
     randomScores: new Map(pool.map((candidate) => [candidate.key, Math.random()])),

@@ -11,6 +11,7 @@ import type { Session } from "@opencode-ai/sdk/v2/client";
 import type { Client, ModelRef } from "../types";
 import { isOpencodeV2Client } from "./opencode-v2-adapter";
 import { unwrap } from "./opencode";
+import { assertConcreteModel } from "./local-router-ref";
 
 export type AbortSessionLogContext = {
   source: string;
@@ -160,6 +161,7 @@ export async function setSessionModel(
   variant?: string | null,
   options?: { signal?: AbortSignal },
 ): Promise<void> {
+  assertConcreteModel(model);
   if (!isOpencodeV2Client(client)) {
     throw new Error("Session model reassignment requires the OpenCode v2 session API.");
   }

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { OpenworkServerError, type OpenworkServerClient, type WorkspaceDefaultModelRef } from "../../app/lib/openwork-server";
 import type { ResolvedWorkspaceEndpoint } from "../../app/lib/workspace-endpoint";
 import type { ModelRef } from "../../app/types";
+import { LOCAL_ROUTER_PROVIDER_ID } from "../../app/lib/local-router-ref";
 
 /**
  * Mirrors the model a new chat in a workspace would use onto that workspace's
@@ -39,7 +40,7 @@ function isMissingRoute(error: unknown): boolean {
 export function workspaceDefaultModelPayload(model: ModelRef | null, variant: string | null): WorkspaceDefaultModelRef | null {
   const providerID = model?.providerID.trim() ?? "";
   const modelID = model?.modelID.trim() ?? "";
-  if (!providerID || !modelID) return null;
+  if (!providerID || !modelID || providerID === LOCAL_ROUTER_PROVIDER_ID) return null;
   const trimmedVariant = variant?.trim();
   return trimmedVariant ? { providerID, modelID, variant: trimmedVariant } : { providerID, modelID };
 }
@@ -69,6 +70,11 @@ export class WorkspaceDefaultModelSync {
   schedule(target: WorkspaceDefaultModelSyncTarget, model: WorkspaceDefaultModelRef | null): void {
     if (this.disabledServers.has(target.serverKey)) return;
     const key = this.key(target);
+    if (model?.providerID === LOCAL_ROUTER_PROVIDER_ID) {
+      this.pending.get(key)?.cancel();
+      this.pending.delete(key);
+      return;
+    }
     const serialized = JSON.stringify(model);
     const existing = this.pending.get(key);
     if (existing?.serialized === serialized) return;

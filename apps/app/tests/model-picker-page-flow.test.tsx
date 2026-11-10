@@ -3,6 +3,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { ModelOption } from "../src/app/types";
+import { LOCAL_ROUTER_MODEL } from "../src/app/lib/local-router-ref";
 
 GlobalRegistrator.register({ url: "https://web.example/" });
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -34,13 +35,14 @@ const { ModelPickerPage } = await import("../src/react-app/domains/models/model-
 const { ModelPickerPageHostProvider, useModelPickerPageHost } = await import("../src/react-app/domains/models/model-picker-page-host");
 const { useChatGptAccountsStore } = await import("../src/react-app/domains/models/chatgpt-accounts-store");
 const { useCopilotAccountsStore } = await import("../src/react-app/domains/models/copilot-accounts-store");
+const { useLocalRouterStore } = await import("../src/react-app/domains/models/nanami-local-router");
 
 const option = (providerID: string, modelID: string): ModelOption => ({
   providerID, modelID, title: modelID, description: providerID,
   behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null, isFree: false,
 });
 
-function TestShell() {
+function TestShell({ onSelect = () => {} }: { onSelect?: (model: { providerID: string; modelID: string }) => void }) {
   const host = useModelPickerPageHost();
   const [open, setOpen] = useState(true);
   const [query, setQuery] = useState("");
@@ -52,7 +54,7 @@ function TestShell() {
         open, options: [option("nanami", "gemini"), option("anthropic", "claude")], query, setQuery,
         disabledProviders: ["openai"],
         target: "session", current: { providerID: "", modelID: "" },
-        onSelect: () => {}, onBehaviorChange: () => {}, onOpenSettings: () => {}, onClose: () => setOpen(false),
+        onSelect, onBehaviorChange: () => {}, onOpenSettings: () => {}, onClose: () => setOpen(false),
       }),
     ),
   );
@@ -64,6 +66,7 @@ afterAll(() => {
 });
 
 test("the picker occupies the page, keeps chat mounted, and opens router settings as a page", async () => {
+  useLocalRouterStore.setState({ mode: "priority", strategies: ["round-robin"], excludedAccounts: [], excludedModels: [], modelOrder: [], accountOrder: [], usage: {} });
   useChatGptAccountsStore.setState({ accounts: [{
     email: "chat@example.invalid", planType: "plus", isActive: true, addedAt: 0, lastLoadedAt: 0,
     models: [{ modelID: "gpt-test", displayName: "GPT test", contextLimit: 1, outputLimit: 1, remainingFraction: 0.5, resetTime: null }],
@@ -75,7 +78,8 @@ test("the picker occupies the page, keeps chat mounted, and opens router setting
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  await act(async () => root.render(createElement(ModelPickerPageHostProvider, null, createElement(TestShell))));
+  const selections: { providerID: string; modelID: string }[] = [];
+  await act(async () => root.render(createElement(ModelPickerPageHostProvider, null, createElement(TestShell, { onSelect: (model) => selections.push(model) }))));
   const chat = container.querySelector<HTMLElement>('[data-testid="chat"]');
   const picker = container.querySelector<HTMLElement>('[data-testid="model-picker-page"]');
   expect(chat?.hidden).toBe(true);
@@ -90,30 +94,34 @@ test("the picker occupies the page, keeps chat mounted, and opens router setting
   const settings = container.querySelector<HTMLElement>('[data-testid="local-router-settings-page"]');
   expect(settings).not.toBeNull();
   expect(settings?.textContent).toContain("claude");
-  expect(settings?.textContent).toContain("gemini");
+  expect(settings?.textContent).not.toContain("gemini");
+  expect(settings?.querySelector('[aria-label="Router models"] [data-model-maker="anthropic"]')).not.toBeNull();
+  expect(settings?.querySelector('[aria-label="Router models"] [data-model-maker="openai"]')).not.toBeNull();
   expect(settings?.textContent).toContain("GPT test");
   expect(settings?.textContent).toContain("Copilot test");
   expect(settings?.textContent).toContain("Provider is disabled in AI providers.");
-  const roundRobin = settings?.querySelector<HTMLElement>('[aria-label="Round robin routing"]');
-  const highest = settings?.querySelector<HTMLElement>('[aria-label="Highest quota routing"]');
-  expect(highest?.getAttribute("aria-disabled")).toBe("true");
-  expect(settings?.textContent).toContain("must be last");
-  await act(async () => roundRobin?.click());
-  expect(highest?.getAttribute("aria-disabled")).not.toBe("true");
+  const roundRobin = settings?.querySelector<HTMLElement>('[data-testid="router-strategy-round-robin"]');
+  const highest = settings?.querySelector<HTMLElement>('[data-testid="router-strategy-highest-quota"]');
+  const random = settings?.querySelector<HTMLElement>('[data-testid="router-strategy-random"]');
+  expect(roundRobin?.getAttribute("aria-pressed")).toBe("true");
   await act(async () => highest?.click());
-  const random = settings?.querySelector<HTMLElement>('[aria-label="Random routing"]');
-  const lowest = settings?.querySelector<HTMLElement>('[aria-label="Lowest quota routing"]');
+  expect(roundRobin?.getAttribute("aria-pressed")).toBe("false");
+  expect(highest?.getAttribute("aria-pressed")).toBe("true");
   await act(async () => random?.click());
-  expect(highest?.getAttribute("aria-checked")).toBe("true");
-  expect(random?.getAttribute("aria-checked")).toBe("true");
-  expect(lowest?.getAttribute("aria-disabled")).toBe("true");
-  expect([...settings!.querySelectorAll('[data-testid^="router-strategy-"]')].slice(0, 2).map((row) => row.getAttribute("data-testid")))
-    .toEqual(["router-strategy-highest-quota", "router-strategy-random"]);
+  expect(highest?.getAttribute("aria-pressed")).toBe("false");
+  expect(random?.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => random?.click());
   const modelsBack = [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Models");
   await act(async () => modelsBack?.click());
   expect(container.querySelector('[data-testid="local-router-settings-page"]')).toBeNull();
-  const chatBack = [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Chat");
-  await act(async () => chatBack?.click());
+  const routerButton = container.querySelector<HTMLButtonElement>('[data-testid="nanami-local-router"] button');
+  expect(routerButton?.disabled).toBe(true);
+  await act(async () => routerButton?.click());
+  expect(selections).toEqual([]);
+  await act(async () => useLocalRouterStore.getState().setMode("account"));
+  expect(routerButton?.disabled).toBe(false);
+  await act(async () => routerButton?.click());
+  expect(selections).toEqual([LOCAL_ROUTER_MODEL]);
   expect(container.querySelector('[data-testid="chat"]')).toBe(chat);
   expect(chat?.hidden).toBe(false);
   await act(async () => root.unmount());

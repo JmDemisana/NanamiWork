@@ -2,9 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { APICallError } from "@ai-sdk/provider";
+import { applyEdits, modify, parse, type ParseError } from "jsonc-parser";
 import { GATEWAY_USAGE_LIMIT_ERROR_CODE } from "@openwork/types/den/gateway-usage-limits";
 import { OPENWORK_MODELS_ALLOWANCE_MESSAGE, openWorkModelsAllowanceErrorBody } from "@openwork/types/den/inference";
 import { gatewayBase, GATEWAY_QUOTA_MESSAGE, isGatewayQuotaResponse, isOpenWorkModelsAllowanceResponse, openWorkModelsBase, record } from "../gateway-quota.js";
+import { codexAccessTokenExpiry, reconcileLocalRouterCodexAuth } from "../local-router-codex-auth.js";
+import { localRouterProfilePaths } from "../local-router-profile.js";
+import { createCopilotOAuthFetch } from "../copilot-oauth-fetch.js";
 
 function parseJsoncSafe(raw: string): Record<string, unknown> {
   const cleaned = String(raw || "")
@@ -12,6 +16,15 @@ function parseJsoncSafe(raw: string): Record<string, unknown> {
     .replace(/\\"|"(?:\\"|[^"])*"|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, g) => (g ? "" : m))
     .replace(/,(\s*[}\]])/g, "$1");
   return JSON.parse(cleaned) as Record<string, unknown>;
+}
+
+function writeConfigSection(file: string, key: string, value: unknown): void {
+  const raw = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+  const errors: ParseError[] = [];
+  const parsed: unknown = parse(raw, errors);
+  if (errors.length || !record(parsed)) throw new Error("Cannot safely update invalid account settings.");
+  const next = applyEdits(raw, modify(raw, [key], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
+  if (next !== raw) fs.writeFileSync(file, next.endsWith("\n") ? next : `${next}\n`, "utf8");
 }
 
 type Fetch = (input: Parameters<typeof fetch>[0], init?: RequestInit) => Promise<Response>;
@@ -146,6 +159,16 @@ export const OpenWorkGatewayQuota = async () => ({
       const codexAccFile = path.join(nanamiCfgDir, "codex-accounts.json");
       const jsoncFile = path.join(nanamiCfgDir, "opencode.jsonc");
       const jsonFile = path.join(nanamiCfgDir, "opencode.json");
+      const nanamiDataDir = path.join(process.env.XDG_DATA_HOME?.trim() || path.join(nanamiCfgDir, "data"), "opencode");
+      let maySyncCodexAuth = true;
+      try {
+        const privateProfile = localRouterProfilePaths(process.env);
+        if (privateProfile) await reconcileLocalRouterCodexAuth(privateProfile);
+        else if (process.env.NANAMIWORK_ISOLATED === "1") maySyncCodexAuth = false;
+      } catch {
+        // An ambiguous identity is not permission to overwrite a credential.
+        maySyncCodexAuth = false;
+      }
       try {
         let codexMeta: { activeEmail?: string; accounts?: Array<Record<string, unknown>> } = {};
         let copilotMeta: { activeUsername?: string; accounts?: Array<Record<string, unknown>> } = {};
@@ -165,6 +188,8 @@ export const OpenWorkGatewayQuota = async () => ({
           copilotList.find((a) => String(a.username ?? "").toLowerCase() === String(copilotMeta.activeUsername ?? "").toLowerCase()) ??
           copilotList[0];
         if (activeCopilot && (activeCopilot.oauthToken || activeCopilot.copilotToken)) {
+          const oauth = typeof activeCopilot.oauthToken === "string" ? activeCopilot.oauthToken : "";
+          const copilotToken = typeof activeCopilot.copilotToken === "string" ? activeCopilot.copilotToken : "";
           config.provider = {
             ...(record(config.provider) ? config.provider : {}),
             "github-copilot": {
@@ -172,7 +197,8 @@ export const OpenWorkGatewayQuota = async () => ({
               name: "GitHub Copilot",
               options: {
                 baseURL: "https://api.githubcopilot.com",
-                apiKey: String(activeCopilot.oauthToken || activeCopilot.copilotToken),
+                apiKey: copilotToken || oauth,
+                ...(oauth ? { fetch: createCopilotOAuthFetch(oauth, { token: copilotToken, expiresAt: typeof activeCopilot.expiresAt === "number" ? activeCopilot.expiresAt : undefined }) } : {}),
                 headers: {
                   "User-Agent": "opencode/1.0.0",
                   "X-GitHub-Api-Version": "2026-06-01",
@@ -210,6 +236,11 @@ export const OpenWorkGatewayQuota = async () => ({
               },
             },
           };
+        } else if (record(copilotProv) && record(copilotProv.options)) {
+          const key = copilotProv.options.apiKey;
+          if (typeof key === "string" && /^(gho_|ghu_|github_pat_)/.test(key.trim()) && copilotProv.options.fetch === undefined) {
+            copilotProv.options.fetch = createCopilotOAuthFetch(key.trim());
+          }
         }
         if ((!codexMeta.accounts || codexMeta.accounts.length === 0) && fs.existsSync(codexAccFile)) {
           try {
@@ -218,9 +249,7 @@ export const OpenWorkGatewayQuota = async () => ({
               accounts?: Array<Record<string, unknown>>;
             };
             for (const f of [jsoncFile, jsonFile]) {
-              const d = fs.existsSync(f) ? parseJsoncSafe(fs.readFileSync(f, "utf8")) : { $schema: "https://opencode.ai/config.json" };
-              d.x_nanami_codex = codexMeta;
-              fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n", "utf8");
+              writeConfigSection(f, "x_nanami_codex", codexMeta);
             }
           } catch {}
         } else if (codexMeta.accounts && codexMeta.accounts.length > 0) {
@@ -232,8 +261,7 @@ export const OpenWorkGatewayQuota = async () => ({
         const activeCodex =
           codexList.find((a) => String(a.email ?? "").toLowerCase() === String(codexMeta.activeEmail ?? "").toLowerCase()) ??
           codexList[0];
-        if (activeCodex && activeCodex.accessToken) {
-          const nanamiDataDir = path.join(process.env.XDG_DATA_HOME?.trim() || path.join(nanamiCfgDir, "data"), "opencode");
+        if (maySyncCodexAuth && activeCodex && activeCodex.accessToken) {
           fs.mkdirSync(nanamiDataDir, { recursive: true });
           const nanamiAuthFile = path.join(nanamiDataDir, "auth.json");
           const nanamiRootAuthFile = path.join(nanamiCfgDir, "auth.json");
@@ -247,7 +275,7 @@ export const OpenWorkGatewayQuota = async () => ({
             type: "oauth",
             refresh: String(activeCodex.refreshToken ?? ""),
             access: String(activeCodex.accessToken),
-            expires: Date.now() + 3600000,
+            expires: codexAccessTokenExpiry(activeCodex.accessToken) ?? Date.now() + 60_000,
             ...(activeCodex.accountId ? { accountId: String(activeCodex.accountId) } : {}),
           };
           const authContent = JSON.stringify(ocAuth, null, 2) + "\n";
@@ -303,9 +331,6 @@ export const OpenWorkGatewayQuota = async () => ({
           if (idx >= 0 && accData.activeIndex !== idx) {
             accData.activeIndex = idx;
             accData.activeIndexByFamily = { claude: idx, gemini: idx };
-            list.forEach((a, i) => {
-              a.enabled = i === idx;
-            });
             accChanged = true;
           }
         }
@@ -314,12 +339,15 @@ export const OpenWorkGatewayQuota = async () => ({
           fs.writeFileSync(accFile, JSON.stringify(accData, null, 2) + "\n", "utf8");
         }
         const activeIdx = Math.min(Math.max(0, accData.activeIndex ?? 0), Math.max(0, list.length - 1));
+        const previousAccounts = Array.isArray(meta.accounts) ? meta.accounts.filter(record) : [];
+        const listEmails = new Set(list.map((account) => String(account.email ?? "").toLowerCase()));
         const nextMeta = {
           ...meta,
           activeEmail: String(list[activeIdx]?.email ?? meta.activeEmail ?? ""),
           activeIndex: activeIdx,
           deletedAtByEmail: delMap,
-          accounts: list.map((a) => ({
+          accounts: [...list.map((a) => ({
+            ...(previousAccounts.find((previous) => String(previous.email ?? "").toLowerCase() === String(a.email ?? "").toLowerCase()) ?? {}),
             email: a.email,
             refreshToken: a.refreshToken,
             projectId: a.projectId ?? "",
@@ -327,12 +355,16 @@ export const OpenWorkGatewayQuota = async () => ({
             addedAt: a.addedAt ?? Date.now(),
             lastUsed: a.lastUsed ?? 0,
             enabled: a.enabled !== false,
-          })),
+            ...(a.verificationRequired !== undefined ? { verificationRequired: a.verificationRequired } : {}),
+            ...(a.verificationUrl !== undefined ? { verificationUrl: a.verificationUrl } : {}),
+            ...(a.verificationReason !== undefined ? { verificationReason: a.verificationReason } : {}),
+          })), ...previousAccounts.filter((account) => {
+            const email = String(account.email ?? "").toLowerCase();
+            return Boolean(email && !listEmails.has(email) && !delMap[email]);
+          })],
         };
         for (const f of [jsoncFile, jsonFile]) {
-          const d = fs.existsSync(f) ? parseJsoncSafe(fs.readFileSync(f, "utf8")) : { $schema: "https://opencode.ai/config.json" };
-          d.x_nanami_antigravity = nextMeta;
-          fs.writeFileSync(f, JSON.stringify(d, null, 2) + "\n", "utf8");
+          writeConfigSection(f, "x_nanami_antigravity", nextMeta);
         }
       }
     } catch {}
