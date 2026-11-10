@@ -28,9 +28,12 @@ test("ChatGPT sign-in starts only one flow and waits for its listener before ope
   expect(creates).toBe(1);
   expect(opened).toBe(1);
   expect(useChatGptAccountsStore.getState().isConnecting).toBe(true);
+  useChatGptAccountsStore.getState().setModalOpen(false);
+  expect(useChatGptAccountsStore.getState().isConnecting).toBe(true);
   exitListener?.({ terminalId: "fixture", exitCode: 1 });
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(useChatGptAccountsStore.getState().isConnecting).toBe(false);
+  expect(useChatGptAccountsStore.getState().authUrl).toBeNull();
 });
 
 test("ChatGPT sign-in reports a callback failure without opening a broken URL", async () => {

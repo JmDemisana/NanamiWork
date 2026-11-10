@@ -515,12 +515,7 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
   error: null,
   modalOpen: false,
 
-  setModalOpen: (open) =>
-    set({
-      modalOpen: open,
-      error: null,
-      ...(open ? {} : { isConnecting: false }),
-    }),
+  setModalOpen: (open) => set({ modalOpen: open, error: null }),
 
   loadAccounts: (client) => {
     if (client) latestClient = client;
@@ -962,7 +957,8 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
       await openDesktopUrl(authUrl);
       void completion.then((ok) => {
         if (ok) void get().confirmAndRefresh();
-        else if (get().isConnecting) set({ isConnecting: false, authUrl: null, error: "ChatGPT sign-in did not finish. Try again." });
+        else set({ isConnecting: false, authUrl: null,
+          ...(get().modalOpen ? { error: "ChatGPT sign-in did not finish. Try again." } : {}) });
       });
     } catch (e) {
       cancellation.abort();
