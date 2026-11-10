@@ -120,8 +120,8 @@ export function SpecializedToolsView() {
             </LayoutSectionItemHeaderActions>
           </LayoutSectionItemHeader>
           <LayoutSectionItemDescription>
-            Notebooks built from your own sources, with grounded answers, citations, and studio
-            artifacts. Fully local: no account and no marketplace.
+            Notebooks stay on this computer. Your selected model receives the source text when
+            you ask questions or create study materials.
           </LayoutSectionItemDescription>
 
           {preparing ? (
@@ -151,7 +151,7 @@ export function SpecializedToolsView() {
               <span className={cn(notebookCount > 0 && !enabled && "text-amber-11")}>
                 {notebookCount > 0
                   ? `${notebookCount} notebook${notebookCount === 1 ? "" : "s"} stored locally. Turning Study off does not delete them.`
-                  : "Notebooks are stored in this app's local data, never in a workspace."}
+                  : "Notebooks are stored in this app’s local data."}
               </span>
               {installed ? (
                 confirmRemove ? (

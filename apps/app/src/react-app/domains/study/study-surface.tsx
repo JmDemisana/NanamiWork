@@ -111,7 +111,7 @@ function StudyHome() {
           <div>
             <h1 className="text-2xl font-medium tracking-[-0.4px]">Notebooks</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your own sources, answered and cited locally. Nothing here is tied to a workspace.
+              Notebooks stay on this computer. Your selected model answers from your sources.
             </p>
           </div>
           <Button onClick={create}>
@@ -460,7 +460,7 @@ function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { 
               <Button onClick={() => void ask()} disabled={!query.trim() || generating || !notebook.sources.length}>{generating ? "Working…" : "Ask"}</Button>
             </div>
             <p className="mx-auto mt-1.5 max-w-2xl text-[11px] text-muted-foreground">
-              {generationError || "Answers use your selected model and cite your sources."}
+              {generationError || "Your selected model receives your sources when you ask or create materials."}
             </p>
           </div>
         </main>
