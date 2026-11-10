@@ -7,6 +7,8 @@ import { LOCAL_ROUTER_PROVIDER_ID } from "@/app/lib/local-router-ref";
 export { LOCAL_ROUTER_PROVIDER_ID, LOCAL_ROUTER_MODEL_ID, isLocalRouterModel } from "@/app/lib/local-router-ref";
 
 export type LocalRouterStrategy =
+  | "model-order"
+  | "account-order"
   | "round-robin"
   | "never-used"
   | "nearest-reset"
@@ -20,19 +22,19 @@ export const LOCAL_ROUTER_STRATEGIES: readonly {
   description: string;
 }[] = [
   {
+    value: "model-order",
+    label: "Model order",
+    description: "Repeatedly use an account until that model is used up, then move to the next account, and ultimately to the next model.",
+  },
+  {
+    value: "account-order",
+    label: "Account order",
+    description: "Run all models on one account first until exhausted, then move in a line to the next account.",
+  },
+  {
     value: "round-robin",
     label: "Round robin",
     description: "Take turns across every included account and model.",
-  },
-  {
-    value: "never-used",
-    label: "Latest to reset",
-    description: "Use the account whose quota resets last.",
-  },
-  {
-    value: "nearest-reset",
-    label: "Earliest to reset",
-    description: "Use whichever account refreshes soonest.",
   },
   {
     value: "highest-quota",
@@ -43,6 +45,16 @@ export const LOCAL_ROUTER_STRATEGIES: readonly {
     value: "lowest-quota",
     label: "Lowest quota",
     description: "Use the account with the least quota left, so nothing goes to waste.",
+  },
+  {
+    value: "nearest-reset",
+    label: "Earliest to reset",
+    description: "Use whichever account refreshes soonest.",
+  },
+  {
+    value: "never-used",
+    label: "Latest to reset",
+    description: "Use the account whose quota resets last.",
   },
   {
     value: "random",
@@ -108,8 +120,8 @@ export type LocalRouterSettings = {
 
 /** Model and account order are routing choices; priority mode needs a strategy. */
 export function hasLocalRouterRouting(settings: Pick<LocalRouterSettings, "mode" | "strategies">): boolean {
-  return settings.mode === "model" || settings.mode === "account"
-    || (settings.mode === "priority" && settings.strategies.length > 0);
+  return settings.strategies.length > 0
+    || settings.mode === "model" || settings.mode === "account";
 }
 
 type LocalRouterStore = LocalRouterSettings & {
@@ -127,7 +139,7 @@ type LocalRouterStore = LocalRouterSettings & {
 const STORAGE_KEY = "openwork.nanamiLocalRouter.v2";
 const DEFAULT_SETTINGS: LocalRouterSettings = {
   mode: "priority",
-  strategies: ["round-robin"],
+  strategies: ["model-order"],
   modelOrder: [],
   accountOrder: [],
   excludedAccounts: [],
@@ -160,11 +172,15 @@ function readStoredSettings(): LocalRouterSettings {
     const enabled = Array.isArray(strategies)
       ? strategies.filter(isStrategy).filter((value, index, list) => list.indexOf(value) === index)
       : [];
+    let effectiveStrategies: LocalRouterStrategy[] = enabled.slice(0, 1);
+    if (effectiveStrategies.length === 0) {
+      if (mode === "account") effectiveStrategies = ["account-order"];
+      else if (mode === "model") effectiveStrategies = ["model-order"];
+      else effectiveStrategies = DEFAULT_SETTINGS.strategies;
+    }
     return {
-      mode: mode === "model" || mode === "account" ? mode : "priority",
-      strategies: Array.isArray(strategies)
-        ? enabled.slice(0, 1)
-        : DEFAULT_SETTINGS.strategies,
+      mode: "priority",
+      strategies: effectiveStrategies,
       modelOrder: Array.isArray(modelOrder)
         ? modelOrder.filter((entry): entry is string => typeof entry === "string")
         : [],
@@ -226,8 +242,9 @@ export const useLocalRouterStore = create<LocalRouterStore>((set, get) => ({
   toggleStrategy: (strategy) => set((state) => {
     if (!isStrategy(strategy)) return state;
     const strategies = state.strategies[0] === strategy ? [] : [strategy];
-    writeStoredSettings({ ...settingsOf(state), strategies });
-    return { strategies };
+    const mode = "priority";
+    writeStoredSettings({ ...settingsOf(state), strategies, mode });
+    return { strategies, mode };
   }),
   toggleAccount: (accountKey) => set((state) => {
     const excluded = state.excludedAccounts.includes(accountKey);
@@ -491,6 +508,26 @@ function compareByStrategy(
   const leftUsage = context.usage[left.key];
   const rightUsage = context.usage[right.key];
   switch (strategy) {
+    case "model-order": {
+      // 1) Model order rank (first model in list until exhausted)
+      const modelRank = compareRanks(rankOf(context.modelOrder, left.model.key), rankOf(context.modelOrder, right.model.key));
+      if (modelRank !== 0) return modelRank;
+      // 2) Account order rank with that model
+      const accountRank = compareRanks(rankOf(context.accountOrder, left.account.key), rankOf(context.accountOrder, right.account.key));
+      if (accountRank !== 0) return accountRank;
+      // 3) Keep using this same account until its model quota is exhausted (prefer most recently used)
+      return (rightUsage?.lastUsedAt ?? 0) - (leftUsage?.lastUsedAt ?? 0);
+    }
+    case "account-order": {
+      // 1) Account order rank (first account in list until all models on it are exhausted)
+      const accountRank = compareRanks(rankOf(context.accountOrder, left.account.key), rankOf(context.accountOrder, right.account.key));
+      if (accountRank !== 0) return accountRank;
+      // 2) Model order rank on this account
+      const modelRank = compareRanks(rankOf(context.modelOrder, left.model.key), rankOf(context.modelOrder, right.model.key));
+      if (modelRank !== 0) return modelRank;
+      // 3) Keep using this same model on this account until exhausted
+      return (rightUsage?.lastUsedAt ?? 0) - (leftUsage?.lastUsedAt ?? 0);
+    }
     case "lowest-quota":
       return compareQuota(left.model, right.model, false);
     case "highest-quota":
@@ -576,10 +613,10 @@ export function resolveLocalRouterChoice(
     candidate.model.remainingFraction === null || candidate.model.remainingFraction > 0);
   if (usable.length === 0) return null;
   const pool = usable;
-  const strategies: readonly LocalRouterStrategy[] = settings.mode !== "priority"
-    ? []
-    : settings.strategies.slice(0, 1).flatMap((strategy) =>
-      strategy === "round-robin" || strategy === "random" ? [strategy] : [strategy, "round-robin"]);
+  const strategies: readonly LocalRouterStrategy[] = settings.strategies.slice(0, 1).flatMap((strategy) =>
+    strategy === "model-order" || strategy === "account-order" || strategy === "round-robin" || strategy === "random"
+      ? [strategy]
+      : [strategy, "round-robin"]);
   const context = {
     mode: settings.mode,
     randomScores: new Map(pool.map((candidate) => [candidate.key, Math.random()])),

@@ -6,7 +6,7 @@ export const LOCAL_ROUTER_MODEL: ModelRef = {
   providerID: LOCAL_ROUTER_PROVIDER_ID,
   modelID: LOCAL_ROUTER_MODEL_ID,
 };
-export const LOCAL_ROUTER_TITLE = "NanamiWorks Local Router";
+export const LOCAL_ROUTER_TITLE = "NanamiWork Local Router";
 
 /** This is a client-side selection, never an engine provider ID. */
 export function isLocalRouterModel(model: ModelRef | null | undefined): boolean {

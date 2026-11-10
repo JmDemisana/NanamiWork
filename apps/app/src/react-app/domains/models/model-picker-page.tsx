@@ -234,14 +234,14 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
             className="flex h-full min-h-0 flex-col"
           >
             <h1 className="sr-only">Models</h1>
-            <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+            <header className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="flex min-w-0 items-center gap-1.5">
                 <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" onClick={close}>
                   <ChevronLeft className="size-4" />
                   <span>{props.disableWorkspaceDefault ? "Study" : "Chat"}</span>
                 </Button>
               </div>
-              <div className="relative flex min-w-0 flex-1 items-center sm:mx-2 sm:max-w-2xl">
+              <div className="relative flex min-w-0 w-full sm:w-80 md:w-96 items-center sm:ml-auto">
                 <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
                 <input
                   ref={searchInputRef}
@@ -272,7 +272,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
                 query={props.query}
                 onQueryChange={props.setQuery}
                 searchInputRef={searchInputRef}
-                leading={!props.query.trim() || "nanamiworks local router route local models".includes(props.query.trim().toLowerCase())
+                leading={!props.query.trim() || "nanamiwork local router route local models".includes(props.query.trim().toLowerCase())
                   ? <RouterRow onUse={useRouter} onEdit={() => setRouterSettingsOpen(true)} notice={routerNotice} needsRouting={needsRouting} selected={isLocalRouterModel(props.current)} /> : null}
                 options={options}
                 current={props.current}

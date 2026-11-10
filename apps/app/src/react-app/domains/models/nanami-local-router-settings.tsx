@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ChevronDown, ChevronLeft, ChevronUp, RotateCcw } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,15 +13,8 @@ import {
   orderLocalRouterAccounts,
   useLocalRouterStore,
   type LocalRouterAccount,
-  type LocalRouterMode,
   type LocalRouterStrategy,
 } from "./nanami-local-router";
-
-const MODE_OPTIONS: readonly { value: LocalRouterMode; label: string }[] = [
-  { value: "model", label: "Model order" },
-  { value: "account", label: "Account order" },
-  { value: "priority", label: "Strategy" },
-];
 
 function OrderButtons({
   label,
@@ -62,38 +55,6 @@ function OrderButtons({
   </span>;
 }
 
-function ModeToggle({ mode, onChange }: { mode: LocalRouterMode; onChange: (mode: LocalRouterMode) => void }) {
-  return (
-    <div role="radiogroup" aria-label="Routing order" className="relative grid grid-cols-3 gap-0.5 rounded-lg border border-border p-0.5 bg-muted/20">
-      {MODE_OPTIONS.map((option) => (
-        <label
-          key={option.value}
-          className={`relative z-10 flex h-8 cursor-pointer items-center justify-center rounded-md px-2 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-ring ${
-            mode === option.value ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <input
-            type="radio"
-            name="local-router-mode"
-            value={option.value}
-            checked={mode === option.value}
-            onChange={() => onChange(option.value)}
-            className="sr-only"
-          />
-          {mode === option.value ? (
-            <motion.div
-              layoutId="local-router-mode-pill"
-              transition={{ type: "spring", stiffness: 450, damping: 35 }}
-              className="absolute inset-0 z-[-1] rounded-md bg-accent shadow-xs"
-            />
-          ) : null}
-          {option.label}
-        </label>
-      ))}
-    </div>
-  );
-}
-
 function RoutingRow({ strategy, label, description, enabled, onToggle }: {
   strategy: LocalRouterStrategy;
   label: string;
@@ -128,8 +89,6 @@ export function LocalRouterSettingsPage({
   onBack: () => void;
   accounts: readonly LocalRouterAccount[];
 }) {
-  const mode = useLocalRouterStore((state) => state.mode);
-  const setMode = useLocalRouterStore((state) => state.setMode);
   const strategies = useLocalRouterStore((state) => state.strategies);
   const toggleStrategy = useLocalRouterStore((state) => state.toggleStrategy);
   const excludedAccounts = useLocalRouterStore((state) => state.excludedAccounts);
@@ -173,7 +132,7 @@ export function LocalRouterSettingsPage({
           </Button>
           <div className="min-w-0">
           <h1 className="text-sm font-semibold">
-            NanamiWorks Local Router
+            NanamiWork Local Router
           </h1>
           </div>
         </header>
@@ -304,17 +263,21 @@ export function LocalRouterSettingsPage({
 
           <section className="min-w-0 rounded-xl border border-border/70 bg-card/35 p-4">
             <div className="mb-2">
-              <h3 className="text-sm font-medium">Routing</h3>
+              <h3 className="text-sm font-medium">Routing Strategy</h3>
+              <p className="text-xs text-muted-foreground">Choose how requests rotate through accounts and models.</p>
             </div>
-            <div className="max-w-md"><ModeToggle mode={mode} onChange={setMode} /></div>
-            {mode === "priority" ? (
-              <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-0.5 @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
-                {LOCAL_ROUTER_STRATEGIES.map((entry) => <RoutingRow
-                  key={entry.value} strategy={entry.value} label={entry.label} description={entry.description}
-                  enabled={strategies[0] === entry.value} onToggle={() => toggleStrategy(entry.value)}
-                />)}
-              </div>
-            ) : null}
+            <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 @[41rem]/router:grid-cols-2 @[62rem]/router:grid-cols-3">
+              {LOCAL_ROUTER_STRATEGIES.map((entry) => (
+                <RoutingRow
+                  key={entry.value}
+                  strategy={entry.value}
+                  label={entry.label}
+                  description={entry.description}
+                  enabled={strategies[0] === entry.value}
+                  onToggle={() => toggleStrategy(entry.value)}
+                />
+              ))}
+            </div>
           </section>
           </div>
         </div>
