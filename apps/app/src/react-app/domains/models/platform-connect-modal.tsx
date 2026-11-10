@@ -22,8 +22,6 @@ import { Button } from "@/components/ui/button";
 import { openDesktopUrl } from "@/app/lib/desktop";
 import {
   confirmAntigravityAuthEvent,
-  confirmCodexAuthEvent,
-  openCodexAuthEvent,
   openWorkbenchInstancesEvent,
 } from "@/react-app/shell/new-providers-listener";
 import { useAntigravityAccountsStore } from "./antigravity-accounts-store";
@@ -59,7 +57,6 @@ export function PlatformConnectModal() {
   const chatGptAuthUrl = useChatGptAccountsStore((s) => s.authUrl);
   const chatGptConnecting = useChatGptAccountsStore((s) => s.isConnecting);
   const startChatGptLogin = useChatGptAccountsStore((s) => s.startBrowserLogin);
-  const confirmChatGpt = useChatGptAccountsStore((s) => s.confirmAndRefresh);
   const connectChatGptKey = useChatGptAccountsStore((s) => s.connectApiKey);
   const deleteChatGptAccount = useChatGptAccountsStore((s) => s.deleteAccount);
   const chatGptError = useChatGptAccountsStore((s) => s.error);
@@ -339,7 +336,7 @@ export function PlatformConnectModal() {
               )}
 
               <div className="text-xs text-muted-foreground">
-                Sign in with your ChatGPT account in your browser, then confirm and refresh.
+                Sign in with your ChatGPT account in your browser. The account appears after authorization.
               </div>
 
               {/* Step 1: Open Browser Sign-In */}
@@ -348,11 +345,11 @@ export function PlatformConnectModal() {
                   type="button"
                   variant="outline"
                   className="w-full justify-between h-9 text-xs font-medium border-border/80 hover:bg-muted/50"
+                  disabled={chatGptConnecting && !chatGptAuthUrl}
                   onClick={() => {
                     if (chatGptAuthUrl) {
                       void openDesktopUrl(chatGptAuthUrl);
                     } else {
-                      window.dispatchEvent(new Event(openCodexAuthEvent));
                       void startChatGptLogin();
                     }
                   }}
@@ -381,19 +378,7 @@ export function PlatformConnectModal() {
                 </span>
               </div>
 
-              {/* Step 3: Confirm & Refresh Button */}
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full h-9 text-xs font-medium gap-2 border border-border/70"
-                onClick={() => {
-                  window.dispatchEvent(new Event(confirmCodexAuthEvent));
-                  void confirmChatGpt();
-                }}
-              >
-                <RefreshCw className="size-3.5" />
-                <span>Click to Confirm & Refresh</span>
-              </Button>
+
             </div>
           )}
         </div>
@@ -407,15 +392,12 @@ export function PlatformConnectModal() {
             <Button variant="outline" size="sm" onClick={handleClose}>
               Close
             </Button>
-            <Button
+            {activePlatform !== "chatgpt" ? <Button
               variant="secondary"
               size="sm"
               className="gap-1.5 text-xs"
               onClick={async () => {
-                if (activePlatform === "chatgpt") {
-                  window.dispatchEvent(new Event(confirmCodexAuthEvent));
-                  void confirmChatGpt();
-                } else if (activePlatform === "antigravity") {
+                if (activePlatform === "antigravity") {
                   window.dispatchEvent(new Event(confirmAntigravityAuthEvent));
                 } else {
                   await loadCopilotAccounts();
@@ -426,7 +408,7 @@ export function PlatformConnectModal() {
             >
               <RefreshCw className="size-3" />
               <span>Refresh</span>
-            </Button>
+            </Button> : null}
           </div>
         </div>
       </DialogContent>

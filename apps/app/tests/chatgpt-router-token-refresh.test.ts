@@ -12,6 +12,8 @@ let writes = 0;
 let refreshes = 0;
 
 mock.module("../src/app/lib/desktop", () => ({
+  readNanamiConfigFile: async () => ({ exists: false, content: null }),
+  writeNanamiConfigFile: async () => ({ ok: true }),
   getCachedDesktopHomeDir: async () => "C:/private-home",
   readOpencodeConfig: async () => ({ path: "C:/private-home/.config/nanamiwork/opencode.jsonc", content }),
   writeOpencodeConfig: async (_scope: string, _directory: string, next: string) => {

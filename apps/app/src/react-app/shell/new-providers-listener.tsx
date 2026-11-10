@@ -386,6 +386,10 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
     const completion = store
       .completeProviderAuthOAuth("openai", methodIndex)
       .then(async (res) => {
+        if (!res.connected) {
+          useChatGptAccountsStore.setState({ isConnecting: false, error: "ChatGPT authorization is still pending. Try signing in again." });
+          return res;
+        }
         clearCachedProviderLists();
         await syncCodexDiskAccountsViaTerminal({ type: "confirm" }).catch(() => undefined);
         await store.refreshProviders({ dispose: true, force: true }).catch(() => undefined);
@@ -402,6 +406,7 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
     pendingCodexOAuthPromise = completion;
   } catch (err) {
     console.warn("Server-side ChatGPT startProviderAuth failed, falling back to local PKCE:", err);
+    useChatGptAccountsStore.setState({ isConnecting: false, authUrl: null });
     await useChatGptAccountsStore.getState().startBrowserLogin();
   }
 }

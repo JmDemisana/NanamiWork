@@ -5,6 +5,8 @@ import {
   desktopFetchViaMain,
   getCachedDesktopHomeDir,
   openDesktopUrl,
+  readNanamiConfigFile,
+  writeNanamiConfigFile,
   readOpencodeConfig,
   writeOpencodeConfig,
   type OpencodeConfigFile,
@@ -337,12 +339,13 @@ const CODEX_PROVIDER_MODELS_CONFIG = {
 async function writeNanamiCodexMeta(
   updater: (prev: NanamiCodexMeta) => NanamiCodexMeta,
   strict = false,
+  prepareProvider = false,
 ): Promise<void> {
   const operation = pendingCodexMetadataWrite.then(async () => {
   try {
     const configDir = await getNanamiConfigDir();
     const res = (await readOpencodeConfig("project", configDir)) as OpencodeConfigFile;
-    if (strict && !res?.content?.trim()) throw new Error("ChatGPT account storage is unavailable.");
+    if (strict && res?.exists && !res.content?.trim()) throw new Error("ChatGPT account storage is unavailable.");
     let raw = res?.content?.trim()
       ? res.content
       : '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
@@ -353,8 +356,8 @@ async function writeNanamiCodexMeta(
       x_nanami_codex?: NanamiCodexMeta;
     };
     if (strict && errors.length) throw new Error("ChatGPT account storage could not be read safely.");
-    const enabled = Array.isArray(parsed.enabled_providers) ? parsed.enabled_providers : ["nanami", "google"];
-    if (!strict && !enabled.includes("openai")) {
+    const enabled = Array.isArray(parsed.enabled_providers) ? parsed.enabled_providers : null;
+    if ((!strict || prepareProvider) && enabled && !enabled.includes("openai")) {
       raw = applyEdits(
         raw,
         modify(raw, ["enabled_providers"], [...enabled, "openai"], {
@@ -362,8 +365,8 @@ async function writeNanamiCodexMeta(
         }),
       );
     }
-    const existingOpenai = parsed.provider?.openai as { options?: { apiKey?: string } } | undefined;
-    if (!strict && !existingOpenai?.options?.apiKey) {
+    const existingOpenai = parsed.provider?.openai;
+    if ((!strict || prepareProvider) && !existingOpenai) {
       raw = applyEdits(
         raw,
         modify(
@@ -389,6 +392,56 @@ async function writeNanamiCodexMeta(
   });
   pendingCodexMetadataWrite = operation.then(() => undefined, () => undefined);
   return operation;
+}
+
+/** Import only the callback just completed by this app, preserving JSONC and other providers. */
+export async function importPendingChatGptAccount(): Promise<string> {
+  const pending = await readNanamiConfigFile("codex-pending-oauth.json");
+  if (!pending.exists || !pending.content?.trim()) throw new Error("ChatGPT sign-in has not completed. Try again.");
+  const tokens: unknown = JSON.parse(pending.content);
+  if (!tokens || typeof tokens !== "object") throw new Error("ChatGPT sign-in did not return an account.");
+  const access = Reflect.get(tokens, "access_token");
+  const refresh = Reflect.get(tokens, "refresh_token");
+  const idToken = Reflect.get(tokens, "id_token");
+  const accountId = Reflect.get(tokens, "account_id");
+  if (typeof access !== "string" || !access) throw new Error("ChatGPT sign-in did not return an access token.");
+  const claims = (token: unknown): Record<string, unknown> => {
+    if (typeof token !== "string") return {};
+    try {
+      const encoded = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/") ?? "";
+      const value: unknown = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
+      return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    } catch { return {}; }
+  };
+  const idClaims = claims(idToken);
+  const accessClaims = claims(access);
+  const profile = (value: Record<string, unknown>) => {
+    const candidate = value["https://api.openai.com/profile"];
+    return candidate && typeof candidate === "object" ? candidate : {};
+  };
+  const email = [idClaims.email, Reflect.get(profile(idClaims), "email"), accessClaims.email, Reflect.get(profile(accessClaims), "email")]
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0)?.trim();
+  if (!email) throw new Error("ChatGPT did not provide an account email. Try signing in again.");
+  const auth = idClaims["https://api.openai.com/auth"] ?? accessClaims["https://api.openai.com/auth"];
+  const plan = auth && typeof auth === "object" ? Reflect.get(auth, "chatgpt_plan_type") : undefined;
+  const now = Date.now();
+  await writeNanamiCodexMeta((previous) => {
+    const accounts = [...(previous.accounts ?? [])];
+    const index = accounts.findIndex((account) => account.email.toLowerCase() === email.toLowerCase());
+    const prior = index >= 0 ? accounts[index] : undefined;
+    const account: StoredCodexAccount = { ...prior, email, accessToken: access,
+      refreshToken: typeof refresh === "string" ? refresh : "", idToken: typeof idToken === "string" ? idToken : "",
+      accountId: typeof accountId === "string" ? accountId : undefined,
+      planType: plan === "plus" || plan === "pro" || plan === "team" || plan === "free" ? plan : prior?.planType ?? "free",
+      addedAt: prior?.addedAt ?? now, lastLoadedAt: now };
+    if (index >= 0) accounts[index] = account; else accounts.push(account);
+    const deletedAtByEmail = { ...(previous.deletedAtByEmail ?? {}) };
+    delete deletedAtByEmail[email.toLowerCase()];
+    return { ...previous, accounts, activeEmail: email, deletedAtByEmail };
+  }, true, true);
+  const cleared = await writeNanamiConfigFile("codex-pending-oauth.json", "{}\n");
+  if (!cleared.ok) throw new Error("ChatGPT was saved, but the sign-in cleanup failed.");
+  return email;
 }
 
 function buildQuotaWindow(raw?: {
@@ -875,8 +928,10 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
   },
 
   startBrowserLogin: async () => {
+    if (get().isConnecting) return;
+    const cancellation = new AbortController();
     try {
-      set({ isConnecting: true, error: null });
+      set({ isConnecting: true, authUrl: null, error: null });
       const { verifier, challenge, state } = await generatePKCE();
       const params = new URLSearchParams({
         response_type: "code",
@@ -891,21 +946,29 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
         originator: "opencode",
       });
       const authUrl = `https://auth.openai.com/oauth/authorize?${params.toString()}`;
+      let markReady: () => void = () => {};
+      const ready = new Promise<boolean>((resolve) => { markReady = () => resolve(true); });
+      const completion = startLocalCodexCallbackServerViaTerminal(verifier, state, markReady, cancellation.signal);
+      const listening = await Promise.race([
+        ready,
+        completion.then(() => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000)),
+      ]);
+      if (!listening) {
+        cancellation.abort();
+        throw new Error("Could not start the ChatGPT sign-in callback on port 1455. Close any other sign-in using that port and try again.");
+      }
       set({ authUrl });
-
-      // Start a local 1455 OAuth callback listener via Node in background terminal
-      // so the browser callback is captured and exchanged even if opencode's internal server isn't listening
-      void startLocalCodexCallbackServerViaTerminal(verifier, state).then((ok) => {
-        if (ok) {
-          void get().confirmAndRefresh();
-        }
-      });
-
-      // Immediately open the default browser!
       await openDesktopUrl(authUrl);
+      void completion.then((ok) => {
+        if (ok) void get().confirmAndRefresh();
+        else if (get().isConnecting) set({ isConnecting: false, authUrl: null, error: "ChatGPT sign-in did not finish. Try again." });
+      });
     } catch (e) {
+      cancellation.abort();
       set({
         isConnecting: false,
+        authUrl: null,
         error: e instanceof Error ? e.message : String(e),
       });
     }
@@ -914,9 +977,12 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
   confirmAndRefresh: async () => {
     try {
       set({ loading: true, error: null });
-      await syncCodexDiskAccountsViaTerminal({ type: "confirm" });
+      const email = await importPendingChatGptAccount();
       await get().loadAccounts();
-      set({ loading: false, isConnecting: false, modalOpen: false });
+      if (!get().hasLoadedAccounts || !get().accounts.some((account) => account.email.toLowerCase() === email.toLowerCase())) {
+        throw new Error("ChatGPT signed in, but the account could not be loaded. Open the model picker and retry.");
+      }
+      set({ loading: false, isConnecting: false, authUrl: null, modalOpen: false });
       return true;
     } catch (e) {
       set({
@@ -1079,6 +1145,8 @@ export async function activateChatGptRouterAccount(email: string, modelID: strin
 async function startLocalCodexCallbackServerViaTerminal(
   verifier: string,
   expectedState: string,
+  onReady: () => void,
+  signal: AbortSignal,
 ): Promise<boolean> {
   const terminal =
     typeof window !== "undefined" ? window.__OPENWORK_ELECTRON__?.terminal : undefined;
@@ -1183,30 +1251,37 @@ server.on('error', () => {
   process.exit(0);
 });
 
-server.listen(1455, '127.0.0.1');
+server.listen(1455, '127.0.0.1', () => console.log('__NANAMI_CODEX_OAUTH_READY__'));
 setTimeout(() => process.exit(0), 180000);
 `.trim();
 
     const b64 = btoa(script);
     const { terminalId } = await terminal.create({ cwd: home, cols: 80, rows: 10 });
+    if (signal.aborted) { await terminal.kill?.(terminalId); return false; }
     return await new Promise<boolean>((resolve) => {
       let settled = false;
       const done = (ok: boolean) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        signal.removeEventListener("abort", abort);
         unsubData?.();
         unsubExit?.();
         resolve(ok);
       };
-      const timer = setTimeout(() => done(false), 180000);
+      const abort = () => { void terminal.kill?.(terminalId); done(false); };
+      signal.addEventListener("abort", abort, { once: true });
+      const timer = setTimeout(() => { void terminal.kill?.(terminalId); done(false); }, 180000);
+      let output = "";
+      let readyReported = false;
       const unsubData = terminal.onData?.((payload) => {
-        if (
-          payload.terminalId === terminalId &&
-          payload.data.includes("__NANAMI_CODEX_OAUTH_SUCCESS__")
-        ) {
-          done(true);
+        if (payload.terminalId !== terminalId) return;
+        output = (output + payload.data).slice(-4096);
+        if (!readyReported && output.includes("__NANAMI_CODEX_OAUTH_READY__")) {
+          readyReported = true;
+          onReady();
         }
+        if (output.includes("__NANAMI_CODEX_OAUTH_SUCCESS__")) done(true);
       });
       const unsubExit = terminal.onExit?.((payload) => {
         if (payload.terminalId === terminalId) {
@@ -1215,7 +1290,7 @@ setTimeout(() => process.exit(0), 180000);
       });
       void terminal.write?.(
         terminalId,
-        `node -e "eval(Buffer.from('${b64}','base64').toString('utf8'))"\r\n`,
+        `node -e "eval(Buffer.from('${b64}','base64').toString('utf8'))"\r\nexit\r\n`,
       );
     });
   } catch {
