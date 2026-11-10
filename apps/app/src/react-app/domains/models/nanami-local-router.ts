@@ -609,8 +609,12 @@ export function resolveLocalRouterChoice(
   }
   if (candidates.length === 0) return null;
 
-  const usable = candidates.filter((candidate) =>
-    candidate.model.remainingFraction === null || candidate.model.remainingFraction > 0);
+  const usable = candidates.filter((candidate) => {
+    if (candidate.model.remainingFraction !== null) {
+      return candidate.model.remainingFraction > 0;
+    }
+    return candidate.account.kind === "local";
+  });
   if (usable.length === 0) return null;
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.strategies.slice(0, 1).flatMap((strategy) =>

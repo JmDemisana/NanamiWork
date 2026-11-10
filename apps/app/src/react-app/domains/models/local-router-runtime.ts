@@ -92,7 +92,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
         antigravity: latestAntigravity.accounts,
         chatgpt: useChatGptAccountsStore.getState().accounts,
         copilot: useCopilotAccountsStore.getState().accounts,
-        thinkingTier: latestAntigravity.thinkingTier,
+        thinkingTier: "medium",
         options,
         disabledProviders,
         restrictToCloud: input.restrictToCloud,

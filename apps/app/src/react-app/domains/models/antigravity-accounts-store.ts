@@ -694,16 +694,16 @@ async function fetchAccountModelsAndQuota(
 
   const resolvedModels: AntigravityModelItem[] = [];
 
-  const effectiveArgonFraction = argonWeeklyBucket?.remainingFraction ?? argonQuota.remainingFraction;
+  const effectiveArgonFraction = argonWeeklyBucket?.remainingFraction ?? argonQuota.remainingFraction ?? 0;
   const effectiveArgonReset = argonWeeklyBucket?.resetTime ?? argonQuota.resetTime;
 
-  const effectiveFlashWeeklyFraction = geminiWeeklyBucket?.remainingFraction ?? flashQuota.remainingFraction;
+  const effectiveFlashWeeklyFraction = geminiWeeklyBucket?.remainingFraction ?? flashQuota.remainingFraction ?? 0;
   const effectiveFlashWeeklyReset = geminiWeeklyBucket?.resetTime ?? argonQuota.resetTime ?? flashQuota.resetTime;
 
-  const effectiveFlash5hFraction = gemini5hBucket?.remainingFraction ?? flashQuota.remainingFraction;
+  const effectiveFlash5hFraction = gemini5hBucket?.remainingFraction ?? flashQuota.remainingFraction ?? 0;
   const effectiveFlash5hReset = gemini5hBucket?.resetTime ?? flashQuota.resetTime;
 
-  const effectiveClaudeWeeklyFraction = thirdPartyWeeklyBucket?.remainingFraction ?? claudeQuota.remainingFraction;
+  const effectiveClaudeWeeklyFraction = thirdPartyWeeklyBucket?.remainingFraction ?? claudeQuota.remainingFraction ?? 0;
   const effectiveClaudeWeeklyReset = thirdPartyWeeklyBucket?.resetTime ?? claudeQuota.resetTime;
 
   const effectiveClaude5hFraction = thirdParty5hBucket?.remainingFraction ?? 1.0;
