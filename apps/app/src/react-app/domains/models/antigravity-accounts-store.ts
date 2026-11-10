@@ -711,8 +711,11 @@ async function fetchAccountModelsAndQuota(
 
   if (isPlus) {
     const argonTierIds: Record<ThinkingTier, string> = {
-      low: "antigravity-gemini-4-argon",
-      medium: "antigravity-gemini-4-argon",
+      // The Antigravity auth provider advertises only the `-high` Argon ID.
+      // Keep the requested thinking tier as a separate option, but send the
+      // provider a model ID it actually serves.
+      low: "antigravity-gemini-4-argon-high",
+      medium: "antigravity-gemini-4-argon-high",
       high: "antigravity-gemini-4-argon-high",
     };
     resolvedModels.push({

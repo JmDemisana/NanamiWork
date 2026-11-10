@@ -368,6 +368,10 @@ let pendingCodexOAuthPromise: Promise<{ connected: boolean; pending?: boolean; m
 export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Promise<void> {
   useChatGptAccountsStore.setState({ modalOpen: true, isConnecting: true, error: null });
   try {
+    await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
+    const accountsBeforeLogin = new Map(
+      useChatGptAccountsStore.getState().accounts.map((account) => [account.email.toLowerCase(), account.accessToken]),
+    );
     let authResult: { methodIndex: number; authorization: { url: string; method: string; instructions?: string } };
     try {
       authResult = await store.startProviderAuth("openai", 0);
@@ -396,11 +400,27 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
         clearCachedProviderLists();
         await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
         await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
+        const accountState = useChatGptAccountsStore.getState();
+        const capturedAccount = accountState.accounts.some((account) => {
+          const previousToken = accountsBeforeLogin.get(account.email.toLowerCase());
+          return previousToken === undefined || previousToken !== account.accessToken;
+        });
+        if (!accountState.hasLoadedAccounts || !capturedAccount) {
+          useChatGptAccountsStore.setState({
+            isConnecting: false,
+            error: "ChatGPT authorized successfully, but NanamiWork could not save the account. Keep this window open and try Refresh.",
+          });
+          return { connected: false, message: "Account was not captured" };
+        }
         useChatGptAccountsStore.setState({ modalOpen: false, isConnecting: false });
         return res;
       })
       .catch((err) => {
         console.warn("ChatGPT OAuth background completion warning:", err);
+        useChatGptAccountsStore.setState({
+          isConnecting: false,
+          error: err instanceof Error ? err.message : "ChatGPT sign-in did not complete. Try again.",
+        });
         return null;
       });
     pendingCodexOAuthPromise = completion;
@@ -428,6 +448,14 @@ export async function runChatGptConfirmAndRefresh(store: AntigravityAuthStoreHan
     clearCachedProviderLists();
     await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
     await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
+    const accountState = useChatGptAccountsStore.getState();
+    if (!accountState.hasLoadedAccounts || accountState.accounts.length === 0) {
+      useChatGptAccountsStore.setState({
+        isConnecting: false,
+        error: "No ChatGPT account was captured yet. Keep this window open and retry Refresh.",
+      });
+      return;
+    }
     useChatGptAccountsStore.setState({ modalOpen: false, isConnecting: false });
   } catch (err) {
     console.warn("ChatGPT Confirm & Refresh warning:", err);

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { openDesktopUrl } from "@/app/lib/desktop";
 import {
   confirmAntigravityAuthEvent,
+  openCodexAuthEvent,
   openWorkbenchInstancesEvent,
 } from "@/react-app/shell/new-providers-listener";
 import { useAntigravityAccountsStore } from "./antigravity-accounts-store";
@@ -56,7 +57,6 @@ export function PlatformConnectModal() {
   const chatGptAccounts = useChatGptAccountsStore((s) => s.accounts);
   const chatGptAuthUrl = useChatGptAccountsStore((s) => s.authUrl);
   const chatGptConnecting = useChatGptAccountsStore((s) => s.isConnecting);
-  const startChatGptLogin = useChatGptAccountsStore((s) => s.startBrowserLogin);
   const connectChatGptKey = useChatGptAccountsStore((s) => s.connectApiKey);
   const deleteChatGptAccount = useChatGptAccountsStore((s) => s.deleteAccount);
   const chatGptError = useChatGptAccountsStore((s) => s.error);
@@ -350,7 +350,9 @@ export function PlatformConnectModal() {
                     if (chatGptAuthUrl) {
                       void openDesktopUrl(chatGptAuthUrl);
                     } else {
-                      void startChatGptLogin();
+                      // Use OpenCode's OAuth callback listener. It already
+                      // owns localhost:1455 and persists the returned token.
+                      window.dispatchEvent(new Event(openCodexAuthEvent));
                     }
                   }}
                 >
@@ -373,7 +375,7 @@ export function PlatformConnectModal() {
                 <Loader2 className="size-3.5 animate-spin text-sky-500 shrink-0" />
                 <span>
                   {chatGptConnecting
-                    ? "Waiting for authorization on localhost:1455..."
+                    ? "Waiting for ChatGPT authorization and account capture…"
                     : "Ready to authenticate via browser…"}
                 </span>
               </div>
