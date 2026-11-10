@@ -38,6 +38,7 @@ import type { WorkspaceInfo } from "../../../../app/lib/desktop";
 import { SidebarTitlebar, type ConversationHistoryControls } from "./sidebar-chrome";
 import { useUiStateStore } from "../../../shell/ui-state-store";
 import type {
+  ModelRef,
   WorkspaceConnectionState,
   WorkspaceSessionGroup,
 } from "../../../../app/types";
@@ -112,7 +113,6 @@ import { CopilotSidebarLimits } from "./copilot-sidebar-limits";
 import { CodexSidebarLimits } from "./codex-sidebar-limits";
 import { LocalRouterSidebarStatus } from "./local-router-sidebar-status";
 import { hasLocalRouterRouting, isLocalRouterModel, useLocalRouterStore } from "@/react-app/domains/models/nanami-local-router";
-import { useAntigravityAccountsStore } from "@/react-app/domains/models/antigravity-accounts-store";
 import type { AccountStatusMenuProps } from "./account-status-menu";
 import { usePlatform } from "../../../kernel/platform";
 import {
@@ -643,6 +643,7 @@ export type AppSidebarProps = {
   selectedWorkspaceId: string;
   developerMode: boolean;
   selectedSessionId: string | null;
+  activeComposerModel: ModelRef | null;
   showSessionActions?: boolean;
   sessionStatusById?: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
@@ -694,7 +695,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const routerMode = useLocalRouterStore((state) => state.mode);
   const routerStrategies = useLocalRouterStore((state) => state.strategies);
   const routerUsage = useLocalRouterStore((state) => state.usage);
-  const selectedModel = useAntigravityAccountsStore((state) => state.selectedModel);
+  const selectedModel = props.activeComposerModel;
   const lastRoutedKey = Object.entries(routerUsage).reduce<[string, number] | null>((current, [key, value]) =>
     !current || value.lastUsedAt > current[1] ? [key, value.lastUsedAt] : current, null)?.[0];
   const lastRoutedModelKey = lastRoutedKey?.slice((lastRoutedKey.lastIndexOf("|") + 1)) ?? null;

@@ -4227,6 +4227,7 @@ export function SessionRoute() {
         workspaceSessionGroups,
         selectedWorkspaceId,
         selectedSessionId,
+        activeComposerModel,
         developerMode: false,
         sessionStatusById: sidebarSessionStatusById,
         settleWorkspaceIds: settleWorkspaceIdSet,

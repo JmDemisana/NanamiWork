@@ -19,6 +19,7 @@ import type { BootPhase } from "../../../../app/lib/startup-boot";
 import { getCachedDesktopHomeDir, resolveDesktopChatFilePath, openDesktopUrl, openDesktopWithApp, openDesktopWorkspaceFile, type WorkspaceInfo } from "../../../../app/lib/desktop";
 import type {
   ComposerAttachment,
+  ModelRef,
   PendingPermission,
   PendingQuestion,
   ProviderListItem,
@@ -171,6 +172,7 @@ export type SessionPageSidebarProps = {
   workspaceSessionGroups: WorkspaceSessionGroup[];
   selectedWorkspaceId: string;
   selectedSessionId: string | null;
+  activeComposerModel: ModelRef | null;
   developerMode: boolean;
   sessionStatusById: Record<string, string>;
   settleWorkspaceIds?: ReadonlySet<string>;
@@ -1484,6 +1486,7 @@ export function SessionPage(props: SessionPageProps) {
           selectedWorkspaceId={props.sidebar.selectedWorkspaceId}
           developerMode={props.sidebar.developerMode}
           selectedSessionId={props.sidebar.selectedSessionId}
+          activeComposerModel={props.sidebar.activeComposerModel}
           showSessionActions={Boolean(props.onRenameSession || props.onDeleteSession || props.onArchiveSession)}
           sessionStatusById={props.sidebar.sessionStatusById}
           settleWorkspaceIds={props.sidebar.settleWorkspaceIds}
