@@ -711,8 +711,8 @@ async function fetchAccountModelsAndQuota(
 
   if (isPlus) {
     const argonTierIds: Record<ThinkingTier, string> = {
-      low: "antigravity-gemini-4-argon-low",
-      medium: "antigravity-gemini-4-argon-medium",
+      low: "antigravity-gemini-4-argon",
+      medium: "antigravity-gemini-4-argon",
       high: "antigravity-gemini-4-argon-high",
     };
     resolvedModels.push({

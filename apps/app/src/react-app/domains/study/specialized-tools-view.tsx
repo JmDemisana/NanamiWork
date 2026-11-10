@@ -123,6 +123,9 @@ export function SpecializedToolsView() {
             Notebooks stay on this computer. Your selected model receives the source text when
             you ask questions or create study materials.
           </LayoutSectionItemDescription>
+          <div className="mt-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200">
+            ⚠️ Study is not polished yet. You may run it, but it might be broken. Stay tuned for the next update!
+          </div>
 
           {preparing ? (
             <div className="mt-3 flex flex-col gap-2">
