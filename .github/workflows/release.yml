@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.1.1)"
+        description: "Release tag (e.g. v1.2.0)"
         required: false
-        default: "v1.1.3"
+        default: "v1.2.0"
   push:
     tags:
       - "v*"
@@ -39,6 +39,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Stamp release version
+        run: node scripts/release/stamp-version.mjs --version "${{ inputs.tag || github.ref_name }}"
 
       - name: Build Electron app
         run: pnpm --filter @openwork/desktop build:electron
@@ -90,6 +93,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Stamp release version
+        run: node scripts/release/stamp-version.mjs --version "${{ inputs.tag || github.ref_name }}"
+
       - name: Build Electron app
         run: pnpm --filter @openwork/desktop build:electron
 
@@ -129,6 +135,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Stamp release version
+        run: node scripts/release/stamp-version.mjs --version "${{ inputs.tag || github.ref_name }}"
 
       - name: Build Electron app
         run: pnpm --filter @openwork/desktop build:electron
@@ -170,44 +179,37 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.1.3' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.0' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork 1.1.3 Critical Update: Isolation and Session Storage Retrieval Fix"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.0' }}: Model Picker Overhaul and NanamiWork Local Router"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork v1.1.3** is a critical update for profile isolation and reliable session storage retrieval, paired with a cleaner sidebar, simplified Preferences, and fixed prompt navigation.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.0' }}** overhauls model selection and adds the NanamiWork Local Router for rotating across connected provider accounts and their available models.
 
-            ### 🛠 Critical Fixes
-            - **Session Storage Retrieval**:
-              - Workspace directories are normalized to forward slashes before every session query, so OpenCode's SQLite exact-match lookups keep finding chats after a restart on Windows.
-              - Cold-boot session loading no longer waits for engine routing to be resolved before the first fetch.
-              - Packaged engines are verified across a full restart to confirm both private and legacy session stores load.
-            - **Profile & Engine Isolation**:
-              - Private profile migration and plugin directory isolation remain enforced, keeping NanamiWork credentials, plugins, and caches separate from global OpenCode, OpenWork, and other agent installations.
-              - NanamiWork no longer registers OpenWork's link scheme or removes OpenWork's shortcut marker during uninstall.
-            - **Update Eligibility**:
-              - Public NanamiWork updates use the NanamiWork release feed without relying on OpenWork's version catalog. Store-managed installs continue to use their store's updates.
-            - **Cold-Engine Resilience**:
-              - Session list loading tolerates missing HTTP responses and extends bounded retries, so a slow-starting engine no longer drops the conversation list.
+            ### Model Picker Overhaul
+            - Reworked model selection into a searchable, grouped picker with account-aware model choices.
+            - Router candidates come from models available in the picker, so it does not invent hidden provider models.
+            - Added per-model and per-account inclusion, ordering, and routing strategies, including **Earliest to reset** and **Latest to reset**.
+            - The router tries another eligible picker candidate after an explicit model/account rejection, while avoiding replay on timeouts, rate limits, and ambiguous failures.
+            - Sidebar router status shows the account and model used by the most recent successful routed turn.
 
-            ### ✨ UI Cleanup
-            - **Sidebar**:
-              - Every session is visible at once; the "Show 6 more" pagination is gone.
-              - A labeled **Create workspace** button now sits directly below **New session**.
-              - The Feed view and Workspaces/Feed switcher are removed.
-            - **Preferences**:
-              - Removed the Model and Privacy groups and their toggles.
-              - Model reasoning stays on and anonymous usage sharing stays off.
-            - **Prompt Navigation**:
-              - Previous/Next Prompt now steps strictly to the adjacent prompt instead of re-selecting the current one.
-              - PageUp and PageDown navigate prompts from the transcript and composer, with guards for dialogs, menus, other scroll regions, and split panes.
+            ### NanamiWork Local Router
+            - Routing stays inside NanamiWork; OpenCode receives the selected provider model for each turn.
+            - ChatGPT, Copilot, and Antigravity accounts can participate when connected and eligible.
+            - Steers stay with the model already serving that conversation instead of switching accounts mid-turn.
+
+            ### Chat and Sidebar
+            - Undo waits for the server to confirm the revert before restoring the prompt.
+            - Manual transcript scrolling no longer races two competing anchor corrections, and a live-turn spacer that could leave blank scroll has been removed.
+            - Finished turns keep the assistant conclusion visible and tuck completed activity under one **Summary of Turn** control. Interrupted work and errors remain visible.
+            - Search and Settings now sit in the sidebar's top titlebar row, using the otherwise empty space.
 
             ### 📦 Downloads & Installers
-            - **Windows**: `NanamiWork-1.1.3-win-x64.exe` (NSIS Installer) & `NanamiWork-1.1.3-win-x64.appx` (Microsoft Store Package)
-            - **macOS**: `NanamiWork-1.1.3-mac-arm64.dmg` / `.zip` (Apple Silicon)
-            - **Linux**: `NanamiWork-1.1.3-linux-x86_64.AppImage` / `NanamiWork-1.1.3-linux-amd64.deb`
+            - **Windows**: NSIS installer and Microsoft Store package
+            - **macOS**: DMG and ZIP
+            - **Linux**: AppImage and Debian package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

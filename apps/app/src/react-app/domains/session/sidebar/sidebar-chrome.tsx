@@ -33,10 +33,12 @@ function SidebarToggle({ surface }: { surface: "sidebar" | "main" }) {
   );
 }
 
-export function SidebarTitlebar() {
+export function SidebarTitlebar({ onOpenSessionSearch, onOpenSettings }: { onOpenSessionSearch?: () => void; onOpenSettings?: () => void }) {
+  const { open } = useSidebar();
   return (
-    <div data-sidebar-titlebar className="window-titlebar mac-window-controls-inset flex shrink-0 items-center gap-1 px-2 titlebar-drag">
+    <div data-sidebar-titlebar className="window-titlebar mac-window-controls-inset flex shrink-0 items-center justify-between gap-1 px-2 titlebar-drag">
       <SidebarToggle surface="sidebar" />
+      {open ? <SidebarActions onOpenSessionSearch={onOpenSessionSearch} onOpenSettings={onOpenSettings} /> : null}
     </div>
   );
 }

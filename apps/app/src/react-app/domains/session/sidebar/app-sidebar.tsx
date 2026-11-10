@@ -35,7 +35,7 @@ import { LazyMotion, MotionContext, Reorder, domMax, m, useDragControls } from "
 
 import { getDisplaySessionTitle } from "../../../../app/lib/session-title";
 import type { WorkspaceInfo } from "../../../../app/lib/desktop";
-import { SidebarActions, SidebarTitlebar, type ConversationHistoryControls } from "./sidebar-chrome";
+import { SidebarTitlebar, type ConversationHistoryControls } from "./sidebar-chrome";
 import { useUiStateStore } from "../../../shell/ui-state-store";
 import type {
   WorkspaceConnectionState,
@@ -805,7 +805,7 @@ export function AppSidebar(props: AppSidebarProps) {
         collapsible="offcanvas"
         className="border-e-0 group-data-[side=left]:border-e-0 mac:**:data-[sidebar=sidebar]:bg-transparent"
       >
-        <SidebarTitlebar />
+        <SidebarTitlebar onOpenSessionSearch={props.onOpenSessionSearch} onOpenSettings={props.onOpenAccountSettings} />
         <div className="flex shrink-0 items-center pr-2 titlebar-drag">
         {brandLogoUrl ? (
           <div
@@ -823,7 +823,6 @@ export function AppSidebar(props: AppSidebarProps) {
             <span className="truncate text-[15px] font-medium tracking-[-0.4px]" title={brandAppName}>{brandAppName}</span>
           </div>
         )}
-        {open ? <SidebarActions onOpenSessionSearch={props.onOpenSessionSearch} onOpenSettings={props.onOpenAccountSettings} /> : null}
         </div>
         <SidebarHeader className="mb-0 mt-2">
           <SidebarMenu>
