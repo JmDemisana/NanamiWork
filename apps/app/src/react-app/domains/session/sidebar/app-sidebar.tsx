@@ -694,14 +694,9 @@ export function AppSidebar(props: AppSidebarProps) {
   const { open, isMobile } = useSidebar();
   const routerMode = useLocalRouterStore((state) => state.mode);
   const routerStrategies = useLocalRouterStore((state) => state.strategies);
-  const routerUsage = useLocalRouterStore((state) => state.usage);
   const selectedModel = props.activeComposerModel;
-  const lastRoutedKey = Object.entries(routerUsage).reduce<[string, number] | null>((current, [key, value]) =>
-    !current || value.lastUsedAt > current[1] ? [key, value.lastUsedAt] : current, null)?.[0];
-  const lastRoutedModelKey = lastRoutedKey?.slice((lastRoutedKey.lastIndexOf("|") + 1)) ?? null;
   const localRouterActive = hasLocalRouterRouting({ mode: routerMode, strategies: routerStrategies })
-    && (isLocalRouterModel(selectedModel)
-      || (selectedModel !== null && lastRoutedModelKey === `${selectedModel.providerID}:${selectedModel.modelID}`));
+    && isLocalRouterModel(selectedModel);
   // Lives in the UI store (not component state) so the open/closed state of
   // each workspace group survives this sidebar unmounting, e.g. while the
   // user is in Settings.
