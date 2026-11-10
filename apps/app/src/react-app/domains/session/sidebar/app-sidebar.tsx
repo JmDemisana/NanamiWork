@@ -998,7 +998,7 @@ function StudyNotebookItem({
   ];
 
   return (
-    <SidebarMenuItem className="group/study-item relative flex items-center">
+    <SidebarMenuSubItem className="group/study-item relative flex items-center">
       <ActionContextMenu actions={actions} contentClassName="w-48">
         <div className="relative min-w-0 flex-1">
           {editing ? (
@@ -1022,23 +1022,24 @@ function StudyNotebookItem({
               />
             </div>
           ) : (
-            <SidebarMenuButton
-              type="button"
+            <SidebarMenuSubButton
+              render={<button type="button" />}
               isActive={isActive}
-              tooltip={notebook.title}
+              aria-label={notebook.title}
+              className={cn(SESSION_ROW_BUTTON_CLASS, "w-full text-start pe-14")}
+              style={{ paddingInlineStart: sidebarRowPaddingInlineStart(0) }}
               onClick={onNavigate}
-              className="pr-12"
             >
-              <NotebookPen className="size-4 shrink-0 text-sidebar-foreground/70" />
-              <span className="truncate">{notebook.title}</span>
-              {isPinned && <Pin className="size-3 shrink-0 text-primary ml-auto" />}
-            </SidebarMenuButton>
+              <NotebookPen className="size-3.5 shrink-0 text-sidebar-foreground/70" />
+              <span className="truncate flex-1">{notebook.title}</span>
+              {isPinned && <Pin className="size-3 shrink-0 text-primary" />}
+            </SidebarMenuSubButton>
           )}
         </div>
       </ActionContextMenu>
 
       {!editing && (
-        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/study-item:opacity-100 transition-opacity">
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover/study-item:opacity-100 transition-opacity">
           <button
             type="button"
             className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
@@ -1065,7 +1066,7 @@ function StudyNotebookItem({
           </button>
         </div>
       )}
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
 }
 
@@ -1103,18 +1104,22 @@ function StudyNotebooksSection() {
             <Plus className="size-3.5" />
           </button>
         </div>
-        <SidebarMenu>
-          {active.map((notebook) => (
-            <StudyNotebookItem
-              key={notebook.id}
-              notebook={notebook}
-              isActive={location.pathname === `/study/${notebook.id}`}
-              onNavigate={() => navigate(`/study/${notebook.id}`)}
-            />
-          ))}
-          {active.length === 0 ? (
-            <p className="px-3 py-1 text-xs text-sidebar-foreground/50">No notebooks yet</p>
-          ) : null}
+        <SidebarMenu className="px-0">
+          <SidebarMenuItem>
+            <SidebarMenuSub className="mx-0 border-none px-0">
+              {active.map((notebook) => (
+                <StudyNotebookItem
+                  key={notebook.id}
+                  notebook={notebook}
+                  isActive={location.pathname === `/study/${notebook.id}`}
+                  onNavigate={() => navigate(`/study/${notebook.id}`)}
+                />
+              ))}
+              {active.length === 0 ? (
+                <p className="px-3 py-1 text-xs text-sidebar-foreground/50">No notebooks yet</p>
+              ) : null}
+            </SidebarMenuSub>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

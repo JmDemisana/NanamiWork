@@ -46,6 +46,7 @@ import {
 } from "./study-file-storage";
 import {
   extractGoogleDriveSource,
+  extractOfficeSource,
   extractPdfText,
   extractWebSource,
   extractYouTubeSource,
@@ -319,97 +320,20 @@ function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { 
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-study-notebook>
-      {/* Top Header */}
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4 bg-card/40">
-        <Button variant="ghost" size="icon-sm" aria-label="Back to notebooks" onClick={() => navigate("/study")}>
-          <ArrowLeft className="size-4" />
-        </Button>
-
-        {editingTitle ? (
-          <Input
-            autoFocus
-            className="h-7 max-w-sm text-sm"
-            value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
-            onBlur={() => { onRename(titleDraft); setEditingTitle(false); }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") { onRename(titleDraft); setEditingTitle(false); }
-              if (event.key === "Escape") { setTitleDraft(notebook.title); setEditingTitle(false); }
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            className="group/title flex min-w-0 items-center gap-1.5"
-            onClick={() => { setTitleDraft(notebook.title); setEditingTitle(true); }}
-            title="Click to rename notebook"
-          >
-            <span className="truncate text-sm font-medium">{notebook.title}</span>
-            <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title={notebook.pinned ? "Unpin notebook" : "Pin notebook"}
-            onClick={() => togglePin(notebook.id)}
-            className={notebook.pinned ? "text-primary" : "text-muted-foreground"}
-          >
-            {notebook.pinned ? <Pin className="size-3.5" /> : <PinOff className="size-3.5" />}
-          </Button>
-
-          {/* Model badge */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1.5 border-border/80 bg-background/50 hover:bg-accent"
-            onClick={() => onChooseModel(notebook.id)}
-            title="Select AI Model for this notebook"
-          >
-            <Sparkles className="size-3 text-primary" />
-            <span className="max-w-40 truncate">{notebook.model?.modelID || "Choose model"}</span>
-            {notebook.modelVariant ? <span className="text-[10px] text-muted-foreground">({notebook.modelVariant})</span> : null}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Archive notebook"
-            title="Archive notebook"
-            onClick={() => {
-              archiveNotebook(notebook.id, true);
-              navigate("/study");
-            }}
-          >
-            <Archive className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Delete notebook"
-            title="Delete notebook"
-            className="hover:text-destructive"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      </header>
-
       {/* Main 3-column NotebookLM Layout */}
       <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_300px] max-lg:grid-cols-[240px_minmax(0,1fr)]">
         {/* LEFT COLUMN: Sources */}
         <aside className="flex min-h-0 flex-col border-e border-border bg-card/20" data-study-sources>
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/60 px-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Sources</span>
-              <span className="flex size-4 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-semibold truncate text-foreground" title={notebook.title}>
+                {notebook.title}
+              </span>
+              <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground">
                 {notebook.sources.length}
               </span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               {notebook.sources.length > 0 ? (
                 <button
                   type="button"
@@ -425,7 +349,7 @@ function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { 
                 size="icon-xs"
                 className="size-6 rounded-md"
                 aria-label="Add source"
-                title="Add source (PDF, YouTube, Web, Drive, Text)"
+                title="Add source (Office, PDF, YouTube, Web, Drive, Text)"
                 onClick={() => setSourceModalOpen(true)}
               >
                 <Plus className="size-3.5" />
@@ -438,10 +362,7 @@ function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { 
               <div className="p-4 text-center">
                 <BookOpen className="mx-auto size-6 text-muted-foreground/60" />
                 <p className="mt-2 text-xs font-medium text-foreground">No sources yet</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Add PDFs, web links, YouTube videos, or notes to get started.</p>
-                <Button variant="outline" size="sm" className="mt-3 w-full text-xs" onClick={() => setSourceModalOpen(true)}>
-                  <Plus className="size-3.5" /> Add source
-                </Button>
+                <p className="mt-1 text-[11px] text-muted-foreground">Add files, web links, YouTube videos, or notes to get started.</p>
               </div>
             ) : (
               notebook.sources.map((source, index) => {
@@ -494,9 +415,18 @@ function NotebookWorkspace({ notebook, onRename, onChooseModel, onGenerate }: { 
           </div>
 
           <div className="border-t border-border p-2">
-            <Button variant="outline" size="sm" className="w-full justify-center text-xs" onClick={() => setSourceModalOpen(true)}>
-              <Plus className="size-3.5 mr-1" />
-              Add source
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-between text-xs border-border/80 bg-background/50 hover:bg-accent"
+              onClick={() => onChooseModel(notebook.id)}
+              title="Select AI Model for this notebook"
+            >
+              <span className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="size-3.5 text-primary shrink-0" />
+                <span className="truncate font-medium">{notebook.model?.modelID || "Choose model"}</span>
+              </span>
+              {notebook.modelVariant ? <span className="text-[10px] text-muted-foreground shrink-0">({notebook.modelVariant})</span> : null}
             </Button>
           </div>
         </aside>
@@ -813,6 +743,24 @@ function AddSourceModal({
         return;
       }
 
+      // Microsoft Office documents (.docx, .doc, .pptx, .ppt, .xlsx, .xls)
+      if (
+        lower.endsWith(".docx") || lower.endsWith(".doc") ||
+        lower.endsWith(".pptx") || lower.endsWith(".ppt") ||
+        lower.endsWith(".xlsx") || lower.endsWith(".xls")
+      ) {
+        const { text, pageCount } = await extractOfficeSource(file, name);
+        await onAdd({
+          name,
+          kind: "text",
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          text,
+          pageCount,
+        }, file);
+        return;
+      }
+
       // Plain text, markdown, json, csv
       const text = await file.text();
       if (!text.trim()) throw new Error("The selected file is empty.");
@@ -928,41 +876,41 @@ function AddSourceModal({
         </div>
 
         {/* Source Kind Tabs */}
-        <div className="mt-3 flex rounded-lg bg-muted/60 p-1 gap-1 text-xs">
+        <div className="mt-3 flex overflow-x-auto rounded-lg bg-muted/60 p-1 gap-1 text-xs [scrollbar-width:none]">
           <button
             type="button"
             onClick={() => { setTab("file"); setError(""); }}
-            className={cn("flex-1 rounded-md py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "file" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "file" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
           >
-            <FileText className="size-3.5" /> File (.pdf, .md, .txt)
+            <FileText className="size-3.5 shrink-0" /> Files
           </button>
           <button
             type="button"
             onClick={() => { setTab("youtube"); setError(""); }}
-            className={cn("flex-1 rounded-md py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "youtube" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "youtube" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
           >
-            <Video className="size-3.5" /> YouTube
+            <Video className="size-3.5 shrink-0" /> YouTube
           </button>
           <button
             type="button"
             onClick={() => { setTab("drive"); setError(""); }}
-            className={cn("flex-1 rounded-md py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "drive" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "drive" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
           >
-            <HardDrive className="size-3.5" /> Google Drive
+            <HardDrive className="size-3.5 shrink-0" /> Google Drive
           </button>
           <button
             type="button"
             onClick={() => { setTab("web"); setError(""); }}
-            className={cn("flex-1 rounded-md py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "web" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "web" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
           >
-            <Globe className="size-3.5" /> Website
+            <Globe className="size-3.5 shrink-0" /> Website
           </button>
           <button
             type="button"
             onClick={() => { setTab("text"); setError(""); }}
-            className={cn("flex-1 rounded-md py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "text" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
+            className={cn("flex-1 whitespace-nowrap rounded-md px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5", tab === "text" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground")}
           >
-            <Pencil className="size-3.5" /> Paste Text
+            <Pencil className="size-3.5 shrink-0" /> Paste Text
           </button>
         </div>
 
@@ -973,9 +921,9 @@ function AddSourceModal({
               className="cursor-pointer rounded-xl border border-dashed border-border p-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/30"
             >
               <FileText className="mx-auto size-8 text-primary" />
-              <h3 className="mt-2 text-sm font-medium">Upload PDF, Markdown, or Text files</h3>
+              <h3 className="mt-2 text-sm font-medium">Upload Office, PDF, Markdown, or Text files</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Supports PDF (with text extraction), Markdown (.md), Plain Text (.txt), JSON, and CSV.
+                Supports Microsoft Office (.docx, .doc, .pptx, .ppt, .xlsx, .xls), PDF (with text extraction), Markdown, Plain Text, JSON, and CSV.
               </p>
               <div className="mt-4">
                 <Button size="sm" variant="outline" disabled={loading} type="button">
@@ -985,7 +933,7 @@ function AddSourceModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.txt,.md,.markdown,.json,.csv,application/pdf,text/plain,text/markdown"
+                accept=".docx,.doc,.pptx,.ppt,.xlsx,.xls,.pdf,.txt,.md,.markdown,.json,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/markdown"
                 className="hidden"
                 onChange={(e) => void handleFileUpload(e.target.files?.[0])}
               />

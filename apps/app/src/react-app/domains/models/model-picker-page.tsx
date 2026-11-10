@@ -216,10 +216,10 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         {routerSettingsOpen ? (
           <motion.div
             key="router-settings"
-            initial={{ opacity: 0, x: 14 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -14 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
+            initial={{ opacity: 0, y: 3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 3 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
             className="flex h-full min-h-0 flex-col"
           >
             <LocalRouterSettingsPage accounts={routerAccounts} onBack={() => setRouterSettingsOpen(false)} />
@@ -227,10 +227,10 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
         ) : (
           <motion.div
             key="model-picker-main"
-            initial={{ opacity: 0, x: -14 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 14 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
+            initial={{ opacity: 0, y: -3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
             className="flex h-full min-h-0 flex-col"
           >
             <h1 className="sr-only">Models</h1>
