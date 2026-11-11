@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { DotMatrixLoader } from "@/components/ui/dot-matrix-loader";
+import { OwDotTicker } from "@/react-app/shell/dot-ticker";
 import { cn } from "@/lib/utils";
 
 type SessionDotMatrixLoaderProps = {
@@ -7,13 +7,12 @@ type SessionDotMatrixLoaderProps = {
   label: string;
 };
 
-/** Sidebar left-lane activity indicator — shared dot-matrix in the fixed slot. */
+/** Match the startup ticker while retaining the sidebar status announcement. */
 export function SessionDotMatrixLoader({ className, label }: SessionDotMatrixLoaderProps) {
   return (
-    <DotMatrixLoader
-      data-session-loading-indicator
-      label={label}
-      className={cn("text-sidebar-foreground", className)}
-    />
+    <span data-session-loading-indicator role="status" aria-label={label} title={label}
+      className={cn("inline-flex shrink-0 items-center justify-center text-sidebar-foreground", className)}>
+      <OwDotTicker size="md" />
+    </span>
   );
 }
