@@ -279,6 +279,7 @@ export function ModelPickerPage(props: ModelPickerModalProps & {
                 behaviorValue={behaviorValue}
                 fallbackBehaviorOptions={props.fallbackBehaviorOptions}
                 onSelect={handleSelect}
+                onNanamiNsfwGrant={props.onNanamiNsfwGrant}
                 onBehaviorChange={(value) => props.onBehaviorChange(props.current, value)}
                 catalogState={catalogState}
                 retainedSelection={retained}

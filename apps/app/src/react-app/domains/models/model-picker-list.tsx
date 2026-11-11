@@ -54,6 +54,7 @@ export type ModelPickerListProps = {
   query: string;
   onQueryChange: (value: string) => void;
   onSelect: (option: ModelOption, behavior?: { variant: string | null }) => void;
+  onNanamiNsfwGrant?: (grant: string) => Promise<void>;
   focusAlternative?: boolean;
   footer?: ReactNode;
   leading?: ReactNode;
@@ -585,7 +586,7 @@ export function ModelProviderLoginBar({
   </div>;
 }
 
-function ModelPickerRows({ options, current, query, onQueryChange, onSelect, focusAlternative = false, footer, leading, searchInputRef,
+function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onNanamiNsfwGrant, focusAlternative = false, footer, leading, searchInputRef,
   catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false, chrome = "panel",
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
   const display = { plainFreeModel };
@@ -681,6 +682,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinChecking, setPinChecking] = useState(false);
+  const [nsfwTarget, setNsfwTarget] = useState<{ option: ModelOption; variant?: { variant: string | null } } | null>(null);
+  const [nsfwInput, setNsfwInput] = useState("");
+  const [nsfwError, setNsfwError] = useState<string | null>(null);
+  const [nsfwChecking, setNsfwChecking] = useState(false);
 
   const handleUnlockPin = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -712,12 +717,51 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
       setPinChecking(false);
     }
   };
+  const handleUnlockNsfw = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (!nsfwTarget || nsfwChecking) return;
+    const code = nsfwInput.trim();
+    if (!code) {
+      setNsfwError("Enter the separate Uncensored Models code.");
+      return;
+    }
+    setNsfwChecking(true);
+    setNsfwError(null);
+    try {
+      const response = await fetch("https://nanami-ai.pages.dev/api/nsfw-gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify-strict", code }),
+      });
+      const data = await response.json().catch(() => ({})) as { grant?: unknown; error?: unknown };
+      if (!response.ok || typeof data.grant !== "string" || !data.grant) {
+        setNsfwError(typeof data.error === "string" ? data.error : "The Uncensored Models code was rejected.");
+        return;
+      }
+      if (!onNanamiNsfwGrant) throw new Error("NanamiWork could not configure the temporary gateway grant.");
+      await onNanamiNsfwGrant(data.grant);
+      const target = nsfwTarget;
+      setNsfwTarget(null);
+      setNsfwInput("");
+      onSelect(target.option, target.variant);
+    } catch (error) {
+      setNsfwError(error instanceof Error ? error.message : "Could not reach the Nanami gate server.");
+    } finally {
+      setNsfwChecking(false);
+    }
+  };
   const blockedAuto = (option: ModelRef) => autoRow?.state !== undefined && autoRow.state !== "ready" && modelRefKey(option) === modelRefKey(autoRow.model);
   const canSelect = (option: ModelOption) => !option.disabled && !blockedAuto(option) && nonGoogleOptions.some((item) => modelRefKey(item) === modelRefKey(option) && !item.disabled);
   const select = (option: ModelOption) => {
     if (!canSelect(option)) return;
     const variant = search ? resolveSearchIntent(option, search.intent).variant : undefined;
     const variantObj = variant === undefined ? undefined : { variant };
+    if (option.providerID === "nanami" && option.modelID === "uncensored") {
+      setNsfwTarget({ option, variant: variantObj });
+      setNsfwInput("");
+      setNsfwError(null);
+      return;
+    }
     if (option.providerID === "nanami") {
       setPinTarget({ option, variant: variantObj });
       setPinInput("");
@@ -828,6 +872,23 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, foc
     if (!option) return;
     event.preventDefault(); event.stopPropagation(); toggle(option);
   }}>
+    {nsfwTarget ? (
+      <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/95 p-5 backdrop-blur-xs">
+        <form onSubmit={handleUnlockNsfw} className="w-full max-w-sm rounded-xl border border-amber-500/25 bg-card p-5 text-left shadow-xl">
+          <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-400"><Lock className="size-5" /></div>
+          <h3 className="text-base font-semibold tracking-tight text-foreground">Separate Uncensored Gate</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Enter the code configured in Nanami AI’s server-side Key Vault. The site promo does not unlock this model.</p>
+          <input type="password" autoFocus disabled={nsfwChecking} placeholder="Uncensored Models code" value={nsfwInput}
+            onChange={(event) => { setNsfwInput(event.target.value); setNsfwError(null); }}
+            className="mt-4 h-10 w-full rounded-lg border border-border bg-background px-3 text-center font-mono text-sm tracking-widest text-foreground outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60" />
+          {nsfwError ? <p role="alert" className="mt-2 text-xs text-rose-400">{nsfwError}</p> : null}
+          <div className="mt-4 flex gap-2">
+            <Button type="button" variant="ghost" disabled={nsfwChecking} className="flex-1" onClick={() => { setNsfwTarget(null); setNsfwInput(""); setNsfwError(null); }}>Cancel</Button>
+            <Button type="submit" disabled={nsfwChecking} className="flex-1 bg-amber-500 text-white hover:bg-amber-600">{nsfwChecking ? <><Loader2 className="mr-2 size-4 animate-spin" /> Verifying</> : "Unlock & Switch"}</Button>
+          </div>
+        </form>
+      </div>
+    ) : null}
     {pinTarget ? (
       <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-xs p-6 text-center select-none animate-in fade-in-0 duration-150">
         <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 mb-3 shadow-xs">

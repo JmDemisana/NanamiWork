@@ -11,6 +11,7 @@ test("a page drawn scaled gets its viewport first, view-pixel input and full-res
     matches() { return false; }
     closest() { return null; }
     contains(element) { return element === this; }
+    getClientRects() { return [this.getBoundingClientRect()]; }
     getBoundingClientRect() { return { x: 100, y: 200, left: 100, top: 200, right: 180, bottom: 240, width: 80, height: 40 }; }
     focus() {}
   }
@@ -43,8 +44,14 @@ test("a page drawn scaled gets its viewport first, view-pixel input and full-res
   assert.deepEqual(captured.map(viewport => ({ ...viewport })), [{ width: 1280, height: 800 }]);
   assert.equal(seen.image.data, Buffer.from("full-resolution").toString("base64"));
 
-  const clicked = await host.request({ sessionId: "chat", operation: "act", args: { tabId: "tab", observationId: seen.observationId,
-    action: { type: "click", ref: seen.elements[0].ref } } });
+  const interactive = await host.request({ sessionId: "chat", operation: "observe", args: { tabId: "tab", mode: "interactive" } });
+  assert.deepEqual({ ...interactive.viewport }, { width: 1280, height: 800 }, `Compact observations keep geometry for programmatic scrolling: ${JSON.stringify(interactive)}`);
+  assert.deepEqual({ ...interactive.scroll }, { x: 0, y: 0 });
+  assert.deepEqual({ ...interactive.elements[0].bounds }, { x: 100, y: 200, width: 80, height: 40 });
+  assert.equal(interactive.elements[0].visible, true);
+
+  const clicked = await host.request({ sessionId: "chat", operation: "act", args: { tabId: "tab", observationId: interactive.observationId,
+    action: { type: "click", ref: interactive.elements[0].ref } } });
   assert.equal(clicked.ok, true, JSON.stringify(clicked));
   const press = sent.find(command => command.params?.type === "mousePressed");
   assert.deepEqual([press.params.x, press.params.y], [70, 110], "CSS (140, 220) is (70, 110) in a view drawn at 50%");

@@ -49,6 +49,7 @@ export type ModelPickerPanelProps = {
   fallbackBehaviorOptions?: readonly { value: string | null; label: string }[];
   /** `behavior.variant` is set when the search named an option such as "fast" or "high". */
   onSelect: (option: ModelOption, behavior?: { variant: string | null }) => void;
+  onNanamiNsfwGrant?: (grant: string) => Promise<void>;
   /** Omit where effort cannot be changed. */
   onBehaviorChange?: (value: string | null) => void;
   catalogState: ModelPickerCatalogState;
@@ -117,7 +118,7 @@ export function ModelPickerPanel(props: ModelPickerPanelProps) {
     </div>;
   }
 
-  return <ModelPickerList searchInputRef={props.searchInputRef} autoFocusSearch={false} options={options} current={current} query={query} onQueryChange={setQuery} onSelect={props.onSelect}
+  return <ModelPickerList searchInputRef={props.searchInputRef} autoFocusSearch={false} options={options} current={current} query={query} onQueryChange={setQuery} onSelect={props.onSelect} onNanamiNsfwGrant={props.onNanamiNsfwGrant}
     focusAlternative={props.focusAlternative} catalogState={props.catalogState} retainedSelection={props.retainedSelection} onConnectProvider={props.onConnectProvider} onConnectCodex={props.onConnectCodex}
     onOpenProviderSettings={props.onOpenProviderSettings} onSetWorkspaceDefault={props.onSetWorkspaceDefault} currentBehaviorValue={behaviorValue}
     openWorkModelsSyncing={props.autoVisible && props.openWorkModelsSyncing} onReloadWorkspace={props.onReloadWorkspace} onRetryAuto={props.catalogState.onRetry} onClose={props.onClose}

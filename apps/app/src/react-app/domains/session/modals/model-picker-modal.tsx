@@ -36,6 +36,7 @@ export type ModelPickerModalProps = {
   current: ModelRef;
   currentBehaviorValue?: string | null;
   onSelect: (model: ModelRef) => void;
+  onNanamiNsfwGrant?: (grant: string) => Promise<void>;
   onBehaviorChange: (model: ModelRef, value: string | null) => void;
   onToggleProvider?: (providerId: string, enabled: boolean) => void;
   onOpenSettings: () => void;
@@ -92,7 +93,7 @@ export function ModelPickerModal(props: ModelPickerModalProps) {
     <DialogContent ref={popupRef} showCloseButton={true} initialFocus={() => isMobile ? popupRef.current : searchInputRef.current} aria-describedby={undefined}
       className="flex max-h-[min(calc(100dvh-2.5rem),40rem)] min-h-0 w-[33rem] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[33rem] lg:w-[33rem] lg:max-w-[33rem] lg:rounded-2xl" data-testid="all-models-picker">
       <DialogTitle className="sr-only">Models</DialogTitle>
-      <ModelPickerPanel searchInputRef={searchInputRef} options={options} current={props.current} behaviorValue={behaviorValue}
+      <ModelPickerPanel searchInputRef={searchInputRef} options={options} current={props.current} behaviorValue={behaviorValue} onNanamiNsfwGrant={props.onNanamiNsfwGrant}
         onSelect={(option, behavior) => {
           const commit = () => {
             props.onSelect({ providerID: option.providerID, modelID: option.modelID });

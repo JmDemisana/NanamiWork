@@ -4549,6 +4549,30 @@ export function SessionRoute() {
         setModelPickerSessionId(null);
         modelPicker.setOpen(false);
       }}
+      onNanamiNsfwGrant={async (grant) => {
+        if (!opencodeClient) throw new Error("NanamiWork engine is not connected.");
+        const current = unwrap(await opencodeClient.config.get()) as Record<string, any>;
+        const provider = current.provider && typeof current.provider === "object" ? current.provider : {};
+        const nanami = provider.nanami && typeof provider.nanami === "object" ? provider.nanami : {};
+        const models = nanami.models && typeof nanami.models === "object" ? nanami.models : {};
+        const uncensoredModel = models.uncensored && typeof models.uncensored === "object" ? models.uncensored : {};
+        const modelHeaders = uncensoredModel.headers && typeof uncensoredModel.headers === "object" ? uncensoredModel.headers : {};
+        await opencodeClient.config.update({
+          config: {
+            ...current,
+            provider: {
+              ...provider,
+              nanami: {
+                ...nanami,
+                models: {
+                  ...models,
+                  uncensored: { ...uncensoredModel, headers: { ...modelHeaders, "x-nami-nsfw-grant": grant } },
+                },
+              },
+            },
+          },
+        });
+      }}
       disabledProviders={disabledProviderIds}
       gatewayProviderIds={gatewayProviderIds}
       gatewayConnectProviders={gatewayConnectProviders}

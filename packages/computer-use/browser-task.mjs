@@ -212,9 +212,9 @@ function observePage(id, options = {}) {
   const identify = (element, control) => JSON.stringify([control.tag, control.role, control.type ?? null, control.sensitive,
     element.isContentEditable || ["textbox", "combobox", "searchbox"].includes(control.role) && !(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)
       ? [element.getAttribute("aria-label"), element.getAttribute("aria-labelledby")] : control.name]);
-  const compact = (ref, control, visible) => {
+  const compact = (ref, control, visible, bounds, needsReveal) => {
     /** @type {Record<string, unknown>} */
-    const item = { ref, role: control.role, name: control.name.slice(0, 120) };
+    const item = { ref, role: control.role, name: control.name.slice(0, 120), bounds, visible, needsReveal };
     if (control.type && !["text", "submit", "button"].includes(control.type)) item.type = control.type;
     if (control.value !== undefined && control.value !== "" && !control.options) item.value = control.value.length > 300 ? `${control.value.slice(0, 300)}…` : control.value;
     if (control.valueWithheld) { item.filled = control.filled === true; item.valueWithheld = true; }
@@ -270,7 +270,8 @@ function observePage(id, options = {}) {
       if (/auto|scroll|hidden|clip/.test(parentStyle.overflowY)) { top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom); }
     }
     const visible = right > left && bottom > top;
-    const item = compact(ref, control, visible);
+    const item = compact(ref, control, visible, { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      left > rect.left || top > rect.top || right < rect.right || bottom < rect.bottom);
     items.push(item);
     // Only options the model was shown can be chosen; a truncated list hides the rest.
     if (Array.isArray(item.options)) registry.shownOptions.set(element, new Set((interactive ? item.options : control.options).map((option) => option.value)));
@@ -781,7 +782,10 @@ export function createBrowserTaskHost({ getTab, tabsFor, ownerOf, activeFor, isV
     // This page script is isolated from the site's own tools, so the host's count says whether to look for them.
     const siteTools = tab.webMcpToolCount > 0 ? { siteTools: tab.webMcpToolCount } : {};
     if (mode === "interactive") {
-      const { hasPaymentField, hasCredentialField: _credential, viewport: _viewport, scroll: _scroll, ...compact } = page;
+      // The program wrapper needs the actual viewport to choose safe scroll
+      // coordinates and decide whether a control is off-screen. Keep the
+      // small geometry fields even in compact interactive observations.
+      const { hasPaymentField, hasCredentialField: _credential, ...compact } = page;
       return { ok: true, tabId: tab.tabId, observationId: id, url: safeUrl(url), trust: TRUST, ...compact, ...siteTools, ...(hasPaymentField ? { payment: "take_over" } : {}), ...(image ? { image } : {}) };
     }
     const { hasCredentialField: _credential, ...full } = page;

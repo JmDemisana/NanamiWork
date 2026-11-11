@@ -58,6 +58,38 @@ test("standard JavaScript programs drive the same helpers and report the same re
   assert.equal(result.mayHaveActed, true);
 });
 
+test("browser scroll uses the observed viewport for useful CSS coordinates and distance", async () => {
+  const calls = [];
+  const host = {
+    computer: async () => { throw new Error("Wrong surface"); },
+    browser: async (operation, args) => {
+      calls.push({ operation, args });
+      if (operation === "observe") return { ok: true, observationId: "page-1", viewport: { width: 1280, height: 800 }, scroll: { x: 0, y: 0 }, elements: [] };
+      return { ok: true, dispatched: true };
+    },
+  };
+  const result = await run("await tools.ui.scroll({ direction: 'down' }); return true;", host, { standardCodeMode: true });
+  assert.equal(result.ok, true, JSON.stringify(result.error));
+  assert.deepEqual(calls[1].args.action, { type: "scroll", x: 832, y: 520, deltaY: 600 });
+});
+
+test("browser scroll can target a named scroll container", async () => {
+  const calls = [];
+  const host = {
+    computer: async () => { throw new Error("Wrong surface"); },
+    browser: async (operation, args) => {
+      calls.push({ operation, args });
+      if (operation === "observe") return { ok: true, observationId: "page-1", viewport: { width: 1280, height: 800 }, scroll: { x: 0, y: 0 }, elements: [
+        { ref: "results", role: "region", name: "Results", bounds: { x: 100, y: 200, width: 400, height: 200 }, visible: true },
+      ] };
+      return { ok: true, dispatched: true };
+    },
+  };
+  const result = await run("await tools.ui.scroll({ container: { role: 'region', name: 'Results' } }); return true;", host, { standardCodeMode: true });
+  assert.equal(result.ok, true, JSON.stringify(result.error));
+  assert.deepEqual(calls[1].args.action, { type: "scroll", x: 300, y: 300, deltaY: 150 });
+});
+
 test("the host's option, not the program, picks the interpreter", async () => {
   // TypeScript annotations: OpenWork's Code Mode strips them, standard JavaScript rejects them.
   const typed = 'const found: boolean = await tools.ui.exists({ target: { name: "Save" } }); return found;';

@@ -2,8 +2,8 @@
  * Nanami Gateway default provider integration.
  *
  * This fork routes every model through `https://nanami-ai.pages.dev/api/v1`,
- * an OpenAI-compatible router. The gateway exposes exactly two model ids
- * (`gemini-router` and `openrouter`) and rejects a `nanami/` prefix, so those
+ * an OpenAI-compatible router. The gateway exposes three model ids
+ * (`gemini-router`, `openrouter`, and `uncensored`) and rejects a `nanami/` prefix, so those
  * ids are also the ids the engine must send upstream.
  *
  * Local providers remain available by default. Set `OPENWORK_NANAMI_ONLY=1`
@@ -36,6 +36,22 @@ function nanamiModelConfig(): Record<string, unknown> {
       output: { text: true },
     },
     limit: { context: 128_000, output: 16_384 },
+  };
+}
+
+function nanamiUncensoredModelConfig(): Record<string, unknown> {
+  return {
+    tool_call: true,
+    reasoning: false,
+    attachment: false,
+    modalities: { input: ["text"], output: ["text"] },
+    capabilities: {
+      tools: true,
+      attachment: false,
+      input: { text: true },
+      output: { text: true },
+    },
+    limit: { context: 64_000, output: 4_096 },
   };
 }
 
@@ -144,6 +160,7 @@ export function nanamiProviderSpec(apiKey: string, baseUrl = nanamiGatewayBaseUr
     models: [
       { id: "gemini-router", name: "Gemini", config: nanamiModelConfig() },
       { id: "openrouter", name: "OpenRouter", config: nanamiModelConfig() },
+      { id: "uncensored", name: "Uncensored Models (NSFW gate)", config: nanamiUncensoredModelConfig() },
     ],
   };
 }
@@ -157,19 +174,26 @@ export function nanamiProviderSpec(apiKey: string, baseUrl = nanamiGatewayBaseUr
 export function enforceNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], apiKey = nanamiApiKey()): OpencodeV2ProviderSpec[] {
   const configured = specs.find((spec) => spec.id === NANAMI_PROVIDER_ID);
   if (!configured) return [nanamiProviderSpec(apiKey)];
+  const defaults = nanamiProviderSpec(apiKey, configured.baseUrl || nanamiGatewayBaseUrl());
+  const models = new Map(defaults.models.map((model) => [model.id, model]));
+  for (const model of configured.models) models.set(model.id, model);
   return [{
     ...configured,
     name: configured.name || "Nanami Gateway",
     baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(),
     apiKey: configured.apiKey || apiKey,
+    models: [...models.values()],
   }];
 }
 
 /** Add the local default gateway without hiding any independently configured provider. */
 export function withNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], apiKey = nanamiApiKey()): OpencodeV2ProviderSpec[] {
   const configured = specs.find((spec) => spec.id === NANAMI_PROVIDER_ID);
+  const defaults = nanamiProviderSpec(apiKey, configured?.baseUrl || nanamiGatewayBaseUrl());
+  const models = new Map(defaults.models.map((model) => [model.id, model]));
+  for (const model of configured?.models ?? []) models.set(model.id, model);
   const gateway = configured
-    ? { ...configured, name: configured.name || "Nanami Gateway", baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(), apiKey: configured.apiKey || apiKey }
+    ? { ...configured, name: configured.name || "Nanami Gateway", baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(), apiKey: configured.apiKey || apiKey, models: [...models.values()] }
     : nanamiProviderSpec(apiKey);
   return [...specs.filter((spec) => spec.id !== NANAMI_PROVIDER_ID), gateway];
 }
@@ -194,6 +218,19 @@ export function nanamiLegacyProviderConfig(apiKey = nanamiApiKey(), baseUrl = na
       output: { text: true },
     },
   });
+  const uncensoredModel = () => ({
+    tool_call: true,
+    reasoning: false,
+    attachment: false,
+    limit: { context: 48_000, input: 44_000, output: 4_096 },
+    modalities: { input: ["text"], output: ["text"] },
+    capabilities: {
+      tools: true,
+      attachment: false,
+      input: { text: true },
+      output: { text: true },
+    },
+  });
   return {
     npm: "@ai-sdk/openai-compatible",
     name: "Nanami Gateway",
@@ -201,6 +238,7 @@ export function nanamiLegacyProviderConfig(apiKey = nanamiApiKey(), baseUrl = na
     models: {
       "gemini-router": { name: "Gemini", ...model() },
       openrouter: { name: "OpenRouter", ...model() },
+      uncensored: { name: "Uncensored Models (NSFW gate)", ...uncensoredModel() },
     },
   };
 }

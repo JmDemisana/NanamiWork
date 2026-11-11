@@ -66,11 +66,21 @@ export const OpenWorkGatewayQuota = async () => ({
           output: { text: true },
         },
       });
+      const nanamiUncensoredMod = {
+        name: "Uncensored Models (NSFW gate)",
+        tool_call: true,
+        reasoning: false,
+        attachment: false,
+        limit: { context: 48000, input: 44000, output: 4096 },
+        modalities: { input: ["text"], output: ["text"] },
+        capabilities: { tools: true, attachment: false, input: { text: true }, output: { text: true } },
+      };
       const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
       nanamiProv.name ??= "Nanami Router Models";
       nanamiProv.models = {
         "gemini-router": nanamiMod("Gemini"),
         openrouter: nanamiMod("OpenRouter"),
+        uncensored: nanamiUncensoredMod,
         ...(record(nanamiProv.models) ? nanamiProv.models : {}),
       };
       const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
