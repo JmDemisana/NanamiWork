@@ -628,7 +628,8 @@ export function resolveLocalRouterCandidates(
     if (candidate.model.remainingFraction !== null) {
       return candidate.model.remainingFraction > 0;
     }
-    return candidate.account.kind === "local";
+    const resetAt = candidate.model.resetTime ? Date.parse(candidate.model.resetTime) : Number.NaN;
+    return candidate.account.kind === "local" || (Number.isFinite(resetAt) && resetAt <= Date.now());
   });
   if (usable.length === 0) return [];
   const pool = usable;

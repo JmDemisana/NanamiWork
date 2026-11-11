@@ -67,7 +67,7 @@ export const OpenWorkGatewayQuota = async () => ({
         },
       });
       const nanamiUncensoredMod = {
-        name: "Uncensored Models (NSFW gate)",
+        name: "Uncensored Models",
         tool_call: true,
         reasoning: false,
         attachment: false,

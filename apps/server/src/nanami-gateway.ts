@@ -160,7 +160,7 @@ export function nanamiProviderSpec(apiKey: string, baseUrl = nanamiGatewayBaseUr
     models: [
       { id: "gemini-router", name: "Gemini", config: nanamiModelConfig() },
       { id: "openrouter", name: "OpenRouter", config: nanamiModelConfig() },
-      { id: "uncensored", name: "Uncensored Models (NSFW gate)", config: nanamiUncensoredModelConfig() },
+      { id: "uncensored", name: "Uncensored Models", config: nanamiUncensoredModelConfig() },
     ],
   };
 }
@@ -238,7 +238,7 @@ export function nanamiLegacyProviderConfig(apiKey = nanamiApiKey(), baseUrl = na
     models: {
       "gemini-router": { name: "Gemini", ...model() },
       openrouter: { name: "OpenRouter", ...model() },
-      uncensored: { name: "Uncensored Models (NSFW gate)", ...uncensoredModel() },
+      uncensored: { name: "Uncensored Models", ...uncensoredModel() },
     },
   };
 }

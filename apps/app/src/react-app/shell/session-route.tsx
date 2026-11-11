@@ -3948,7 +3948,7 @@ export function SessionRoute() {
       if (!prepared) throw new Error("Workspace is unavailable. Reconnect and retry.");
       bindPendingConversationWorkspace(pending.id, prepared.workspaceId);
       const refreshed = workspacesRef.current.find((workspace) => workspace.id === prepared?.workspaceId);
-      return createRouteSessionOnEngine((refreshed && endpointForWorkspace(refreshed)) || prepared.endpoint, prepared.path || undefined);
+      return createRouteSessionOnEngine((refreshed && endpointForWorkspace(refreshed)) || prepared.endpoint, prepared.path || undefined, prompt);
     }, (created) => {
       const current = usePendingConversationStore.getState().conversations[pending.id];
       if (current) publishCreatedConversation(current, created, newTaskAgent, prepared?.title);
@@ -4320,7 +4320,7 @@ export function SessionRoute() {
             if (!currentWorkspace) throw new Error("Workspace is unavailable. Try again.");
             const workspaceEndpoint = endpointForWorkspace(currentWorkspace);
             if (!workspaceEndpoint?.token) throw new Error("Workspace is disconnected. Reconnect and try again.");
-            return createRouteSessionOnEngine(workspaceEndpoint, currentWorkspace.path?.trim() || undefined);
+            return createRouteSessionOnEngine(workspaceEndpoint, currentWorkspace.path?.trim() || undefined, prompt);
           }, (created) => publishCreatedConversation(pending, created, agent, workspace?.displayNameResolved));
         },
         onOpenRenameWorkspace: handleOpenRenameWorkspace,

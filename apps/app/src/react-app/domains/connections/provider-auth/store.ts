@@ -1915,6 +1915,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
     providerId: string,
     methodIndex: number,
     code?: string,
+    requireCallback = false,
   ) {
     setStateField("providerAuthError", null);
     const c = options.client();
@@ -1979,6 +1980,7 @@ export function createProviderAuthStore(options: CreateProviderAuthStoreOptions)
       return { connected: false, pending: true };
     } catch (error) {
       if (isPendingOauthError(error)) {
+        if (requireCallback) return { connected: false, pending: true };
         const updated = await refreshProviders({ dispose: true });
         if (Array.isArray(updated?.connected) && updated.connected.includes(resolved)) {
           return { connected: true, message: `${t("status.connected")} ${resolved}` };

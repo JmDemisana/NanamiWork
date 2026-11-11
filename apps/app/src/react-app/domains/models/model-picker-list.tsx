@@ -30,6 +30,7 @@ export function ModelSourceIcon({ model }: { model: ModelRef & { source?: ModelO
 }
 
 function ProviderMark({ model, description, retained = false, plainFreeModel = false }: { model: ModelRef & { title?: string }; description?: string; retained?: boolean; plainFreeModel?: boolean }) {
+  if (model.providerID === "nanami" && model.modelID === "uncensored") return null;
   const maker = retained ? null : modelMakerId(model);
   return <div data-slot="model-provider-mark" className="flex size-4 shrink-0 items-center justify-center">
     {isAutoModel(model) && !plainFreeModel ? <OpenWorkMark className="size-4 text-dls-accent dark:text-foreground" />
@@ -873,18 +874,68 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     event.preventDefault(); event.stopPropagation(); toggle(option);
   }}>
     {nsfwTarget ? (
-      <div className="absolute inset-0 z-[60] flex items-center justify-center bg-background/95 p-5 backdrop-blur-xs">
-        <form onSubmit={handleUnlockNsfw} className="w-full max-w-sm rounded-xl border border-amber-500/25 bg-card p-5 text-left shadow-xl">
-          <div className="mb-3 flex size-10 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-400"><Lock className="size-5" /></div>
-          <h3 className="text-base font-semibold tracking-tight text-foreground">Separate Uncensored Gate</h3>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Enter the code configured in Nanami AI’s server-side Key Vault. The site promo does not unlock this model.</p>
-          <input type="password" autoFocus disabled={nsfwChecking} placeholder="Uncensored Models code" value={nsfwInput}
-            onChange={(event) => { setNsfwInput(event.target.value); setNsfwError(null); }}
-            className="mt-4 h-10 w-full rounded-lg border border-border bg-background px-3 text-center font-mono text-sm tracking-widest text-foreground outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60" />
-          {nsfwError ? <p role="alert" className="mt-2 text-xs text-rose-400">{nsfwError}</p> : null}
-          <div className="mt-4 flex gap-2">
-            <Button type="button" variant="ghost" disabled={nsfwChecking} className="flex-1" onClick={() => { setNsfwTarget(null); setNsfwInput(""); setNsfwError(null); }}>Cancel</Button>
-            <Button type="submit" disabled={nsfwChecking} className="flex-1 bg-amber-500 text-white hover:bg-amber-600">{nsfwChecking ? <><Loader2 className="mr-2 size-4 animate-spin" /> Verifying</> : "Unlock & Switch"}</Button>
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-xs p-6 text-center select-none animate-in fade-in-0 duration-150">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 mb-3 shadow-xs">
+          <Lock className="size-6" />
+        </div>
+        <h3 className="text-base font-semibold tracking-tight text-foreground">
+          Uncensored Gate Code Required
+        </h3>
+        <p className="mt-1 text-xs text-muted-foreground max-w-xs leading-relaxed">
+          Enter the uncensored code from the Nanami AI portal to switch to{" "}
+          <span className="font-medium text-foreground">{nsfwTarget.option.title}</span>.
+        </p>
+        <form
+          onSubmit={handleUnlockNsfw}
+          className="mt-4 flex w-full max-w-xs flex-col gap-2.5"
+        >
+          <input
+            type="password"
+            autoFocus
+            disabled={nsfwChecking}
+            placeholder="Enter uncensored code..."
+            value={nsfwInput}
+            onChange={(e) => {
+              setNsfwInput(e.target.value);
+              setNsfwError(null);
+            }}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 py-1 text-center font-mono text-sm tracking-widest text-foreground outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-60"
+          />
+          {nsfwError ? (
+            <span className="text-[11px] font-medium text-rose-400 animate-in fade-in-0">
+              {nsfwError}
+            </span>
+          ) : null}
+          <div className="flex gap-2 mt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={nsfwChecking}
+              className="flex-1 text-xs h-9 cursor-pointer"
+              onClick={() => {
+                setNsfwTarget(null);
+                setNsfwInput("");
+                setNsfwError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={nsfwChecking}
+              className="flex-1 text-xs h-9 bg-amber-500 hover:bg-amber-600 text-white font-medium cursor-pointer disabled:opacity-50"
+            >
+              {nsfwChecking ? (
+                <div className="flex items-center justify-center gap-1.5">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <span>Verifying...</span>
+                </div>
+              ) : (
+                "Unlock & Switch"
+              )}
+            </Button>
           </div>
         </form>
       </div>
@@ -1021,7 +1072,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
           <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
-        <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : undefined}>
+        <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[50rem]/modelgrid:grid-cols-2 @[75rem]/modelgrid:grid-cols-3" : undefined}>
         {groups.length > 0 || chrome !== "page" ? <CommandList className={chrome === "page" ? "not-empty:p-0" : undefined}>
           {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "px-2 py-1" : undefined}>
             {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
@@ -1072,7 +1123,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         {leading ? <div className={chrome === "page" ? "px-2 py-1" : "px-2 pb-1"}><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">Local Router</p>{leading}</div> : null}
         </div>
         {visibleConnectedAccounts.length > 0 ? (
-          <div data-testid="model-account-grid" className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-3 px-2 pb-1 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : "pb-1"}>
+          <div data-testid="model-account-grid" className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-3 px-2 pb-1 @[50rem]/modelgrid:grid-cols-2 @[75rem]/modelgrid:grid-cols-3" : "pb-1"}>
             {visibleConnectedAccounts.map((entry, index) => {
               const moveProps = chrome === "page" && !searching
                 ? {

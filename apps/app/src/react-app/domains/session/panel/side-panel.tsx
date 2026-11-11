@@ -374,7 +374,7 @@ export function BrowserPanelContent({
   return (
     <>
       {failure?.owner === failureOwner ? <div className="shrink-0 px-3 py-2"><TaskRecovery compact title={failure.title} technicalDetails={failure.details}
-        actions={<Button variant="ghost" size="xs" onClick={() => setFailure(null)}>Dismiss</Button>} /></div> : null}
+        actions={<>{failure.title.startsWith("Could not show the browser") ? <Button variant="ghost" size="xs" onClick={() => { setFailure(null); window.dispatchEvent(new Event("openwork:browser:bounds-invalidated")); }}>Retry</Button> : null}<Button variant="ghost" size="xs" onClick={() => setFailure(null)}>Dismiss</Button></>} /></div> : null}
       {isAvailable && tab.browserTask ? (
         <div data-browser-shortcut-tab={tab.id} className="flex min-h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
           <span className="shrink-0 font-medium">Built-in browser</span>

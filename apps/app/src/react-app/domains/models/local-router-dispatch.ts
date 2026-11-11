@@ -119,7 +119,8 @@ export async function dispatchLocalRouterTurn<T>(input: {
       const currentAccount = currentAccounts.find((account) => account.key === candidate.account.key);
       const currentModel = currentAccount?.models.find((model) => model.key === candidate.model.key);
       if (!currentAccount || currentAccount.unavailableReason || !currentModel
-        || (currentModel.remainingFraction !== null && currentModel.remainingFraction <= 0)) continue;
+        || (currentModel.remainingFraction !== null && currentModel.remainingFraction <= 0)
+        || (candidate.account.kind !== "local" && currentModel.remainingFraction === null)) continue;
       if (routingSignature(input.settings()) !== routingSignature(settings)) {
         throw new Error("Local Router settings changed while the message was being prepared. Try again.");
       }

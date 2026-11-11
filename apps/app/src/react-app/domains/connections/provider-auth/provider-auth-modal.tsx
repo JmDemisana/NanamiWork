@@ -84,6 +84,7 @@ export type ProviderAuthModalProps = {
     providerId: string,
     methodIndex: number,
     code?: string,
+    requireCallback?: boolean,
   ) => Promise<{ connected: boolean; pending?: boolean; message?: string }>;
   onRefreshProviders?: () => Promise<unknown>;
   openWorkModelsState?: "included" | "off" | "unavailable";
@@ -118,8 +119,10 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
   const providerButtonsRef = useRef(new Map<string, HTMLButtonElement>());
   const returnProviderIdRef = useRef<string | null>(null);
   const previousViewRef = useRef(view);
+  const connectedBeforeOAuthRef = useRef(false);
   const providerPollRef = useRef<number | null>(null);
   const oauthAutoPollRef = useRef<number | null>(null);
+  const oauthAutoInFlightRef = useRef(false);
   const oauthCodeCopiedResetRef = useRef<number | null>(null);
   const autoOpenedPreferredProviderIdRef = useRef<string | null>(null);
 
@@ -385,7 +388,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     } finally {
       setPollingBusy(false);
     }
-    if ((props.connectedProviderIds ?? []).includes(id)) {
+    if (!connectedBeforeOAuthRef.current && (props.connectedProviderIds ?? []).includes(id)) {
       handleClose();
     }
   };
@@ -404,7 +407,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       stopProviderPolling();
       return;
     }
-    if (isActiveProviderConnected) {
+    if (isActiveProviderConnected && !connectedBeforeOAuthRef.current) {
       handleClose();
       return;
     }
@@ -445,7 +448,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
     const trimmedCode = code?.trim();
     setLocalError(null);
     try {
-      return await props.onSubmitOAuth(providerId, methodIndex, trimmedCode || undefined);
+      return await props.onSubmitOAuth(providerId, methodIndex, trimmedCode || undefined, connectedBeforeOAuthRef.current);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to complete OAuth";
       setLocalError(message);
@@ -455,14 +458,19 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
 
   const attemptOauthAutoCompletion = async () => {
     const session = oauthSession;
-    if (!session || oauthAutoBusy) return;
+    if (!session || oauthAutoInFlightRef.current) return;
+    oauthAutoInFlightRef.current = true;
     setOauthAutoBusy(true);
     try {
       const result = await submitOauth(session.providerId, session.methodIndex);
       if (result?.connected) {
         stopOauthAutoPolling();
+        handleClose();
       }
+    } catch {
+      stopOauthAutoPolling();
     } finally {
+      oauthAutoInFlightRef.current = false;
       setOauthAutoBusy(false);
     }
   };
@@ -490,6 +498,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       setLocalError(`No OAuth flow available for ${entry.name}.`);
       return;
     }
+    connectedBeforeOAuthRef.current = (props.connectedProviderIds ?? []).includes(entry.id);
     setLocalError(null);
     setOauthCodeInput("");
     setOauthSession(null);
@@ -592,7 +601,8 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
       return;
     }
 
-    await submitOauth(selectedEntry.id, oauthSession.methodIndex, trimmed);
+    const result = await submitOauth(selectedEntry.id, oauthSession.methodIndex, trimmed);
+    if (result?.connected) handleClose();
   };
 
   const handleBack = () => {
@@ -1034,7 +1044,7 @@ export default function ProviderAuthModal(props: ProviderAuthModalProps) {
                         : "Open browser again"}
                     </Button>
                     <div className="text-[11px] text-gray-9 text-right">
-                      This window will close once the provider is connected.
+                      Return here after completing sign-in.
                     </div>
                   </div>
                 </div>
