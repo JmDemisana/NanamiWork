@@ -34,8 +34,8 @@ test("account groups use a borderless responsive grid in the saved order", async
   }))));
   const grid = container.querySelector<HTMLElement>('[data-testid="model-account-grid"]');
   expect(grid?.classList.contains("grid")).toBe(true);
-  expect(grid?.className).toContain("@[50rem]/modelgrid:grid-cols-2");
-  expect(grid?.className).toContain("@[75rem]/modelgrid:grid-cols-3");
+  expect(grid?.className).toContain("@[41rem]/modelgrid:grid-cols-2");
+  expect(grid?.className).toContain("@[62rem]/modelgrid:grid-cols-3");
   expect(grid?.className).not.toContain("columns-");
   const groups = [...(grid?.children ?? [])];
   expect(groups.map((group) => group.querySelector("[data-testid]")?.getAttribute("data-testid"))).toEqual([

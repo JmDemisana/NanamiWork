@@ -1072,7 +1072,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         {empty ? <div role="status" className="flex flex-col items-center gap-1 px-4 py-7 text-center text-sm" data-testid="model-catalog-empty">
           <p>No models yet</p><p className="text-muted-foreground">{onConnectProvider ? <>Add an account below, or configure providers in {onOpenProviderSettings ? <button type="button" className="text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none" onClick={onOpenProviderSettings}>AI providers</button> : "AI providers"}.</> : "Your organization manages model access. Ask your workspace owner or admin."}</p>
         </div> : null}
-        <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[50rem]/modelgrid:grid-cols-2 @[75rem]/modelgrid:grid-cols-3" : undefined}>
+        <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : undefined}>
         {groups.length > 0 || chrome !== "page" ? <CommandList className={chrome === "page" ? "not-empty:p-0" : undefined}>
           {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "px-2 py-1" : undefined}>
             {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
@@ -1123,7 +1123,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         {leading ? <div className={chrome === "page" ? "px-2 py-1" : "px-2 pb-1"}><p className="flex min-h-7 items-center px-2 text-xs text-muted-foreground">Local Router</p>{leading}</div> : null}
         </div>
         {visibleConnectedAccounts.length > 0 ? (
-          <div data-testid="model-account-grid" className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-3 px-2 pb-1 @[50rem]/modelgrid:grid-cols-2 @[75rem]/modelgrid:grid-cols-3" : "pb-1"}>
+          <div data-testid="model-account-grid" className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-3 px-2 pb-1 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : "pb-1"}>
             {visibleConnectedAccounts.map((entry, index) => {
               const moveProps = chrome === "page" && !searching
                 ? {
