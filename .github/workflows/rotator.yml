@@ -36,6 +36,14 @@ jobs:
         with:
           node-version: 24.22.1
 
+      - name: Match latest stable version
+        shell: pwsh
+        run: |
+          $stable = gh release view --repo "$env:GITHUB_REPOSITORY" --json tagName --jq .tagName
+          if ($LASTEXITCODE -ne 0 -or -not $stable) { throw "Could not determine the latest stable version" }
+          node scripts/release/stamp-version.mjs --version $stable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
