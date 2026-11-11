@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag (e.g. v1.2.0)"
         required: false
-        default: "v1.2.0"
+        default: "v1.2.1"
   push:
     tags:
       - "v*"
@@ -179,37 +179,32 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.0' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.1' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.0' }}: Model Picker Overhaul and NanamiWork Local Router"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.1' }}: Mini Reliability Update and Nanami Uncensored Models"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.0' }}** overhauls model selection and adds the NanamiWork Local Router for rotating across connected provider accounts and their available models.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.1' }}** adds Nanami Uncensored Models and focused reliability improvements.
 
-            ### Model Picker Overhaul
-            - Reworked model selection into a searchable, grouped picker with account-aware model choices.
-            - Router candidates come from models available in the picker, so it does not invent hidden provider models.
-            - Added per-model and per-account inclusion, ordering, and routing strategies, including **Earliest to reset** and **Latest to reset**.
-            - The router tries another eligible picker candidate after an explicit model/account rejection, while avoiding replay on timeouts, rate limits, and ambiguous failures.
-            - Sidebar router status shows the account and model used by the most recent successful routed turn.
-            - The router status is shown only while Local Router is selected; choosing a concrete model restores its regular provider quota widget, even when the router used that model on the previous turn.
+            ### Nanami Uncensored Models
+            - Access Uncensored Models from Nanami Router Models using the separate uncensored gate code configured on Nanami AI.
+            - The code is verified by the server; NanamiWork uses a temporary grant for the model. The route supports text and tools.
 
-            ### NanamiWork Local Router
-            - Routing stays inside NanamiWork; OpenCode receives the selected provider model for each turn.
-            - ChatGPT, Copilot, and Antigravity accounts can participate when connected and eligible.
-            - Steers stay with the model already serving that conversation instead of switching accounts mid-turn.
+            ### Mini Reliability Update
+            - Improved provider reconnect handling so an existing connection does not prematurely close the new sign-in dialog.
+            - Local Router can reconsider an exhausted quota after its reset and checks the refreshed quota before sending.
+            - Browser observations retain viewport and element geometry for more useful scrolling and targeting; the browser view has a retry action if it cannot be displayed.
+            - New chats started with a prompt use it as an initial title, and the model picker keeps its compact account grid and aligned uncensored label.
 
-            ### Chat and Sidebar
-            - Undo waits for the server to confirm the revert before restoring the prompt.
-            - Manual transcript scrolling no longer races two competing anchor corrections, and a live-turn spacer that could leave blank scroll has been removed.
-            - Finished turns keep the assistant conclusion visible and tuck completed activity under one **Summary of Turn** control. Interrupted work and errors remain visible.
-            - Search and Settings now sit in the sidebar's top titlebar row, using the otherwise empty space.
+            ### Known limitations
+            - The uncensored model context metadata differs between the legacy and v2 engine configurations.
+            - Windows dictation falls back to Windows voice typing when the bundled helper is unavailable.
 
-            ### 📦 Downloads & Installers
-            - **Windows**: NSIS installer and Microsoft Store package
+            ### Downloads & Installers
+            - **Windows**: NSIS installer and AppX package
             - **macOS**: DMG and ZIP
             - **Linux**: AppImage and Debian package
         env:
