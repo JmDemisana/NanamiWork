@@ -27,11 +27,15 @@ test("account groups use a borderless responsive grid in the saved order", async
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const options = [{ providerID: "nanami", modelID: "router", title: "Gemini", description: "Nanami Router Models", behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null, isFree: false }];
+  const options = [{ providerID: "nanami", modelID: "router", title: "Gemini", description: "Nanami Router Models", behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null, isFree: false }, { providerID: "nanami", modelID: "uncensored", title: "Uncensored Models", description: "Nanami Router Models", behaviorTitle: "", behaviorLabel: "", behaviorDescription: "", behaviorValue: null, isFree: false }];
   await act(async () => root.render(createElement(PlatformProvider, { value: createDefaultPlatform() }, createElement(ModelPickerList, {
     chrome: "page", options, current: { providerID: "", modelID: "" }, query: "",
     onQueryChange: () => {}, onSelect: () => {}, leading: createElement("span", { "data-test-router": "" }, "Router"),
   }))));
+  const uncensoredMark = container.querySelector<HTMLElement>('[data-testid="model-option-nanami-uncensored"] [data-slot="model-provider-mark"]');
+  expect(uncensoredMark?.classList.contains("size-4")).toBe(true);
+  expect(uncensoredMark?.getAttribute("aria-hidden")).toBe("true");
+  expect(uncensoredMark?.children.length).toBe(0);
   const grid = container.querySelector<HTMLElement>('[data-testid="model-account-grid"]');
   expect(grid?.classList.contains("grid")).toBe(true);
   expect(grid?.className).toContain("@[41rem]/modelgrid:grid-cols-2");

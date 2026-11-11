@@ -30,7 +30,7 @@ export function ModelSourceIcon({ model }: { model: ModelRef & { source?: ModelO
 }
 
 function ProviderMark({ model, description, retained = false, plainFreeModel = false }: { model: ModelRef & { title?: string }; description?: string; retained?: boolean; plainFreeModel?: boolean }) {
-  if (model.providerID === "nanami" && model.modelID === "uncensored") return null;
+  if (model.providerID === "nanami" && model.modelID === "uncensored") return <span data-slot="model-provider-mark" aria-hidden="true" className="size-4 shrink-0" />;
   const maker = retained ? null : modelMakerId(model);
   return <div data-slot="model-provider-mark" className="flex size-4 shrink-0 items-center justify-center">
     {isAutoModel(model) && !plainFreeModel ? <OpenWorkMark className="size-4 text-dls-accent dark:text-foreground" />
