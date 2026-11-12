@@ -34,9 +34,9 @@ function mockEngine(authFails: boolean) {
   return { requests, restore: () => fetch.mockRestore() };
 }
 
-function createStore(withClient = true) {
+function createStore(withClient = true, providedClient?: ReturnType<typeof createClientV2>) {
   const server = createOpenworkServerClient({ baseUrl: "http://localhost:8787", hostToken: "fixture-host" });
-  const client = createClientV2("http://localhost:8787/opencode2", "/workspace", {});
+  const client = providedClient ?? createClientV2("http://localhost:8787/opencode2", "/workspace", {});
   return createProviderAuthStore({
     client: () => (withClient ? client : null),
     providers: () => [], providerDefaults: () => ({}), providerConnectedIds: () => [], disabledProviders: () => [],
@@ -109,6 +109,24 @@ test("without a workspace engine Connect still rejects so callers can open AI Pr
     expect(store.getSnapshot().providerAuthError).toBeTruthy();
   } finally {
     store.dispose();
+    engine.restore();
+  }
+});
+
+
+test("a missing OAuth callback cannot be satisfied by an existing provider connection", async () => {
+  const engine = mockEngine(false);
+  const client = createClientV2("http://localhost:8787/opencode2", "/workspace", {});
+  const callback = spyOn(client.provider.oauth, "callback").mockRejectedValue(new Error("ProviderAuthOauthMissing"));
+  const store = createStore(true, client);
+  try {
+    const result = await store.completeProviderAuthOAuth("openai", 0, undefined, true);
+    expect(result).toEqual({ connected: false, pending: true });
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(engine.requests).toEqual([]);
+  } finally {
+    store.dispose();
+    callback.mockRestore();
     engine.restore();
   }
 });

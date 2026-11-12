@@ -269,6 +269,7 @@ export type AntigravityAuthStoreHandle = {
     providerId: string,
     methodIndex: number,
     code?: string,
+    requireCallback?: boolean,
   ) => Promise<{ connected: boolean; pending?: boolean; message?: string }>;
   refreshProviders: (options?: {
     dispose?: boolean;
@@ -388,10 +389,10 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
     await openDesktopUrl(authUrl).catch(() => undefined);
 
     const completion = store
-      .completeProviderAuthOAuth("openai", methodIndex)
+      .completeProviderAuthOAuth("openai", methodIndex, undefined, true)
       .then(async (res) => {
         if (!res.connected) {
-          useChatGptAccountsStore.setState({ isConnecting: false, error: "ChatGPT authorization is still pending. Try signing in again." });
+          useChatGptAccountsStore.setState({ isConnecting: false, authUrl: null, error: "ChatGPT sign-in could not be confirmed. If it does not complete in your browser, start sign-in again." });
           return res;
         }
         clearCachedProviderLists();
@@ -408,7 +409,8 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
         if (!accountState.hasLoadedAccounts || !capturedAccount) {
           useChatGptAccountsStore.setState({
             isConnecting: false,
-            error: "ChatGPT authorized successfully, but NanamiWork could not save the account. Keep this window open and try Refresh.",
+            authUrl: null,
+            error: "NanamiWork could not confirm the new ChatGPT account. Complete sign-in in your browser, then try signing in again if needed.",
           });
           return { connected: false, message: "Account was not captured" };
         }
@@ -431,34 +433,11 @@ export async function runChatGptOAuthFlow(store: AntigravityAuthStoreHandle): Pr
   }
 }
 
-export async function runChatGptConfirmAndRefresh(store: AntigravityAuthStoreHandle): Promise<void> {
-  try {
-    clearCachedProviderLists();
-    if (pendingCodexOAuthPromise) {
-      await Promise.race([
-        pendingCodexOAuthPromise,
-        new Promise((resolve) => setTimeout(resolve, 800)),
-      ]);
-    }
-    await syncCodexDiskAccountsViaTerminal({ type: "confirm" }).catch(() => undefined);
-    await Promise.race([
-      store.refreshProviders({ dispose: true, force: true }).catch(() => undefined),
-      new Promise((resolve) => setTimeout(resolve, 1200)),
-    ]);
-    clearCachedProviderLists();
-    await refreshProviderListQueries(getReactQueryClient()).catch(() => undefined);
-    await useChatGptAccountsStore.getState().loadAccounts().catch(() => undefined);
-    const accountState = useChatGptAccountsStore.getState();
-    if (!accountState.hasLoadedAccounts || accountState.accounts.length === 0) {
-      useChatGptAccountsStore.setState({
-        isConnecting: false,
-        error: "No ChatGPT account was captured yet. Keep this window open and retry Refresh.",
-      });
-      return;
-    }
-    useChatGptAccountsStore.setState({ modalOpen: false, isConnecting: false });
-  } catch (err) {
-    console.warn("ChatGPT Confirm & Refresh warning:", err);
+export async function runChatGptConfirmAndRefresh(_store: AntigravityAuthStoreHandle): Promise<void> {
+  // A previously connected provider or an existing account does not prove this
+  // login completed. Only the current callback may capture and close the dialog.
+  if (pendingCodexOAuthPromise) {
+    await Promise.race([pendingCodexOAuthPromise, new Promise((resolve) => setTimeout(resolve, 800))]);
   }
 }
 

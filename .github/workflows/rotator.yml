@@ -71,7 +71,7 @@ jobs:
         working-directory: apps/app
         shell: pwsh
         run: |
-          foreach ($test in @("tests/model-picker-account-grid.test.tsx", "tests/sidebar-activity-ticker.test.tsx", "tests/text-activity-cards.test.tsx", "tests/antigravity-router-account.test.ts", "tests/local-router-dispatch.test.ts", "tests/local-router-runtime.test.ts", "tests/nanami-local-router.test.ts")) {
+          foreach ($test in @("tests/model-picker-account-grid.test.tsx", "tests/sidebar-activity-ticker.test.tsx", "tests/text-activity-cards.test.tsx", "tests/provider-auth-load-error.test.ts", "tests/antigravity-router-account.test.ts", "tests/local-router-dispatch.test.ts", "tests/local-router-runtime.test.ts", "tests/nanami-local-router.test.ts")) {
             bun test $test --timeout 30000
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
