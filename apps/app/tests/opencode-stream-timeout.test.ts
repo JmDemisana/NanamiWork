@@ -401,6 +401,65 @@ describe("OpenCode transport timeouts", () => {
     } finally { cancel(); }
   });
 
+  test.each(["web URL", "web Request", "desktop Request"])("provider OAuth callback stays open while browser sign-in continues (%s)", async (transport) => {
+    jest.useFakeTimers();
+    installWindow(transport === "desktop Request" ? { __OPENWORK_ELECTRON__: {} } : undefined);
+    const { cancel, complete, observedSignal, attempts } = installControllableFetch();
+    const fetchImpl = createCapturedFetch();
+    const url = "http://127.0.0.1:8788/workspace/ws_test/opencode/provider/openai/oauth/callback?directory=fixture";
+    const init = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method: 0 }) };
+    const response = transport === "web URL" ? fetchImpl(url, init) : fetchImpl(new Request(url, init));
+    const state = trackPromise(response);
+    try {
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      expect(state()).toBe("pending");
+      expect(observedSignal()?.aborted).toBe(false);
+      complete(Response.json(true));
+      expect((await response).status).toBe(200);
+      expect(attempts()).toBe(1);
+    } finally { cancel(); }
+  });
+
+  test("OpenCode SDK callback waits for browser authorization beyond ten seconds", async () => {
+    jest.useFakeTimers();
+    installWindow(undefined);
+    let complete!: (response: Response) => void;
+    let seenUrl = "";
+    let started!: () => void;
+    const startedPromise = new Promise<void>((resolve) => { started = resolve; });
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: (input: RequestInfo | URL) => {
+      seenUrl = input instanceof Request ? input.url : String(input);
+      started();
+      return new Promise<Response>((resolve) => { complete = resolve; });
+    } });
+    const client = createClient("http://127.0.0.1:8788/workspace/ws_test/opencode", "/workspace");
+    const pending = client.provider.oauth.callback({ providerID: "openai", method: 0 });
+    const state = trackPromise(pending);
+    await startedPromise;
+    expect(new URL(seenUrl).pathname).toBe("/workspace/ws_test/opencode/provider/openai/oauth/callback");
+    jest.advanceTimersByTime(60_000);
+    await Promise.resolve();
+    expect(state()).toBe("pending");
+    complete(Response.json(true));
+    expect((await pending).data).toBe(true);
+  });
+
+  test("provider OAuth callback has a five-minute deadline without retry", async () => {
+    jest.useFakeTimers();
+    installWindow(undefined);
+    const { cancel, attempts, observedSignal } = installControllableFetch();
+    const pending = createCapturedFetch()(new Request("https://web.example/workspace/ws_test/opencode/provider/google/oauth/callback", { method: "POST", body: "{}" })).catch((error: unknown) => error);
+    try {
+      jest.advanceTimersByTime(299_999);
+      expect(observedSignal()?.aborted).toBe(false);
+      jest.advanceTimersByTime(1);
+      expect(await pending).toMatchObject({ message: "Request timed out." });
+      expect(observedSignal()?.aborted).toBe(true);
+      expect(attempts()).toBe(1);
+    } finally { cancel(); }
+  });
+
   test("keeps synchronous command and summarize requests untimed", async () => {
     jest.useFakeTimers();
     installWindow(undefined);
