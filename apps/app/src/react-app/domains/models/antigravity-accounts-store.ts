@@ -271,6 +271,24 @@ function matchesRouterPin(accounts: Array<Record<string, unknown>>, pin: RouterP
   return valid && seen.has(pin.selectedEmail);
 }
 
+/** Recover identities only when the stored credential identifies exactly one saved account. */
+function recoverAntigravityIdentities(accounts: Array<Record<string, unknown>>, meta: NanamiAntigravityMeta) {
+  const saved = (meta.accounts ?? []).filter((account) => {
+    const email = account.email?.trim().toLowerCase();
+    if (!email || !account.refreshToken) return false;
+    const deleted = meta.deletedAtByEmail?.[email];
+    return !deleted || Math.max(account.addedAt ?? 0, account.lastUsed ?? 0) > deleted;
+  });
+  for (const account of accounts) {
+    if (typeof account.email === "string" && account.email.trim()) continue;
+    const token = account.refreshToken;
+    const matches = typeof token === "string" && token ? saved.filter((item) => item.refreshToken === token) : [];
+    if (matches.length !== 1) throw new Error("Antigravity account identities cannot be matched safely.");
+    account.email = matches[0]!.email;
+  }
+  return saved;
+}
+
 /** Restore only the flags the router pinned, without replacing account records. */
 export async function restoreAntigravityRouterPin(): Promise<void> {
   const pin = await readRouterPin();
@@ -278,6 +296,10 @@ export async function restoreAntigravityRouterPin(): Promise<void> {
   const saved = await readNanamiConfigFile("antigravity-accounts.json");
   if (!saved.exists || !saved.content) throw new Error("Antigravity account storage is unavailable.");
   const data = JSON.parse(saved.content) as { accounts?: Array<Record<string, unknown>> };
+  if (Array.isArray(data.accounts) && data.accounts.some((account) => !String(account.email ?? "").trim())) {
+    const { meta } = await readNanamiMetaAndConfigDir(true);
+    recoverAntigravityIdentities(data.accounts, meta);
+  }
   if (!Array.isArray(data.accounts) || !matchesRouterPin(data.accounts, pin)) {
     throw new Error("Antigravity accounts changed while Local Router was active. Choose an account manually and retry.");
   }
@@ -306,12 +328,35 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
       activeIndex?: number;
       activeIndexByFamily?: Record<string, number>;
     };
-    if (!Array.isArray(data.accounts) || data.accounts.length === 0) {
+    if (!Array.isArray(data.accounts)) {
       if (options?.strict) throw new Error("No Antigravity accounts are available.");
       return;
     }
 
     const lowerTarget = (email ?? "").toLowerCase();
+    const previousPin = await readRouterPin();
+    const needsRecovery = options?.exactAccount && (data.accounts.some((account) => !String(account.email ?? "").trim())
+      || !data.accounts.some((account) => String(account.email ?? "").toLowerCase() === lowerTarget));
+    if (needsRecovery) {
+      const { meta } = await readNanamiMetaAndConfigDir(true);
+      const savedAccounts = recoverAntigravityIdentities(data.accounts, meta);
+      // Validate a previous pin before adding a newly selected account.
+      if (previousPin && !matchesRouterPin(data.accounts, previousPin)) {
+        throw new Error("Antigravity accounts changed while Local Router was active.");
+      }
+      if (!data.accounts.some((account) => String(account.email ?? "").toLowerCase() === lowerTarget)) {
+        const matches = savedAccounts.filter((account) => account.email?.trim().toLowerCase() === lowerTarget);
+        if (matches.length !== 1 || matches[0]?.refreshToken !== options.expectedRefreshToken
+          || savedAccounts.filter((account) => account.refreshToken === matches[0]?.refreshToken).length !== 1) {
+          throw new Error("The selected Antigravity account cannot be matched safely.");
+        }
+        data.accounts.push({ ...matches[0] });
+      }
+    }
+    if (data.accounts.length === 0) {
+      if (options?.strict) throw new Error("No Antigravity accounts are available.");
+      return;
+    }
     let targetIndex = data.accounts.findIndex((a) => String(a.email ?? "").toLowerCase() === lowerTarget);
     if (targetIndex < 0) {
       if (options?.strict) throw new Error("The selected Antigravity account is no longer available.");
@@ -327,9 +372,8 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
         throw new Error("Antigravity account identities cannot be matched safely.");
       }
     }
-    const previousPin = await readRouterPin();
     if (!options?.exactAccount && previousPin && options?.skipIfRouterPinned) return;
-    if (options?.exactAccount && previousPin && !matchesRouterPin(data.accounts, previousPin)) {
+    if (options?.exactAccount && previousPin && !needsRecovery && !matchesRouterPin(data.accounts, previousPin)) {
       throw new Error("Antigravity accounts changed while Local Router was active.");
     }
 
@@ -438,6 +482,15 @@ if (fs.existsSync(accFile)) {
     delMap[action.email.toLowerCase()] = Date.now();
   }
   if (Array.isArray(data.accounts)) {
+    const savedAccounts = Array.isArray(meta.accounts) ? meta.accounts : [];
+    // Some plugin versions omit email. Never discard such an account or
+    // overwrite NanamiWork's saved list unless its identity is unambiguous.
+    for (const account of data.accounts) {
+      if (!account || account.email) continue;
+      const matches = account.refreshToken ? savedAccounts.filter(saved => saved && saved.email && saved.refreshToken === account.refreshToken) : [];
+      if (matches.length !== 1) throw new Error('Antigravity account identity is unavailable or ambiguous.');
+      account.email = matches[0].email;
+    }
     data.accounts = data.accounts.filter(a => {
       if (!a || !a.email || !a.refreshToken) return false;
       const k = String(a.email).toLowerCase();
@@ -476,6 +529,16 @@ if (fs.existsSync(accFile)) {
       verificationUrl: a.verificationUrl || '',
       verificationReason: a.verificationReason || '',
     }));
+    const present = new Set(sanitized.map(a => String(a.email).toLowerCase()));
+    for (const saved of savedAccounts) {
+      if (!saved || !saved.email || !saved.refreshToken) continue;
+      const key = String(saved.email).toLowerCase();
+      const deletedAt = delMap[key];
+      if (present.has(key) || (action && action.type === 'delete' && key === action.email.toLowerCase())
+        || (deletedAt && Math.max(saved.addedAt || 0, saved.lastUsed || 0) <= deletedAt)) continue;
+      sanitized.push(saved);
+      present.add(key);
+    }
     for (const f of [jsoncFile, jsonFile]) {
       const cfg = fs.existsSync(f) ? parseJ(fs.readFileSync(f, 'utf8')) : { $schema: 'https://opencode.ai/config.json' };
       cfg.x_nanami_antigravity = {
