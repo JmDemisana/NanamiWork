@@ -1,4 +1,5 @@
 import type { ModelRef } from "@/app/types";
+import { LocalRouterQuotaExhaustedError } from "./local-router-errors";
 import { isLocalRouterModel } from "@/app/lib/local-router-ref";
 import { ModelAdmissionFence, modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import {
@@ -97,6 +98,7 @@ export async function dispatchLocalRouterTurn<T>(input: {
       throw new Error("All included accounts are out of quota. Wait for a reset or include another account.");
     }
     let lastProviderRejection: unknown;
+    let unknownQuotaSeen = false;
     for (const candidate of candidates) {
       input.assertCurrent?.();
       const latest = input.settings();
@@ -107,7 +109,12 @@ export async function dispatchLocalRouterTurn<T>(input: {
       if (candidate.account.kind !== "local") {
         await input.ensureIdle(candidate);
         input.assertCurrent?.();
-        await input.activate(candidate);
+        try {
+          await input.activate(candidate);
+        } catch (error) {
+          if (error instanceof LocalRouterQuotaExhaustedError) continue;
+          throw error;
+        }
         input.assertCurrent?.();
       } else {
         await input.release?.();
@@ -119,8 +126,11 @@ export async function dispatchLocalRouterTurn<T>(input: {
       const currentAccount = currentAccounts.find((account) => account.key === candidate.account.key);
       const currentModel = currentAccount?.models.find((model) => model.key === candidate.model.key);
       if (!currentAccount || currentAccount.unavailableReason || !currentModel
-        || (currentModel.remainingFraction !== null && currentModel.remainingFraction <= 0)
-        || (candidate.account.kind !== "local" && currentModel.remainingFraction === null)) continue;
+        || (currentModel.remainingFraction !== null && currentModel.remainingFraction <= 0)) continue;
+      if (candidate.account.kind !== "local" && currentModel.remainingFraction === null) {
+        unknownQuotaSeen = true;
+        continue;
+      }
       if (routingSignature(input.settings()) !== routingSignature(settings)) {
         throw new Error("Local Router settings changed while the message was being prepared. Try again.");
       }
@@ -138,6 +148,7 @@ export async function dispatchLocalRouterTurn<T>(input: {
       }
     }
     if (lastProviderRejection) throw lastProviderRejection;
+    if (unknownQuotaSeen) throw new Error("Local Router could not verify quota for the included accounts. Refresh their limits or check the provider connection, then try again.");
     throw new Error("All included accounts are out of quota. Wait for a reset or include another account.");
   }, input.assertCurrent);
 }

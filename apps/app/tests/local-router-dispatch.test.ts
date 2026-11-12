@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { LOCAL_ROUTER_MODEL } from "../src/app/lib/local-router-ref";
 import { ModelAdmissionFence } from "../src/app/lib/model-admission-fence";
 import { dispatchLocalRouterTurn } from "../src/react-app/domains/models/local-router-dispatch";
+import { LocalRouterQuotaExhaustedError } from "../src/react-app/domains/models/local-router-errors";
 import type { LocalRouterAccount, LocalRouterSettings } from "../src/react-app/domains/models/nanami-local-router";
 
 const accounts: LocalRouterAccount[] = [
@@ -69,4 +70,44 @@ test("ordinary models pass through unchanged and do not activate accounts", asyn
   await dispatchLocalRouterTurn({ ...fixture.input, selected: { providerID: "other", modelID: "direct" }, variant: "low" });
   expect(fixture.sent).toEqual(["other/direct:low"]);
   expect(fixture.activated).toEqual([]);
+});
+
+
+test("a candidate exhausted during refresh falls through to the next account", async () => {
+  const fixture = setup();
+  const activated: string[] = [];
+  await dispatchLocalRouterTurn({ ...fixture.input, activate: async (candidate) => {
+    activated.push(candidate.account.key);
+    if (candidate.account.key === "a") throw new LocalRouterQuotaExhaustedError();
+  } });
+  expect(activated).toEqual(["a", "b"]);
+  expect(fixture.sent).toEqual(["openai/model-b:medium"]);
+});
+
+test("unknown quota is refreshed and is not mistaken for exhausted quota", async () => {
+  const fixture = setup();
+  const unknown = [{ ...accounts[0]!, models: [{ ...accounts[0]!.models[0]!, remainingFraction: null }] }];
+  let refreshed = false;
+  await dispatchLocalRouterTurn({ ...fixture.input,
+    accounts: async () => refreshed ? accounts.slice(0, 1) : unknown,
+    activate: async () => { refreshed = true; },
+  });
+  expect(fixture.sent).toEqual(["google/model-a:high"]);
+  fixture.sent.length = 0;
+  await expect(dispatchLocalRouterTurn({ ...fixture.input, accounts: async () => unknown })).rejects.toThrow("could not verify quota");
+  expect(fixture.sent).toEqual([]);
+});
+
+test("steering stays on the active routed model without switching or refreshing accounts", async () => {
+  const fixture = setup();
+  const account = accounts[1]!;
+  const model = account.models[0]!;
+  await dispatchLocalRouterTurn({ ...fixture.input,
+    steer: true,
+    steeringCandidate: () => ({ key: "active", account, model, ref: { providerID: account.providerID, modelID: model.modelID } }),
+    accounts: async () => { throw new Error("steering must not reload accounts"); },
+    ensureIdle: async () => { throw new Error("steering must not acquire a lease"); },
+  });
+  expect(fixture.activated).toEqual([]);
+  expect(fixture.sent).toEqual(["openai/model-b:medium"]);
 });

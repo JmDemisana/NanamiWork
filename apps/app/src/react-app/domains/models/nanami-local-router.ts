@@ -628,8 +628,8 @@ export function resolveLocalRouterCandidates(
     if (candidate.model.remainingFraction !== null) {
       return candidate.model.remainingFraction > 0;
     }
-    const resetAt = candidate.model.resetTime ? Date.parse(candidate.model.resetTime) : Number.NaN;
-    return candidate.account.kind === "local" || (Number.isFinite(resetAt) && resetAt <= Date.now());
+    // Unknown quota can be refreshed under the router lease before admission.
+    return true;
   });
   if (usable.length === 0) return [];
   const pool = usable;

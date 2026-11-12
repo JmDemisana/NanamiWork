@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Client } from "@/app/types";
 import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
+import { LocalRouterQuotaExhaustedError } from "./local-router-errors";
 import {
   desktopFetchViaMain,
   getCachedDesktopHomeDir,
@@ -1261,8 +1262,11 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
     account.email.toLowerCase() === email.toLowerCase() ? { ...account, isPlus: fresh.isPlus, models: freshModels,
       quotas: fresh.quotas, quotaLoading: false, quotaError: null, verificationRequired: Boolean(fresh.verificationRequired),
       verificationUrl: fresh.verificationUrl, verificationReason: fresh.verificationReason } : account) }));
-  if (fresh.verificationRequired || !freshModel || (freshModel.remainingFraction !== null && freshModel.remainingFraction <= 0)) {
-    throw new Error("The selected Antigravity account or model is unavailable or out of quota.");
+  if (fresh.verificationRequired || !freshModel) {
+    throw new Error("The selected Antigravity account or model is unavailable.");
+  }
+  if (freshModel.remainingFraction !== null && freshModel.remainingFraction <= 0) {
+    throw new LocalRouterQuotaExhaustedError();
   }
   const { meta } = await readNanamiMetaAndConfigDir(true);
   const index = (meta.accounts ?? []).findIndex((account) => account.email?.toLowerCase() === email.toLowerCase());
