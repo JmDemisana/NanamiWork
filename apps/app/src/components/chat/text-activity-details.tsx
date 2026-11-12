@@ -57,48 +57,50 @@ export function TextCommandCard({
   const { program, rest } = commandProgram(command)
   const shown = output ? previewLines(output.trimEnd(), expanded) : null
   return (
-    <div data-text-command-card="" className="relative min-w-0 rounded-[10px] border border-border bg-background px-3 py-2 pe-9 font-mono text-[12.5px] leading-5">
-      <p className="whitespace-pre-wrap break-all text-foreground">
-        <span className="select-none text-muted-foreground">$ </span>
-        <span className="text-orange-11">{program}</span>
-        {rest}
-      </p>
+    <div data-text-command-card="" className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-muted/25 font-mono text-[12.5px] leading-5">
+      <div className="flex min-w-0 items-start gap-2 px-3 py-2.5">
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-foreground">
+          <span className="select-none text-muted-foreground">$ </span>
+          <span className="text-orange-11">{program}</span>
+          {rest}
+        </p>
+        <div className="-my-0.5 -me-1.5 flex shrink-0 items-center gap-1">
+          {running && onRunInBackground ? (
+            <button
+              type="button"
+              onClick={onRunInBackground}
+              className="inline-flex h-6 items-center rounded px-2 text-xs font-sans text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title="Turn into a background task"
+            >
+              Run in background
+            </button>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={t("text_activity.command_actions")}>
+                  <MoreHorizontal aria-hidden="true" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="min-w-40">
+              <DropdownMenuItem onClick={() => void copyText(command)}>{t("text_activity.copy_command")}</DropdownMenuItem>
+              {output ? <DropdownMenuItem onClick={() => void copyText(output)}>{t("text_activity.copy_output")}</DropdownMenuItem> : null}
+              {onRunInBackground ? (
+                <DropdownMenuItem onClick={onRunInBackground}>
+                  Run in background
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
       {shown ? (
-        <div className="mt-1.5 flex flex-col">
-          <pre data-text-command-output="" data-failed={failed ? "" : undefined} className="whitespace-pre-wrap break-all font-mono text-slate-9">{shown.text}</pre>
+        <div className="flex min-w-0 flex-col border-t border-border/60 bg-background/40 px-3 py-2.5">
+          <pre data-text-command-output="" data-failed={failed ? "" : undefined} className={cn("whitespace-pre-wrap break-words font-mono", failed ? "text-red-11" : "text-muted-foreground")}>{shown.text}</pre>
           {shown.clipped || expanded ? <ShowMore expanded={expanded} onToggle={() => setExpanded(!expanded)} /> : null}
         </div>
       ) : null}
-      <div className="absolute end-1.5 top-1.5 flex items-center gap-1">
-        {running && onRunInBackground ? (
-          <button
-            type="button"
-            onClick={onRunInBackground}
-            className="inline-flex h-6 items-center rounded px-2 text-xs font-sans text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-            title="Turn into a background task"
-          >
-            Run in background
-          </button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button type="button" variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={t("text_activity.command_actions")}>
-                <MoreHorizontal aria-hidden="true" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="min-w-40">
-            <DropdownMenuItem onClick={() => void copyText(command)}>{t("text_activity.copy_command")}</DropdownMenuItem>
-            {output ? <DropdownMenuItem onClick={() => void copyText(output)}>{t("text_activity.copy_output")}</DropdownMenuItem> : null}
-            {onRunInBackground ? (
-              <DropdownMenuItem onClick={onRunInBackground}>
-                Run in background
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </div>
   )
 }
@@ -110,21 +112,21 @@ export function TextCommandCard({
 export function TextDiffCard({ removed, added }: { removed: string | null; added: string | null }) {
   const [expanded, setExpanded] = useState(false)
   const rows = [
-    ...(removed ? removed.replace(/\n$/, "").split("\n").map((line) => ({ sign: "−", line, tone: "text-red-11" })) : []),
-    ...(added ? added.replace(/\n$/, "").split("\n").map((line) => ({ sign: "+", line, tone: "text-green-11" })) : []),
+    ...(removed ? removed.replace(/\n$/, "").split("\n").map((line) => ({ sign: "−", line, tone: "text-red-11", surface: "border-red-6/70 bg-red-3/30" })) : []),
+    ...(added ? added.replace(/\n$/, "").split("\n").map((line) => ({ sign: "+", line, tone: "text-green-11", surface: "border-green-6/70 bg-green-3/30" })) : []),
   ]
   if (rows.length === 0) return null
   const clipped = !expanded && rows.length > OUTPUT_PREVIEW_LINES
   const visible = clipped ? rows.slice(0, OUTPUT_PREVIEW_LINES) : rows
   return (
-    <div data-text-diff-card="" className="min-w-0 rounded-[10px] border border-border bg-background px-3 py-2 font-mono text-[12.5px] leading-5">
+    <div data-text-diff-card="" className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-muted/25 py-1.5 font-mono text-[12.5px] leading-5">
       {visible.map((row, index) => (
-        <div key={index} className="flex min-w-0 gap-2">
-          <span className={cn("shrink-0 select-none", row.tone)}>{row.sign}</span>
-          <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">{row.line || " "}</span>
+        <div key={index} className={cn("flex min-w-0 gap-2 border-s-2 px-3 py-0.5", row.surface)}>
+          <span className={cn("w-3 shrink-0 select-none text-center", row.tone)}>{row.sign}</span>
+          <span className="min-w-0 whitespace-pre-wrap break-words text-foreground">{row.line || " "}</span>
         </div>
       ))}
-      {clipped || expanded ? <ShowMore expanded={expanded} onToggle={() => setExpanded(!expanded)} /> : null}
+      {clipped || expanded ? <div className="px-3"><ShowMore expanded={expanded} onToggle={() => setExpanded(!expanded)} /></div> : null}
     </div>
   )
 }

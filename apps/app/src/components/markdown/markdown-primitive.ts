@@ -188,7 +188,7 @@ function codeWrapButton() {
 function chatCodeBlockContainer(html: string, shiki: boolean) {
   const shikiAttribute = shiki ? ` data-openwork-shiki="true"` : "";
 
-  return `<div data-openwork-code-block=""${shikiAttribute} class="relative my-4 overflow-hidden rounded-[18px] border border-border/70 bg-gray-2/60 font-mono text-xs leading-6 text-foreground">${codeWrapButton()}${codeCopyButton()}${html}</div>`;
+  return `<div data-openwork-code-block=""${shikiAttribute} class="relative my-4 overflow-hidden rounded-xl border border-border/70 bg-muted/25 font-mono text-[12.5px] leading-5 text-foreground">${codeWrapButton()}${codeCopyButton()}${html}</div>`;
 }
 
 function chatCodeBlockHtml(text: string, lang: string | undefined) {
