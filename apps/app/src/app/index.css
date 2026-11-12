@@ -431,6 +431,11 @@ select:disabled {
   background-color: rgb(var(--dls-secondary-rgb) / 0.22);
 }
 
+/* The default accent is dark in both themes; use the readable theme tone in the sidebar. */
+.ow-sidebar-activity {
+  --dls-accent-rgb: var(--dls-secondary-rgb);
+}
+
 /* The running-work mark used to advance these frames with a React interval,
    causing every mounted loader to commit about five times per second. Opacity
    animation keeps the same four frames on the compositor instead. */
