@@ -96,4 +96,13 @@ NanamiWork provides multi-account profile switching to help developers organize 
 ## 📄 License & Attribution
 
 NanamiWork is licensed under the [GNU General Public License v3.0 (GPL-3.0)](./LICENSE).  
-Derived from and built upon the foundations of [OpenWork](https://github.com/different-ai/openwork) by Different AI, Inc. (MIT License).
+NanamiWork is grateful to the projects and people whose work makes it possible:
+
+- [OpenWork](https://github.com/different-ai/openwork) by Different AI, Inc. provides the foundation NanamiWork is built on.
+- [OpenCode](https://github.com/anomalyco/opencode) provides the agent engine and the upstream code used by the vendored code-mode package. See its [upstream notes](./packages/codemode/UPSTREAM.md) and [notice](./packages/codemode/NOTICE).
+- [opencode-antigravity-auth](https://github.com/NoeFabris/opencode-antigravity-auth) by NoeFabris and contributors provides the community Antigravity authentication plugin used by NanamiWork.
+- [Electron](https://www.electronjs.org/) and [React](https://react.dev/) provide the desktop application and interface frameworks.
+
+NanamiWork also connects to services from [Google Antigravity](https://antigravity.google/), [OpenAI](https://openai.com/), and [GitHub Copilot](https://github.com/features/copilot). These are independent products, and their inclusion does not imply endorsement or affiliation.
+
+These projects and their dependencies retain their own licenses and notices. See the [Documents third-party notices](./packages/documents/THIRD_PARTY_NOTICES.md) for that package's dependencies.
