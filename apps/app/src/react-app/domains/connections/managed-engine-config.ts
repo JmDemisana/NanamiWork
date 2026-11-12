@@ -74,14 +74,13 @@ export async function readManagedDisabledProviders(
   };
   if (client && isOpencodeV2Client(client)) return readRuntime();
   if (!client) return [];
-  const config = unwrap(await client.config.get(options.directory ? { directory: options.directory } : undefined));
-  const fromConfig = disabledProvidersFromConfig(config);
-  if (!managedRuntime) return fromConfig;
-  // updateManagedDisabledProviders writes this list on the server. v1 only
-  // reads it after an engine reload, which v2 chat routing never runs, so its
-  // config alone misses a provider that was just disabled (ENG-994).
-  const fromRuntime = options.requireRuntime ? await readRuntime() : await readRuntime().catch(() => []);
-  return normalizeDisabledProviders([...fromConfig, ...fromRuntime]);
+  // These independent reads can run together on each safety recheck.
+  const configRead = client.config.get(options.directory ? { directory: options.directory } : undefined);
+  if (!managedRuntime) return disabledProvidersFromConfig(unwrap(await configRead));
+  // v1 can lag the server's shared list after a provider is disabled (ENG-994).
+  const runtimeRead = options.requireRuntime ? readRuntime() : readRuntime().catch(() => []);
+  const [config, fromRuntime] = await Promise.all([configRead, runtimeRead]);
+  return normalizeDisabledProviders([...disabledProvidersFromConfig(unwrap(config)), ...fromRuntime]);
 }
 
 function configWithDisabledProviders(

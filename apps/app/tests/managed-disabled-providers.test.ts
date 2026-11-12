@@ -122,3 +122,46 @@ test("ENG-994: policy reconcile does not write when the current list already sat
     mock.restore();
   }
 });
+
+
+test("router policy reads run concurrently and still combine both lists", async () => {
+  let releaseConfig!: () => void;
+  let runtimeStarted!: () => void;
+  const configGate = new Promise<void>((resolve) => { releaseConfig = resolve; });
+  const runtimeSeen = new Promise<void>((resolve) => { runtimeStarted = resolve; });
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const path = new URL(request.url).pathname;
+    if (path === "/opencode/config") { await configGate; return Response.json({ disabled_providers: ["one"] }); }
+    if (path === RUNTIME_PATH) { runtimeStarted(); return Response.json({ ok: true, disabledProviders: ["two"] }); }
+    return Response.json({});
+  });
+  const read = readManagedDisabledProviders({
+    opencodeClient: createClient("http://localhost:8787/opencode", "/workspace", { mode: "openwork", token: "client" }),
+    openworkClient: server(), workspaceId: "workspace", workspaceType: "local", requireRuntime: true,
+  });
+  try {
+    const startedBeforeConfigCompleted = await Promise.race([runtimeSeen.then(() => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500))]);
+    expect(startedBeforeConfigCompleted).toBe(true);
+    releaseConfig();
+    expect(await read).toEqual(["one", "two"]);
+  } finally {
+    releaseConfig();
+    await read.catch(() => undefined);
+    fetch.mockRestore();
+  }
+});
+
+test("router policy reads still fail closed when the runtime read fails", async () => {
+  const fetch = spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    if (new URL(request.url).pathname === RUNTIME_PATH) return Response.json({ error: "unavailable" }, { status: 503 });
+    return Response.json({ disabled_providers: [] });
+  });
+  try {
+    await expect(readManagedDisabledProviders({
+      opencodeClient: createClient("http://localhost:8787/opencode", "/workspace", { mode: "openwork", token: "client" }),
+      openworkClient: server(), workspaceId: "workspace", workspaceType: "local", requireRuntime: true,
+    })).rejects.toThrow();
+  } finally { fetch.mockRestore(); }
+});

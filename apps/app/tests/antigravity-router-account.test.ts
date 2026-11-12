@@ -9,6 +9,7 @@ let configFile = "";
 let pinFile: string | null = null;
 let writes = 0;
 let metadataConfig = "{}";
+let quotaFetch: (url: string) => Promise<Response> = async () => { throw new Error("Unexpected network request"); };
 
 mock.module("../src/app/lib/desktop", () => ({
   getCachedDesktopHomeDir: async () => "C:/private-home",
@@ -24,10 +25,10 @@ mock.module("../src/app/lib/desktop", () => ({
     else configFile = content;
     return { ok: true };
   },
-  desktopFetchViaMain: async () => { throw new Error("Unexpected network request"); },
+  desktopFetchViaMain: async (url: string) => quotaFetch(url),
 }));
 
-const { syncAntigravityDiskState, restoreAntigravityRouterPin, syncDiskAccountsViaTerminal } = await import("../src/react-app/domains/models/antigravity-accounts-store");
+const { syncAntigravityDiskState, restoreAntigravityRouterPin, syncDiskAccountsViaTerminal, fetchAccountModelsAndQuota } = await import("../src/react-app/domains/models/antigravity-accounts-store");
 
 beforeEach(() => {
   accountsFile = JSON.stringify({ version: 4, activeIndex: 0, accounts: [
@@ -39,6 +40,40 @@ beforeEach(() => {
   pinFile = null;
   writes = 0;
   metadataConfig = "{}";
+  quotaFetch = async () => { throw new Error("Unexpected network request"); };
+});
+
+test("model and quota summary requests overlap after token refresh", async () => {
+  let releaseModel!: () => void;
+  let modelStarted!: () => void;
+  let summaryStarted!: () => void;
+  const modelGate = new Promise<void>((resolve) => { releaseModel = resolve; });
+  const modelSeen = new Promise<void>((resolve) => { modelStarted = resolve; });
+  const summarySeen = new Promise<void>((resolve) => { summaryStarted = resolve; });
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) { modelStarted(); await modelGate; return Response.json({ models: {} }); }
+    if (url.includes("retrieveUserQuotaSummary")) { summaryStarted(); return Response.json({ groups: [] }); }
+    throw new Error("Unexpected request");
+  };
+  const pending = fetchAccountModelsAndQuota({ email: "test@example.invalid", refreshToken: "test", projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: false, models: [], quotas: [], quotaLoading: false, quotaError: null }, "medium");
+  try {
+    await modelSeen;
+    expect(await Promise.race([summarySeen.then(() => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 500))])).toBe(true);
+    releaseModel();
+    expect((await pending).verificationRequired).toBe(false);
+  } finally { releaseModel(); await pending.catch(() => undefined); }
+});
+
+test("an unavailable optional quota summary does not reject the model response", async () => {
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) return Response.json({ models: {} });
+    if (url.includes("retrieveUserQuotaSummary")) throw new Error("summary unavailable");
+    throw new Error("Unexpected request");
+  };
+  const result = await fetchAccountModelsAndQuota({ email: "test@example.invalid", refreshToken: "test", projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: false, models: [], quotas: [], quotaLoading: false, quotaError: null }, "medium");
+  expect(result.verificationRequired).toBe(false);
 });
 
 test("recovers an unlabeled plugin account and adds the selected saved account", async () => {

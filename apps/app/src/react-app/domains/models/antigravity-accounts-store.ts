@@ -580,7 +580,7 @@ if (fs.existsSync(accFile)) {
   }
 }
 
-async function fetchAccountModelsAndQuota(
+export async function fetchAccountModelsAndQuota(
   account: AntigravityAccountInfo,
   thinkingTier: ThinkingTier,
 ): Promise<{
@@ -616,6 +616,27 @@ async function fetchAccountModelsAndQuota(
   }
 
   const project = account.projectId || account.managedProjectId || "aicode-consumers";
+  // These two quota reads use the same refreshed token and do not depend on
+  // each other. Keep the optional summary failure isolated from model checks.
+  type QuotaSummaryResponse = {
+    groups?: Array<{
+      displayName?: string;
+      buckets?: Array<{ bucketId?: string; window?: string; remainingFraction?: number; resetTime?: string }>;
+    }>;
+  };
+  const summaryPromise: Promise<QuotaSummaryResponse | null> = (async () => {
+    try {
+      const response = await desktopFetchViaMain(
+        "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+        { method: "POST", headers: { Authorization: `Bearer ${tokenData.access_token}`,
+          "Content-Type": "application/json", "User-Agent": ANTIGRAVITY_HUB_USER_AGENT },
+          body: JSON.stringify({ project }) },
+        10_000,
+      );
+      return response.ok ? await response.json() as QuotaSummaryResponse : null;
+    } catch { return null; }
+  })();
+
   const modelsRes = await desktopFetchViaMain(
     ANTIGRAVITY_MODELS_ENDPOINT,
     {
@@ -676,39 +697,7 @@ async function fetchAccountModelsAndQuota(
   const argonHighEntry = modelsMap["gemini-4-argon-high"] ?? modelsMap["gemini-4-argon-medium"] ?? modelsMap["gemini-4-argon"];
   const isPlus = Boolean(argonHighEntry && !argonHighEntry.disabled);
 
-  // Fetch official user quota summary from Google's internal quota service
-  // to reflect authentic 5h and weekly limit buckets.
-  type QuotaSummaryResponse = {
-    groups?: Array<{
-      displayName?: string;
-      buckets?: Array<{
-        bucketId?: string;
-        window?: string;
-        remainingFraction?: number;
-        resetTime?: string;
-      }>;
-    }>;
-  };
-  let quotaSummary: QuotaSummaryResponse | null = null;
-
-  try {
-    const summaryRes = await desktopFetchViaMain(
-      "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          "Content-Type": "application/json",
-          "User-Agent": ANTIGRAVITY_HUB_USER_AGENT,
-        },
-        body: JSON.stringify({ project }),
-      },
-      10_000,
-    );
-    if (summaryRes.ok) {
-      quotaSummary = (await summaryRes.json()) as typeof quotaSummary;
-    }
-  } catch {}
+  const quotaSummary = await summaryPromise;
 
   const findBucket = (bucketId: string) => {
     const summary = quotaSummary as QuotaSummaryResponse | null;
