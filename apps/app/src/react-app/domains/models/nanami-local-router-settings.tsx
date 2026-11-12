@@ -126,8 +126,8 @@ export function LocalRouterSettingsPage({
       className="flex min-h-0 flex-1 flex-col bg-dls-surface"
       data-testid="local-router-settings-page"
     >
-        <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-          <Button type="button" variant="ghost" size="sm" className="gap-1 px-2" onClick={onBack}>
+        <header className="flex min-h-[60px] shrink-0 items-center gap-1.5 border-b border-border px-4 py-3 sm:px-5">
+          <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1 px-2 text-muted-foreground hover:text-foreground" onClick={onBack}>
             <ChevronLeft className="size-4" /> Models
           </Button>
           <div className="min-w-0">
