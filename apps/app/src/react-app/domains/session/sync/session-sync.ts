@@ -7,6 +7,7 @@ import { readGatewayUsageScope } from "@/app/lib/gateway-usage-scope";
 import { refreshGatewayUsageAfterCompletion } from "../../cloud/gateway-usage-refresh";
 import { gatewayUsageQueryPrefix } from "../../cloud/gateway-usage-state";
 import { mergeReplyMetadata, replyModelFromInfo } from "./reply-model";
+import { contextUsageFromInfo } from "./context-usage";
 import { providerCredentialScope, useProviderCredentialHealth } from "../../connections/provider-auth/credential-health";
 import { isProviderCredentialRejection } from "./session-error";
 import { closeSessionBrowserTabs } from "@/app/lib/desktop";
@@ -1544,6 +1545,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
         ...(typeof completed === "number" ? { completed } : {}),
         ...(typeof info.parentID === "string" ? { parentID: info.parentID } : {}),
         ...(replyModelFromInfo(info) ? { replyModel: replyModelFromInfo(info) } : {}),
+        ...(contextUsageFromInfo(info) !== undefined ? { contextUsage: contextUsageFromInfo(info) } : {}),
       } },
       parts: [],
     } satisfies UIMessage;

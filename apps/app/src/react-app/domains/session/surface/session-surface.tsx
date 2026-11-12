@@ -1,4 +1,7 @@
 /** @jsxImportSource react */
+import { useProviderListQuery } from "@/react-app/infra/provider-list-query";
+import { latestContextUsage } from "../sync/context-usage";
+/** @jsxImportSource react */
 import { openMemberApiKeyDialog } from "../../connections/member-api-key-dialog";
 import { childOrigin, rememberChildOrigin, prepareChildReturn, consumeChildReturn, registerChildDraftPersistence } from "@/lib/child-navigation";
 import { remoteSessionRouteId } from "@/lib/remote-session-route";
@@ -1806,6 +1809,14 @@ export function SessionSurface(props: SessionSurfaceProps) {
     autoSendComposer: autoSendPayload?.composer,
     composer: { draft, attachments, pasteParts },
   });
+  const contextProviders = useProviderListQuery({ client: opencodeClient, baseUrl: props.opencodeBaseUrl, directory: props.workspaceRoot });
+  const contextUsage = useMemo(() => latestContextUsage(renderedMessages), [renderedMessages]);
+  const contextLimit = contextUsage?.providerID && contextUsage.modelID
+    ? contextProviders.data?.all.find((provider) => provider.id === contextUsage.providerID)?.models[contextUsage.modelID]?.limit?.context
+    : undefined;
+  const contextPercent = contextUsage && typeof contextLimit === "number" && Number.isFinite(contextLimit) && contextLimit > 0
+    ? Math.round(contextUsage.used / contextLimit * 100) : null;
+
   const gatewaySelected = !isAutoModel(sessionModel.selectedModel) && isGatewayUsageModel(sessionModel.selectedModel.providerID, props.gatewayProviderIds);
   const latestUsageMessage = renderedMessages.at(-1);
   // The turn's error, not whatever renders last: a trailing empty or retry message must not hide it.
@@ -4091,6 +4102,13 @@ export function SessionSurface(props: SessionSurfaceProps) {
         modelRecoveryScope={props.modelRecoveryScope}
         organizationModelsEmpty={props.organizationModelsEmpty}
         statusLabel={statusLabel(liveStatus, chatStreaming)}
+        contextControl={
+          <span className="shrink-0 whitespace-nowrap px-1 text-xs text-muted-foreground"
+            title={sessionActivityStatus === "compacting" ? "The conversation is being compacted." : contextUsage ? `Last reported request input including cached tokens: ${contextUsage.used.toLocaleString()}${contextLimit ? ` / ${contextLimit.toLocaleString()}` : ""}. Usage may change on the next request.` : "Context usage has not been reported yet."}
+            aria-live="polite">
+            {sessionActivityStatus === "compacting" ? "Compacting…" : contextPercent !== null ? `Context ${contextPercent}%` : contextUsage ? `Context ${contextUsage.used.toLocaleString()} tokens` : "Context —"}
+          </span>
+        }
         modelPickerOpen={modelPickerOpen}
         selectedModel={sessionModel.selectedModel}
         openWorkModelsEntitled={props.openWorkModelsEntitled}

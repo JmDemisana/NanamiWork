@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import { contextUsageFromInfo } from "./context-usage";
+/** @jsxImportSource react */
 import type { UIMessage } from "ai";
 import { replyModelFromInfo } from "./reply-model";
 import type { FilePart, Part, TextPart, ToolPart } from "@opencode-ai/sdk/v2/client";
@@ -194,6 +196,7 @@ export function snapshotToUIMessages(snapshot: Pick<OpenworkSessionSnapshot, "me
         ...(typeof completed === "number" ? { completed } : {}),
         ...(typeof parentID === "string" ? { parentID } : {}),
         ...(replyModelFromInfo(message.info) ? { replyModel: replyModelFromInfo(message.info) } : {}),
+        ...(contextUsageFromInfo(message.info) !== undefined ? { contextUsage: contextUsageFromInfo(message.info) } : {}),
       } },
       parts: message.parts.flatMap<UIMessage["parts"][number]>((part) => {
         if (part.type === "text") {
