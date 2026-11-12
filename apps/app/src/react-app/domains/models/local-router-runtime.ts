@@ -9,7 +9,6 @@ import { activateAntigravityRouterAccount, restoreAntigravityRouterPin, useAntig
 import { activateChatGptRouterAccount, useChatGptAccountsStore } from "./chatgpt-accounts-store";
 import { activateCopilotRouterAccount, useCopilotAccountsStore } from "./copilot-accounts-store";
 import { dispatchLocalRouterTurn, type ResolvedTurnModel } from "./local-router-dispatch";
-import { useLocalModelPickerPreference } from "./local-model-picker-preference";
 import { buildLocalRouterAccounts, getLastLocalRouterCandidate, recordLocalRouterUse, useLocalRouterStore } from "./nanami-local-router";
 
 /** Never send the desktop host token to a different loopback service. */
@@ -47,8 +46,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
   assertCurrent?: () => void;
 }): Promise<T> {
   const settings = readOpenworkServerSettings();
-  const localRuntime = input.enabled && useLocalModelPickerPreference.getState().enabled
-    && input.localWorkspace && isDesktopRuntime() && isConfiguredRouterHost(input.openworkClient.baseUrl, settings) && !input.restrictToCloud;
+  const localRuntime = input.enabled && input.localWorkspace && isDesktopRuntime() && isConfiguredRouterHost(input.openworkClient.baseUrl, settings) && !input.restrictToCloud;
   let leasedClient: Client | null = null;
   let leaseId: string | null = null;
   const host = settings.hostToken && localRuntime
