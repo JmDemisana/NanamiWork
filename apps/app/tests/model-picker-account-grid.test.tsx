@@ -65,3 +65,65 @@ test("account groups use a borderless responsive grid in the saved order", async
   await act(async () => root.unmount());
   container.remove();
 });
+
+
+test("direct model picker waits for the selected account to be prepared", async () => {
+  const previousSelect = useAntigravityAccountsStore.getState().selectAccount;
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  const selections: string[] = [];
+  let starts = 0;
+  useAntigravityAccountsStore.setState({
+    accounts: [{ email: "chosen@example.invalid", refreshToken: "fixture", projectId: "", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: false, quotas: [], quotaLoading: false, quotaError: null, models: [{ familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 1, resetTime: null, supportsThinkingTier: false }] }],
+    selectAccount: async () => { starts += 1; return pending; },
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(PlatformProvider, { value: createDefaultPlatform() }, createElement(ModelPickerList, {
+      chrome: "page", options: [], current: { providerID: "", modelID: "" }, query: "", onQueryChange: () => {},
+      onSelect: (option) => { selections.push(option.modelID); },
+    }))));
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="antigravity-model-chosen@example.invalid-model-a"]');
+    expect(button).not.toBeNull();
+    await act(async () => { button!.click(); button!.click(); });
+    expect(starts).toBe(1);
+    expect(container.textContent).toContain("Preparing selected account");
+    expect(selections).toEqual([]);
+    await act(async () => { finish(); await pending; });
+    expect(selections).toEqual(["model-a"]);
+  } finally {
+    finish();
+    await act(async () => root.unmount());
+    container.remove();
+    useAntigravityAccountsStore.setState({ selectAccount: previousSelect });
+  }
+});
+
+
+test("the picker does not select a model when account preparation fails", async () => {
+  const previousSelect = useAntigravityAccountsStore.getState().selectAccount;
+  const selections: string[] = [];
+  useAntigravityAccountsStore.setState({
+    accounts: [{ email: "chosen@example.invalid", refreshToken: "fixture", projectId: "", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: false, quotas: [], quotaLoading: false, quotaError: null, models: [{ familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 1, resetTime: null, supportsThinkingTier: false }] }],
+    selectAccount: async () => { throw new Error("Could not prepare selected account"); },
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => root.render(createElement(PlatformProvider, { value: createDefaultPlatform() }, createElement(ModelPickerList, {
+      chrome: "page", options: [], current: { providerID: "", modelID: "" }, query: "", onQueryChange: () => {},
+      onSelect: (option) => { selections.push(option.modelID); },
+    }))));
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="antigravity-model-chosen@example.invalid-model-a"]');
+    expect(button).not.toBeNull();
+    await act(async () => { button!.click(); await Promise.resolve(); });
+    expect(selections).toEqual([]);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    useAntigravityAccountsStore.setState({ selectAccount: previousSelect });
+  }
+});

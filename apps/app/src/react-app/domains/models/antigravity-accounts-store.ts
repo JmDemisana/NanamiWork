@@ -962,7 +962,7 @@ type AntigravityAccountsState = {
   setThinkingTier: (tier: ThinkingTier) => Promise<void>;
   loadAccounts: (client?: Client | null) => Promise<AntigravityAccountInfo[]>;
   refreshQuotas: () => Promise<void>;
-  selectAccount: (email: string, client?: Client | null) => Promise<void>;
+  selectAccount: (email: string, client?: Client | null, modelID?: string) => Promise<void>;
   deleteAccount: (email: string, client?: Client | null) => Promise<void>;
   modalOpen: boolean;
   authUrl: string | null;
@@ -993,13 +993,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
   setIsConnecting: (connecting) => set({ isConnecting: connecting }),
   setError: (error) => set({ error }),
 
-  setSelectedModel: (model) => {
-    set({ selectedModel: model });
-    if (model?.providerID === "google") {
-      const active = get().accounts.find((a) => a.isActive);
-      void modelAdmissionFence.regular(() => syncAntigravityDiskState(active?.email, model.modelID, { skipIfRouterPinned: true }));
-    }
-  },
+  setSelectedModel: (model) => set({ selectedModel: model }),
 
   setThinkingTier: async (tier) => {
     set((state) => ({
@@ -1159,63 +1153,72 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     );
   },
 
-  selectAccount: (email, client) => modelAdmissionFence.regular(async () => {
+  selectAccount: (email, client, modelID) => modelAdmissionFence.routed(async () => {
     if (client) latestClient = client;
     const activeClient = client ?? latestClient;
+    if (!activeClient) throw new Error("The Antigravity engine is not connected. Try again when it is ready.");
     const lower = email.toLowerCase();
     const currentAccounts = get().accounts;
     const target = currentAccounts.find((a) => a.email.toLowerCase() === lower);
-    if (!target) return;
-    const wasAlreadyActive = target.isActive;
-
-    set({
-      selectedModel: {
-        providerID: "google",
-        modelID: target.models[0]?.modelID || "antigravity-gemini-3.8-flash-high",
-      },
-      accounts: currentAccounts.map((a) => {
-        const isThis = a.email.toLowerCase() === lower;
-        return {
-          ...a,
-          isActive: isThis,
-          quotas: isThis && a.quotas.length > 0 ? a.quotas : a.quotas,
-          quotaLoading: isThis && a.quotas.length === 0,
-        };
-      }),
-    });
-
-    const activeIndex = Math.max(
-      0,
-      currentAccounts.findIndex((a) => a.email.toLowerCase() === lower),
-    );
-    await writeNanamiMeta((prev) => ({
-      ...prev,
-      activeEmail: target.email,
-      activeIndex,
-      accounts: (prev.accounts ?? []).map((a, i) => ({
-        ...a,
-        enabled: true,
-      })),
-    }));
-
-    await syncAntigravityDiskState(target.email, get().selectedModel?.modelID);
-
-    if (!wasAlreadyActive) {
-      try {
-        await activeClient?.auth.set({
-          providerID: "google",
-          auth: {
-            type: "oauth",
-            refresh: `${target.refreshToken}|${target.projectId || ""}|${target.managedProjectId || ""}`,
-            access: "",
-            expires: 0,
-          },
-        });
-      } catch {}
-      try {
-        await activeClient?.instance.dispose();
-      } catch {}
+    if (!target || target.verificationRequired) throw new Error("This Antigravity account is unavailable or needs verification.");
+    const selectedModelID = modelID ?? get().selectedModel?.modelID ?? target.models[0]?.modelID;
+    if (!selectedModelID || !findAntigravityModelItem(target.models, selectedModelID)) {
+      throw new Error("This model is no longer available for the selected Antigravity account.");
     }
+
+    // Reconfiguring the shared provider while a task is running can interrupt it.
+    const activity = await activeClient.session.status();
+    if (activity.error || !activity.data || typeof activity.data !== "object" || Array.isArray(activity.data)) {
+      throw new Error("Could not verify whether the Antigravity engine is idle. Try again.");
+    }
+    if (Object.values(activity.data).some((status) => !status || typeof status !== "object" || status.type !== "idle")) {
+      throw new Error("Wait for running tasks to finish before changing Antigravity accounts.");
+    }
+
+    // A picker account must not silently fall back to another plugin account.
+    // The existing pin records the prior flags and recovers a uniquely matched
+    // saved credential if the plugin omitted the selected account.
+    const previousAccount = currentAccounts.find((account) => account.isActive);
+    const previousModel = get().selectedModel?.modelID;
+    const previousPin = await readRouterPin();
+    let prepared = false;
+    try {
+      await syncAntigravityDiskState(target.email, selectedModelID, { exactAccount: true, strict: true, expectedRefreshToken: target.refreshToken });
+      prepared = true;
+      const auth = await activeClient.auth.set({
+        providerID: "google",
+        auth: { type: "oauth", refresh: `${target.refreshToken}|${target.projectId || ""}|${target.managedProjectId || ""}`, access: "", expires: 0 },
+      });
+      if (auth.error || auth.data !== true) throw new Error("Could not activate the selected Antigravity account.");
+      const disposed = await activeClient.instance.dispose();
+      if (disposed.error || disposed.data !== true) throw new Error("Could not refresh the Antigravity provider.");
+      const activeIndex = currentAccounts.findIndex((a) => a.email.toLowerCase() === lower);
+      await writeNanamiMeta((prev) => ({ ...prev, activeEmail: target.email, activeIndex }), true);
+    } catch (error) {
+      // The pin is written first, so a later disk failure may leave a partial switch.
+      let pinUnreadable = false;
+      const pinAfterFailure = await readRouterPin().catch(() => { pinUnreadable = true; return null; });
+      const changed = prepared || pinUnreadable || JSON.stringify(previousPin) !== JSON.stringify(pinAfterFailure);
+      if (changed && previousAccount) {
+        try {
+          await syncAntigravityDiskState(previousAccount.email, previousModel, { exactAccount: true, strict: true, expectedRefreshToken: previousAccount.refreshToken });
+          const restored = await activeClient.auth.set({ providerID: "google", auth: { type: "oauth",
+            refresh: `${previousAccount.refreshToken}|${previousAccount.projectId || ""}|${previousAccount.managedProjectId || ""}`, access: "", expires: 0 } });
+          if (restored.error || restored.data !== true) throw new Error("Previous provider credentials could not be restored.");
+          const refreshed = await activeClient.instance.dispose();
+          if (refreshed.error || refreshed.data !== true) throw new Error("Previous provider could not be refreshed.");
+        } catch {
+          throw new Error("Account selection failed and the previous account could not be restored. Reconnect it before sending.");
+        }
+      } else if (changed) {
+        throw new Error("Account selection failed and there was no previous account to restore. Reconnect an account before sending.");
+      }
+      throw error;
+    }
+    set({
+      selectedModel: { providerID: "google", modelID: selectedModelID },
+      accounts: get().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === lower })),
+    });
 
     const tier = get().thinkingTier;
     void fetchAccountModelsAndQuota(target, tier)

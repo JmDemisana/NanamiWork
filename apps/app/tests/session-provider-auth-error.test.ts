@@ -49,3 +49,11 @@ describe("AI Gateway provider credential failures", () => {
     expect(presentation.description).toBe("Check or replace your API key in model settings.")
   })
 })
+
+
+test("Google subscription denial is not presented as an exhausted quota or generic admin error", () => {
+  const presentation = presentOpencodeSessionError({ name: "APIError", data: { statusCode: 403, message: "Forbidden", responseBody: JSON.stringify({ error: { status: "PERMISSION_DENIED", details: [{ reason: "SUBSCRIPTION_REQUIRED" }] } }) } });
+  expect(presentation.kind).toBe("provider-access-denied");
+  expect(presentation.title).toBe("This model requires an eligible subscription");
+  expect(presentation.description).toContain("account or project");
+});

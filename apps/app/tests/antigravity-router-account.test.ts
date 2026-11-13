@@ -14,7 +14,7 @@ let quotaFetch: (url: string) => Promise<Response> = async () => { throw new Err
 mock.module("../src/app/lib/desktop", () => ({
   getCachedDesktopHomeDir: async () => "C:/private-home",
   readOpencodeConfig: async () => ({ path: "C:/private-home/.config/nanamiwork/opencode.jsonc", content: metadataConfig }),
-  writeOpencodeConfig: async () => ({ ok: true }),
+  writeOpencodeConfig: async (_scope: string, _dir: string, content: string) => { metadataConfig = content; return { ok: true }; },
   readNanamiConfigFile: async (name: string) => name === "nanami-local-router-antigravity.json"
     ? { exists: pinFile !== null, content: pinFile }
     : { exists: true, content: name === "antigravity-accounts.json" ? accountsFile : configFile },
@@ -28,7 +28,7 @@ mock.module("../src/app/lib/desktop", () => ({
   desktopFetchViaMain: async (url: string) => quotaFetch(url),
 }));
 
-const { syncAntigravityDiskState, restoreAntigravityRouterPin, syncDiskAccountsViaTerminal, fetchAccountModelsAndQuota } = await import("../src/react-app/domains/models/antigravity-accounts-store");
+const { syncAntigravityDiskState, restoreAntigravityRouterPin, syncDiskAccountsViaTerminal, fetchAccountModelsAndQuota, useAntigravityAccountsStore } = await import("../src/react-app/domains/models/antigravity-accounts-store");
 
 beforeEach(() => {
   accountsFile = JSON.stringify({ version: 4, activeIndex: 0, accounts: [
@@ -74,6 +74,63 @@ test("an unavailable optional quota summary does not reject the model response",
   };
   const result = await fetchAccountModelsAndQuota({ email: "test@example.invalid", refreshToken: "test", projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: false, models: [], quotas: [], quotaLoading: false, quotaError: null }, "medium");
   expect(result.verificationRequired).toBe(false);
+});
+
+test("direct model selection recovers and pins the chosen account before confirming it", async () => {
+  accountsFile = JSON.stringify({ version: 4, activeIndex: 0, accounts: [{ refreshToken: "first-token", enabled: true }] });
+  metadataConfig = JSON.stringify({ x_nanami_antigravity: { accounts: [
+    { email: "first@example.invalid", refreshToken: "first-token", enabled: true },
+    { email: "second@example.invalid", refreshToken: "second-token", enabled: true },
+  ] } });
+  const model = { familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 0.8, resetTime: null, supportsThinkingTier: false };
+  const makeAccount = (email: string, refreshToken: string, isActive: boolean) => ({ email, refreshToken, isActive, projectId: "", managedProjectId: "", addedAt: 1, lastUsed: 0, isPlus: false, models: [model], quotas: [], quotaLoading: false, quotaError: null });
+  useAntigravityAccountsStore.setState({ accounts: [makeAccount("first@example.invalid", "first-token", true), makeAccount("second@example.invalid", "second-token", false)], selectedModel: null });
+  let authMatches = false;
+  const client = { session: { status: async () => ({ data: {} }) }, auth: { set: async ({ auth }: { auth: { refresh: string } }) => { authMatches = auth.refresh.startsWith("second-token|"); return { data: true }; } }, instance: { dispose: async () => ({ data: true }) } };
+  await useAntigravityAccountsStore.getState().selectAccount("second@example.invalid", client as never, "model-a");
+  const saved = JSON.parse(accountsFile);
+  expect(authMatches).toBe(true);
+  expect(saved.accounts.map((a: { enabled: boolean }) => a.enabled)).toEqual([false, true]);
+  expect(saved.accounts[saved.activeIndex].email).toBe("second@example.invalid");
+  expect(useAntigravityAccountsStore.getState().accounts.find((a) => a.isActive)?.email).toBe("second@example.invalid");
+});
+
+test("direct model selection fails without changing the displayed account when credentials cannot be matched", async () => {
+  metadataConfig = JSON.stringify({ x_nanami_antigravity: { accounts: [] } });
+  const model = { familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 0.8, resetTime: null, supportsThinkingTier: false };
+  const makeAccount = (email: string, refreshToken: string, isActive: boolean) => ({ email, refreshToken, isActive, projectId: "", managedProjectId: "", addedAt: 1, lastUsed: 0, isPlus: false, models: [model], quotas: [], quotaLoading: false, quotaError: null });
+  useAntigravityAccountsStore.setState({ accounts: [makeAccount("first@example.invalid", "first-token", true), makeAccount("missing@example.invalid", "missing-token", false)], selectedModel: null });
+  const client = { session: { status: async () => ({ data: {} }) }, auth: { set: async () => { throw new Error("should not change engine auth"); } }, instance: { dispose: async () => ({ data: true }) } };
+  await expect(useAntigravityAccountsStore.getState().selectAccount("missing@example.invalid", client as never, "model-a")).rejects.toThrow("Could not prepare");
+  expect(useAntigravityAccountsStore.getState().accounts.find((a) => a.isActive)?.email).toBe("first@example.invalid");
+  expect(writes).toBe(0);
+});
+
+test("failed direct selection restores the previous account and engine credentials", async () => {
+  metadataConfig = JSON.stringify({ x_nanami_antigravity: { accounts: [
+    { email: "first@example.invalid", refreshToken: "first-token", enabled: true },
+    { email: "second@example.invalid", refreshToken: "second-token", enabled: true },
+  ] } });
+  const model = { familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 0.8, resetTime: null, supportsThinkingTier: false };
+  const makeAccount = (email: string, refreshToken: string, isActive: boolean) => ({ email, refreshToken, isActive, projectId: "", managedProjectId: "", addedAt: 1, lastUsed: 0, isPlus: false, models: [model], quotas: [], quotaLoading: false, quotaError: null });
+  useAntigravityAccountsStore.setState({ accounts: [makeAccount("first@example.invalid", "first-token", true), makeAccount("second@example.invalid", "second-token", false)], selectedModel: { providerID: "google", modelID: "model-a" } });
+  const attempted: string[] = [];
+  const client = { session: { status: async () => ({ data: {} }) }, auth: { set: async ({ auth }: { auth: { refresh: string } }) => { attempted.push(auth.refresh.split("|")[0]); return { data: attempted.length > 1 }; } }, instance: { dispose: async () => ({ data: true }) } };
+  await expect(useAntigravityAccountsStore.getState().selectAccount("second@example.invalid", client as never, "model-a")).rejects.toThrow("Could not activate");
+  const saved = JSON.parse(accountsFile);
+  expect(attempted).toEqual(["second-token", "first-token"]);
+  expect(saved.accounts[saved.activeIndex].email).toBe("first@example.invalid");
+  expect(saved.accounts.map((a: { enabled: boolean }) => a.enabled)).toEqual([true, false, false]);
+  expect(useAntigravityAccountsStore.getState().accounts.find((a) => a.isActive)?.email).toBe("first@example.invalid");
+});
+
+test("direct account switching does not interrupt an active task", async () => {
+  const model = { familyKey: "gemini", modelID: "model-a", rawId: "model-a", displayName: "Model A", remainingFraction: 0.8, resetTime: null, supportsThinkingTier: false };
+  const account = { email: "second@example.invalid", refreshToken: "second-token", isActive: false, projectId: "", managedProjectId: "", addedAt: 1, lastUsed: 0, isPlus: false, models: [model], quotas: [], quotaLoading: false, quotaError: null };
+  useAntigravityAccountsStore.setState({ accounts: [account], selectedModel: null });
+  const client = { session: { status: async () => ({ data: { session: { type: "busy" } } }) } };
+  await expect(useAntigravityAccountsStore.getState().selectAccount(account.email, client as never, "model-a")).rejects.toThrow("Wait for running tasks");
+  expect(writes).toBe(0);
 });
 
 test("recovers an unlabeled plugin account and adds the selected saved account", async () => {

@@ -429,6 +429,17 @@ function technicalErrorDetails(error: unknown, fallback: string, fields: ReturnT
   return normalizeErrorText(serialized && serialized !== "{}" ? serialized : fallback, { cap: 1_500 }).display;
 }
 
+/** Google can report quota remaining while rejecting a model for subscription eligibility. */
+function requiresProviderSubscription(responseBody: string | null): boolean {
+  if (!responseBody || responseBody.length > 16_384) return false;
+  try {
+    const body: unknown = JSON.parse(responseBody);
+    const error = recordValue(body, "error");
+    const details = recordValue(error, "details");
+    return Array.isArray(details) && details.some((detail) => recordValue(detail, "reason") === "SUBSCRIPTION_REQUIRED");
+  } catch { return false; }
+}
+
 export function presentOpencodeSessionError(error: unknown, fallback = "Session failed"): OpencodeSessionErrorPresentation {
   const wall = autoAccessWallFromError(error);
   if (wall) {
@@ -444,10 +455,11 @@ export function presentOpencodeSessionError(error: unknown, fallback = "Session 
   const kind = gatewayProviderAuth?.kind ?? (gatewayAuth ? "gateway-auth-required" : gatewaySelection ? "gateway-selection-required" : openworkModelsLimit ? "generic" : sessionErrorKind(fields.name, fields.message, fields.code, fields.responseBody, fields.status));
   const fallbackTitle = normalizeSessionError(fields.message ?? defaultErrorMessage(fields.name, fallback));
   const credentialCopy = kind === "provider-credentials" ? providerCredentialCopy(fields) : null;
+  const subscriptionRequired = kind === "provider-access-denied" && requiresProviderSubscription(fields.responseBody);
   return {
     kind,
-    title: openworkModelsLimit ? "Your workspace used its OpenWork Models allowance" : credentialCopy?.title ?? errorTitle(kind, fallbackTitle),
-    description: gatewayProviderAuth?.message ?? credentialCopy?.description
+    title: openworkModelsLimit ? "Your workspace used its OpenWork Models allowance" : subscriptionRequired ? "This model requires an eligible subscription" : credentialCopy?.title ?? errorTitle(kind, fallbackTitle),
+    description: gatewayProviderAuth?.message ?? (subscriptionRequired ? "The provider rejected the account or project used for this request. Check the selected account and its subscription, or choose another model." : null) ?? credentialCopy?.description
       ?? (kind === "config-invalid" ? describeOpencodeConfigError(error) ?? fields.message : null)
       ?? errorDescription(kind, gatewayAuth),
     technicalDetails: kind === "gateway-selection-required" ? "Error code: gateway_selection_required\nStatus: 409" : gatewayAuth ? "Error code: openwork_auth_required\nStatus: 401" : technicalErrorDetails(error, fallback, fields),

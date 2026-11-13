@@ -3,6 +3,7 @@ import { Building, Check, ChevronDown, ChevronUp, Cloud, Laptop, Loader2, Lock, 
 import { confirmAntigravityAuthEvent, openCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActionContextMenu } from "@/components/ui/action-context-menu";
 import { OpenWorkMark, ProviderIcon } from "@/react-app/design-system/provider-icon";
@@ -591,6 +592,8 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
   catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false, chrome = "panel",
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
   const display = { plainFreeModel };
+  const selectingAccount = useRef(false);
+  const [accountPreparing, setAccountPreparing] = useState(false);
   const favorites = useModelCollectionsStore((state) => state.favorites);
   const recent = useModelCollectionsStore((state) => state.recent);
   const antigravityAccounts = useAntigravityAccountsStore((state) => state.accounts);
@@ -754,7 +757,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
   const blockedAuto = (option: ModelRef) => autoRow?.state !== undefined && autoRow.state !== "ready" && modelRefKey(option) === modelRefKey(autoRow.model);
   const canSelect = (option: ModelOption) => !option.disabled && !blockedAuto(option) && nonGoogleOptions.some((item) => modelRefKey(item) === modelRefKey(option) && !item.disabled);
   const select = (option: ModelOption) => {
-    if (!canSelect(option)) return;
+    if (selectingAccount.current || !canSelect(option)) return;
     const variant = search ? resolveSearchIntent(option, search.intent).variant : undefined;
     const variantObj = variant === undefined ? undefined : { variant };
     if (option.providerID === "nanami" && option.modelID === "uncensored") {
@@ -772,23 +775,26 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     onSelect(option, variantObj);
   };
   const selectAntigravityModel = (account: AntigravityAccountInfo, item: AntigravityModelItem) => {
+    if (selectingAccount.current) return;
+    selectingAccount.current = true;
+    setAccountPreparing(true);
     const resolvedModelID = resolveAntigravityModelForTier(item, thinkingTier);
-    useAntigravityAccountsStore.getState().setSelectedModel({
-      providerID: "google",
-      modelID: resolvedModelID,
-    });
-    void useAntigravityAccountsStore.getState().selectAccount(account.email);
-    onSelect(
-      {
-        providerID: "google",
-        modelID: resolvedModelID,
-        title: item.displayName,
-        description: `${account.email} (Antigravity)`,
-      } as unknown as ModelOption,
-      item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
-    );
+    void useAntigravityAccountsStore.getState().selectAccount(account.email, undefined, resolvedModelID).then(() => {
+      onSelect(
+        {
+          providerID: "google",
+          modelID: resolvedModelID,
+          title: item.displayName,
+          description: `${account.email} (Antigravity)`,
+        } as unknown as ModelOption,
+        item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
+      );
+    }).catch((error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Could not select this Antigravity account.");
+    }).finally(() => { selectingAccount.current = false; setAccountPreparing(false); });
   };
   const selectChatGptModel = (account: ChatGptAccountInfo, item: ChatGptModelItem) => {
+    if (selectingAccount.current) return;
     useAntigravityAccountsStore.getState().setSelectedModel({
       providerID: "openai",
       modelID: item.modelID,
@@ -805,6 +811,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     );
   };
   const selectCopilotModel = (account: CopilotAccountInfo, item: CopilotModelItem) => {
+    if (selectingAccount.current) return;
     useAntigravityAccountsStore.getState().setSelectedModel({
       providerID: "github-copilot",
       modelID: item.modelID,
@@ -865,7 +872,10 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
   const verifiedDate = catalogState?.lastVerifiedAt ? new Date(catalogState.lastVerifiedAt) : null;
   const verified = verifiedDate && Number.isFinite(verifiedDate.valueOf()) ? verifiedDate : null;
 
-  return <div ref={root} className="flex min-h-0 flex-1 flex-col relative" onKeyDownCapture={(event) => {
+  return <div ref={root} aria-busy={accountPreparing} className="flex min-h-0 flex-1 flex-col relative"
+    onClickCapture={(event) => { if (selectingAccount.current) { event.preventDefault(); event.stopPropagation(); } }}
+    onKeyDownCapture={(event) => {
+    if (selectingAccount.current) { event.preventDefault(); event.stopPropagation(); return; }
     if (!isPinModelShortcut(event) || event.repeat) return;
     const focusedRow = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-model-key]") : null;
     const row = focusedRow ?? root.current?.querySelector<HTMLElement>("[data-model-key][data-highlighted]");
@@ -873,6 +883,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     if (!option) return;
     event.preventDefault(); event.stopPropagation(); toggle(option);
   }}>
+    {accountPreparing ? <div role="status" className="px-3 py-1 text-xs text-muted-foreground">Preparing selected account…</div> : null}
     {nsfwTarget ? (
       <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/95 backdrop-blur-xs p-6 text-center select-none animate-in fade-in-0 duration-150">
         <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-400 mb-3 shadow-xs">
