@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag (e.g. v1.2.0)"
         required: false
-        default: "v1.2.3"
+        default: "v1.2.4"
   push:
     tags:
       - "v*"
@@ -191,29 +191,27 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.3' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.4' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.3' }}: Sign-In and Context Update"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.4' }}: Startup and Rendering Fixes"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.3' }}** gives browser sign-in more time and makes context usage easier to see.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.4' }}** improves startup recovery, math formatting, and Antigravity account selection.
 
-            ### ChatGPT sign-in
-            - Fixed a provider OAuth callback timeout that could stop sign-in after ten seconds while you were still in your browser.
-            - A previous account connection no longer counts as confirmation of a new sign-in. Start a new sign-in after updating if your earlier attempt expired.
+            ### Startup recovery
+            - Recover an interrupted runtime database transaction before startup checks, preventing a read-only database error from blocking the app.
 
-            ### Context and activity
-            - The composer shows the most recently reported context usage and displays a compacting status when the engine reports it.
-            - Aligned the Local Router and model picker headers.
+            ### Math rendering
+            - Render multiline dollar-delimited math, including LaTeX arrays, more reliably while preserving ordinary currency and Markdown formatting.
 
-            ### Local Router
-            - Reduced preparation delays by running independent provider-policy and Antigravity quota reads in parallel. Fresh quota, account and policy checks remain in place.
+            ### Antigravity accounts
+            - Apply the selected account before switching models and explain subscription-related access errors more clearly.
 
             ### Notes
-            - Context usage is based on the last reported request and may not be available for every model.
+            - Model access still depends on the selected account's provider entitlements.
             - Windows installers are unsigned, and macOS packages are not notarized.
             - Windows dictation uses Windows voice typing if its bundled helper is unavailable.
 
