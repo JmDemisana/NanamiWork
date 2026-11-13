@@ -12,6 +12,7 @@ import {
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
 import { applyEdits, modify, parse, type ParseError } from "jsonc-parser";
+import { discoverNewAntigravityModels } from "./antigravity-new-models";
 
 const ANTIGRAVITY_CLIENT_ID =
   "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
@@ -671,6 +672,7 @@ export async function fetchAccountModelsAndQuota(
       {
         displayName?: string;
         disabled?: boolean;
+        selectable?: boolean;
         quotaInfo?: { remainingFraction?: number; resetTime?: string };
       }
     >;
@@ -746,6 +748,7 @@ export async function fetchAccountModelsAndQuota(
   );
 
   const resolvedModels: AntigravityModelItem[] = [];
+  resolvedModels.push(...discoverNewAntigravityModels(modelsMap, thinkingTier));
 
   const effectiveArgonFraction = argonWeeklyBucket?.remainingFraction ?? argonQuota.remainingFraction ?? 0;
   const effectiveArgonReset = argonWeeklyBucket?.resetTime ?? argonQuota.resetTime;
