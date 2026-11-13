@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag (e.g. v1.2.0)"
         required: false
-        default: "v1.2.2"
+        default: "v1.2.3"
   push:
     tags:
       - "v*"
@@ -191,33 +191,35 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.2' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.3' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.2' }}: Local Router Bugfix"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.3' }}: Sign-In and Context Update"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.2' }}** fixes local router account rotation and improves activity visibility.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.3' }}** gives browser sign-in more time and makes context usage easier to see.
+
+            ### ChatGPT sign-in
+            - Fixed a provider OAuth callback timeout that could stop sign-in after ten seconds while you were still in your browser.
+            - A previous account connection no longer counts as confirmation of a new sign-in. Start a new sign-in after updating if your earlier attempt expired.
+
+            ### Context and activity
+            - The composer shows the most recently reported context usage and displays a compacting status when the engine reports it.
+            - Aligned the Local Router and model picker headers.
 
             ### Local Router
-            - Retry account selection after quota refresh and rotate to an eligible account when quota is exhausted.
-            - Recover Antigravity account identities from saved credentials and avoid selecting an ambiguous account.
-            - Preserve the active model and account for steering an ongoing turn.
-
-            ### Interface
-            - Make sidebar activity animation easier to see.
-            - Improve command, output, code and diff card readability.
-            - Remove the full-page model picker switch; standalone desktops use the full-page picker while managed restrictions remain respected.
+            - Reduced preparation delays by running independent provider-policy and Antigravity quota reads in parallel. Fresh quota, account and policy checks remain in place.
 
             ### Notes
+            - Context usage is based on the last reported request and may not be available for every model.
             - Windows installers are unsigned, and macOS packages are not notarized.
             - Windows dictation uses Windows voice typing if its bundled helper is unavailable.
 
             ### Downloads
             - **Windows**: NSIS installer and AppX package
-            - **macOS**: DMG and ZIP
-            - **Linux**: AppImage and Debian package
+            - **macOS**: Apple Silicon DMG and ZIP
+            - **Linux**: x86-64 AppImage and Debian package
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
