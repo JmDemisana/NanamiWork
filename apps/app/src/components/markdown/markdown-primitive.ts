@@ -694,6 +694,29 @@ type StreamingMarkdownState = {
  */
 const STREAMING_RELEX_TAIL = 2;
 
+/** Incomplete display math can span several paragraphs while a reply streams. */
+function hasOpenDisplayMath(tokens: Token[]) {
+  let open = false;
+  for (const token of tokens) {
+    if (token.type === "code") continue;
+    let text = token.raw;
+    while (text) {
+      if (open) {
+        const close = text.indexOf("$$");
+        if (close < 0) break;
+        text = text.slice(close + 2);
+        open = false;
+      } else {
+        const match = /(?:^|\n) {0,3}\$\$(?!\$)/.exec(text);
+        if (!match) break;
+        text = text.slice(match.index + match[0].length);
+        open = true;
+      }
+    }
+  }
+  return open;
+}
+
 function hasReferenceDefinition(tokens: Token[]) {
   return tokens.some((token) => token.type === "def");
 }
@@ -733,7 +756,7 @@ export function createStreamingMarkdownRenderer(presentation: MarkdownPresentati
 
   const renderAppended = (source: string, previous: StreamingMarkdownState): StreamingMarkdownState | null => {
     const keep = previous.tokens.length - STREAMING_RELEX_TAIL;
-    if (keep <= 0 || hasReferenceDefinition(previous.tokens)) return null;
+    if (keep <= 0 || hasReferenceDefinition(previous.tokens) || (previous.source.includes("$$") && hasOpenDisplayMath(previous.tokens))) return null;
 
     let offset = 0;
     for (const token of previous.tokens.slice(0, keep)) offset += token.raw.length;

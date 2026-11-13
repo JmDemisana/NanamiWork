@@ -74,6 +74,24 @@ function renderMathToken(token: Tokens.Generic) {
   return isMathToken(token) ? renderMathHtml(token.text, token.displayMode) : false;
 }
 
+/** Display math may put the opening and closing markers next to its content. */
+function dollarDisplayMath(): TokenizerAndRendererExtension {
+  return {
+    name: "blockDollarMath",
+    level: "block",
+    start(src) {
+      const match = /(?:^|\n) {0,3}\$\$(?!\$)/.exec(src);
+      return match ? match.index + (match[0].startsWith("\n") ? 1 : 0) : undefined;
+    },
+    tokenizer(src) {
+      const match = /^ {0,3}\$\$(?!\$)([\s\S]*?)\$\$(?!\$)[ \t]*(?:\n|$)/.exec(src);
+      if (!match || !match[1].trim()) return undefined;
+      return { type: "blockDollarMath", raw: match[0], text: match[1].trim(), displayMode: true };
+    },
+    renderer: renderMathToken,
+  };
+}
+
 function bracketMath(
   name: string,
   level: "inline" | "block",
@@ -110,6 +128,7 @@ export function markdownMath(): MarkedExtension {
   return {
     extensions: [
       ...dollarExtensions.map(guardRenderer),
+      dollarDisplayMath(),
       // Block first: a standalone `\[ ... \]` should render as centred display math
       // rather than as display math nested inside a paragraph.
       bracketMath("blockBracketKatex", "block", BLOCK_BRACKET_RULE, true, "\\["),
