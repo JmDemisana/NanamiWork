@@ -1,4 +1,5 @@
 import { dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { openworkConfigDir } from "@openwork/paths";
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
@@ -43,6 +44,19 @@ export function runtimeDbPath(config: Pick<ServerConfig, "configPath">): string 
 /** Directory holding runtime state (the SQLite DB and derived files). */
 export function runtimeStorageDir(config: Pick<ServerConfig, "configPath">): string {
   return dirname(runtimeDbPath(config));
+}
+
+/** Allow SQLite to roll back an interrupted transaction before read-only startup probes. */
+export async function recoverRuntimeDatabase(config: Pick<ServerConfig, "configPath" | "readOnly">): Promise<void> {
+  if (config.readOnly) return;
+  const path = runtimeDbPath(config);
+  if (!existsSync(path) || !existsSync(`${path}-journal`)) return;
+  const db = await openRuntimeSqliteDatabase(path);
+  try {
+    db.sqlite.exec("PRAGMA schema_version");
+  } finally {
+    db.close();
+  }
 }
 
 export async function openRuntimeSqliteDatabase(path: string): Promise<RuntimeSqliteDatabase> {

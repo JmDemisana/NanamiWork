@@ -6,6 +6,7 @@ import type { ConnectMcpCatalogDiagnostic } from "./connect-mcp-server-catalog.j
 import { diagnoseMcpToolDenies, type McpToolDeny } from "./mcp.js";
 import { openworkPluginPath } from "./openwork-extensions-plugin-path.js";
 import { sanitizeDiagnosticString, sanitizeDiagnosticValue } from "./diagnostic-sanitizer.js";
+import { recoverRuntimeDatabase } from "./runtime-db.js";
 import {
   ENGINE_GLOBAL_RUNTIME_CONFIG_ID,
   listRuntimeOpencodeConfigRows,
@@ -961,6 +962,7 @@ async function readPersistedDesiredConfig(
 export async function migrateOpenworkCloudMcpRuntimeConfig(
   config: ServerConfig,
 ): Promise<{ config: Record<string, unknown> | null; changed: boolean }> {
+  await recoverRuntimeDatabase(config);
   const rows = await listRuntimeOpencodeConfigRows(config);
   const globalRow = rows.find((row) => row.workspaceId === ENGINE_GLOBAL_RUNTIME_CONFIG_ID);
   const globalEntry = globalRow
