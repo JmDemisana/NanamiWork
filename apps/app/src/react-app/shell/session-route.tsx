@@ -223,6 +223,7 @@ import {
 } from "@/react-app/domains/cloud/openwork-models-promo";
 import { ModelPickerModal, MODEL_PICKER_UNAVAILABLE_SUBTITLE } from "@/react-app/domains/session/modals/model-picker-modal";
 import { ModelPickerPage } from "@/react-app/domains/models/model-picker-page";
+import { configureNanamiUncensoredGrant } from "@/react-app/domains/models/nanami-uncensored-grant";
 import { useLocalModelPickerEnabled } from "@/react-app/domains/models/use-local-model-picker";
 import { ModelPickerPageHostProvider } from "@/react-app/domains/models/model-picker-page-host";
 import { PlatformConnectModal } from "@/react-app/domains/models/platform-connect-modal";
@@ -4549,30 +4550,7 @@ export function SessionRoute() {
         setModelPickerSessionId(null);
         modelPicker.setOpen(false);
       }}
-      onNanamiNsfwGrant={async (grant) => {
-        if (!opencodeClient) throw new Error("NanamiWork engine is not connected.");
-        const current = unwrap(await opencodeClient.config.get()) as Record<string, any>;
-        const provider = current.provider && typeof current.provider === "object" ? current.provider : {};
-        const nanami = provider.nanami && typeof provider.nanami === "object" ? provider.nanami : {};
-        const models = nanami.models && typeof nanami.models === "object" ? nanami.models : {};
-        const uncensoredModel = models.uncensored && typeof models.uncensored === "object" ? models.uncensored : {};
-        const modelHeaders = uncensoredModel.headers && typeof uncensoredModel.headers === "object" ? uncensoredModel.headers : {};
-        await opencodeClient.config.update({
-          config: {
-            ...current,
-            provider: {
-              ...provider,
-              nanami: {
-                ...nanami,
-                models: {
-                  ...models,
-                  uncensored: { ...uncensoredModel, headers: { ...modelHeaders, "x-nami-nsfw-grant": grant } },
-                },
-              },
-            },
-          },
-        });
-      }}
+      onNanamiNsfwGrant={(grant) => configureNanamiUncensoredGrant(opencodeClient, grant)}
       disabledProviders={disabledProviderIds}
       gatewayProviderIds={gatewayProviderIds}
       gatewayConnectProviders={gatewayConnectProviders}

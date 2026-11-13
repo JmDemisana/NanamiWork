@@ -177,6 +177,7 @@ import {
 } from "@/app/utils";
 import { RenameWorkspaceModal } from "@/react-app/domains/workspace/rename-workspace-modal";
 import { ModelPickerModal } from "@/react-app/domains/session/modals/model-picker-modal";
+import { configureNanamiUncensoredGrant } from "@/react-app/domains/models/nanami-uncensored-grant";
 import type { ModelRef } from "@/app/types";
 import { workspaceSwatchColor } from "@/react-app/domains/session/sidebar/utils";
 import { recordInspectorEvent } from "../../app/lib/app-inspector";
@@ -2729,6 +2730,7 @@ function SettingsRouteContent(props: SettingsSurfaceProps = {}) {
       />
       <ModelPickerModal
         open={modelPicker.open}
+        onNanamiNsfwGrant={(grant) => configureNanamiUncensoredGrant(opencodeClient, grant)}
         options={modelPicker.options}
         knownOptions={modelPicker.knownOptions}
         disabledProviders={disabledProviders}

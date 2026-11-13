@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "
 import { Building, Check, ChevronDown, ChevronUp, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X, Bot } from "lucide-react";
 import { confirmAntigravityAuthEvent, openCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
+import { useWorkspaceMaybe } from "@/react-app/shell/workspace-provider";
+import { configureNanamiUncensoredGrant } from "./nanami-uncensored-grant";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -591,6 +593,7 @@ export function ModelProviderLoginBar({
 function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onNanamiNsfwGrant, focusAlternative = false, footer, leading, searchInputRef,
   catalogState, retainedSelection, onConnectProvider, onConnectCodex, onOpenProviderSettings, onSetWorkspaceDefault, currentBehaviorValue, openWorkModelsSyncing, onReloadWorkspace, onRetryAuto, onClose, autoRow, plainFreeModel = false, chrome = "panel",
 }: ModelPickerListProps & { autoRow?: AutoRowState; plainFreeModel?: boolean }) {
+  const workspace = useWorkspaceMaybe();
   const display = { plainFreeModel };
   const selectingAccount = useRef(false);
   const [accountPreparing, setAccountPreparing] = useState(false);
@@ -742,8 +745,8 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         setNsfwError(typeof data.error === "string" ? data.error : "The Uncensored Models code was rejected.");
         return;
       }
-      if (!onNanamiNsfwGrant) throw new Error("NanamiWork could not configure the temporary gateway grant.");
-      await onNanamiNsfwGrant(data.grant);
+      if (onNanamiNsfwGrant) await onNanamiNsfwGrant(data.grant);
+      else await configureNanamiUncensoredGrant(workspace?.client, data.grant);
       const target = nsfwTarget;
       setNsfwTarget(null);
       setNsfwInput("");
