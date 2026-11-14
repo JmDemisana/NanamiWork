@@ -905,14 +905,14 @@ export async function fetchAccountModelsAndQuota(
       },
       {
         family: "gemini-flash-5h",
-        label: "Gemini 3.8 Flash (5h)",
+        label: "Gemini (5h)",
         remainingFraction: effectiveFlash5hFraction,
         resetTime: effectiveFlash5hReset,
         period: "5h",
       },
       {
         family: "gemini-flash-weekly",
-        label: "Gemini 3.8 Flash (Weekly)",
+        label: "Gemini (Weekly)",
         remainingFraction: effectiveFlashWeeklyFraction,
         resetTime: effectiveFlashWeeklyReset,
         period: "weekly",
@@ -937,7 +937,7 @@ export async function fetchAccountModelsAndQuota(
     quotas.push(
       {
         family: "gemini-flash-weekly",
-        label: "Gemini 3.8 Flash (Weekly)",
+        label: "Gemini (Weekly)",
         remainingFraction: effectiveFlashWeeklyFraction,
         resetTime: effectiveFlashWeeklyReset,
         period: "weekly",

@@ -10,10 +10,18 @@ export async function configureNanamiUncensoredGrant(client: Client | null | und
   const nanami = provider.nanami && typeof provider.nanami === "object" ? provider.nanami : {};
   const models = nanami.models && typeof nanami.models === "object" ? nanami.models : {};
   const uncensored = models.uncensored && typeof models.uncensored === "object" ? models.uncensored : {};
+  const providerHeaders = nanami.headers && typeof nanami.headers === "object" ? nanami.headers : {};
   const headers = uncensored.headers && typeof uncensored.headers === "object" ? uncensored.headers : {};
   const updated = await client.config.update({ config: {
     ...current,
-    provider: { ...provider, nanami: { ...nanami, models: { ...models,
+    provider: { ...provider, nanami: {
+      ...nanami,
+      // Include the grant at provider scope as a fallback for engine versions
+      // that omit model-level headers when building chat-completion requests.
+      // The gateway still validates the short-lived grant on the uncensored
+      // endpoint, and the separate gate remains required to select this model.
+      headers: { ...providerHeaders, "x-nami-nsfw-grant": grant },
+      models: { ...models,
       uncensored: { ...uncensored, headers: { ...headers, "x-nami-nsfw-grant": grant } },
     } } },
   } });
