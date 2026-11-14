@@ -1089,7 +1089,16 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
         <div className={chrome === "page" ? "grid grid-cols-1 items-start gap-x-4 gap-y-2 px-2 @[41rem]/modelgrid:grid-cols-2 @[62rem]/modelgrid:grid-cols-3" : undefined}>
         {groups.length > 0 || chrome !== "page" ? <CommandList className={chrome === "page" ? "not-empty:p-0" : undefined}>
           {(group: ModelGroup) => <CommandGroup key={group.value} items={group.items} className={chrome === "page" ? "px-2 py-1" : undefined}>
-            {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>}
+            {group.value === mergedLabel || UNLABELED_GROUPS.has(group.value) ? null : (
+              <>
+                <CommandGroupLabel className="flex min-h-7 items-center">{group.value}</CommandGroupLabel>
+                {group.value === "Nanami Router Models" ? (
+                  <p className="px-2 pb-1 text-[11px] leading-snug text-muted-foreground">
+                    Antigravity is faster than the router since the public API pool has lower priority.
+                  </p>
+                ) : null}
+              </>
+            )}
             <CommandCollection>{(option: ModelOption) => {
               const key = modelRefKey(option);
               const name = modelTitle(option, display);
