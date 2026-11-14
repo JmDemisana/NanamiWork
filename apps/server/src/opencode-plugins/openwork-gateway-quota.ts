@@ -80,7 +80,7 @@ export const OpenWorkGatewayQuota = async () => ({
       const existingNanamiModels = record(nanamiProv.models) ? { ...nanamiProv.models } : {};
       delete existingNanamiModels.openrouter;
       nanamiProv.models = {
-        "gemini-router": nanamiMod("Gemini 4 Hydrogen"),
+        "gemini-router": nanamiMod("Gemini"),
         uncensored: nanamiUncensoredMod,
         ...existingNanamiModels,
       };

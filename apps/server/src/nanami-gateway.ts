@@ -158,7 +158,7 @@ export function nanamiProviderSpec(apiKey: string, baseUrl = nanamiGatewayBaseUr
     baseUrl,
     apiKey,
     models: [
-      { id: "gemini-router", name: "Gemini 4 Hydrogen", config: nanamiModelConfig() },
+      { id: "gemini-router", name: "Gemini", config: nanamiModelConfig() },
       { id: "uncensored", name: "Uncensored Models", config: nanamiUncensoredModelConfig() },
     ],
   };
@@ -235,7 +235,7 @@ export function nanamiLegacyProviderConfig(apiKey = nanamiApiKey(), baseUrl = na
     name: "Nanami Gateway",
     options: { baseURL: baseUrl, apiKey },
     models: {
-      "gemini-router": { name: "Gemini 4 Hydrogen", ...model() },
+      "gemini-router": { name: "Gemini", ...model() },
       uncensored: { name: "Uncensored Models", ...uncensoredModel() },
     },
   };
