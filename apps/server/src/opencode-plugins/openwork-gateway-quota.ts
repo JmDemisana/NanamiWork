@@ -77,11 +77,12 @@ export const OpenWorkGatewayQuota = async () => ({
       };
       const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
       nanamiProv.name ??= "Nanami Router Models";
+      const existingNanamiModels = record(nanamiProv.models) ? { ...nanamiProv.models } : {};
+      delete existingNanamiModels.openrouter;
       nanamiProv.models = {
-        "gemini-router": nanamiMod("Gemini"),
-        openrouter: nanamiMod("OpenRouter"),
+        "gemini-router": nanamiMod("Gemini 4 Hydrogen"),
         uncensored: nanamiUncensoredMod,
-        ...(record(nanamiProv.models) ? nanamiProv.models : {}),
+        ...existingNanamiModels,
       };
       const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
 
