@@ -111,3 +111,17 @@ test("steering stays on the active routed model without switching or refreshing 
   expect(fixture.activated).toEqual([]);
   expect(fixture.sent).toEqual(["openai/model-b:medium"]);
 });
+
+test("candidates with 5% or less quota after refresh are skipped in favor of the next account", async () => {
+  const fixture = setup();
+  const nearEmpty = [
+    { ...accounts[0]!, models: [{ ...accounts[0]!.models[0]!, remainingFraction: 0.01 }] },
+    accounts[1]!,
+  ];
+  let refreshed = false;
+  await dispatchLocalRouterTurn({ ...fixture.input,
+    accounts: async () => refreshed ? nearEmpty : accounts,
+    activate: async () => { refreshed = true; },
+  });
+  expect(fixture.sent).toEqual(["openai/model-b:medium"]);
+});

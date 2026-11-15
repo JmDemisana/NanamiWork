@@ -279,3 +279,38 @@ test("a passive model render cannot silently unpin a routed account", async () =
   expect(accountsFile).toBe(pinned);
   expect(writes).toBe(before);
 });
+
+test("model quotas use the stricter of 5h and weekly windows", async () => {
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) {
+      return Response.json({
+        models: {
+          "gemini-4-hydrogen-medium": { quotaInfo: { remainingFraction: 0.9, resetTime: "weekly" } },
+          "gemini-3.8-flash-medium": { quotaInfo: { remainingFraction: 0.9, resetTime: "weekly" } },
+          "claude-sonnet-5-5-medium": { quotaInfo: { remainingFraction: 0.8, resetTime: "weekly" } },
+        },
+      });
+    }
+    if (url.includes("retrieveUserQuotaSummary")) {
+      return Response.json({
+        groups: [{
+          buckets: [
+            { bucketId: "gemini-5h", remainingFraction: 0.01, resetTime: "5h-gemini" },
+            { bucketId: "gemini-weekly", remainingFraction: 0.9, resetTime: "weekly-gemini" },
+            { bucketId: "3p-5h", remainingFraction: 0, resetTime: "5h-3p" },
+            { bucketId: "3p-weekly", remainingFraction: 0.8, resetTime: "weekly-3p" },
+          ],
+        }],
+      });
+    }
+    throw new Error("Unexpected request");
+  };
+  const result = await fetchAccountModelsAndQuota({ email: "test@example.invalid", refreshToken: "test", projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: true, models: [], quotas: [], quotaLoading: false, quotaError: null }, "medium");
+  const hydrogen = result.models.find((m) => m.familyKey === "gemini-4-hydrogen");
+  const flash = result.models.find((m) => m.familyKey === "gemini-3.8-flash");
+  const claude = result.models.find((m) => m.familyKey === "claude-sonnet");
+  expect(hydrogen?.remainingFraction).toBe(0.01);
+  expect(flash?.remainingFraction).toBe(0.01);
+  expect(claude?.remainingFraction).toBe(0);
+});

@@ -4,6 +4,7 @@ import { isLocalRouterModel } from "@/app/lib/local-router-ref";
 import { ModelAdmissionFence, modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import {
   hasLocalRouterRouting,
+  isLocalRouterQuotaExhausted,
   localRouterSummary,
   resolveLocalRouterCandidates,
   type LocalRouterAccount,
@@ -126,7 +127,7 @@ export async function dispatchLocalRouterTurn<T>(input: {
       const currentAccount = currentAccounts.find((account) => account.key === candidate.account.key);
       const currentModel = currentAccount?.models.find((model) => model.key === candidate.model.key);
       if (!currentAccount || currentAccount.unavailableReason || !currentModel
-        || (currentModel.remainingFraction !== null && currentModel.remainingFraction <= 0)) continue;
+        || isLocalRouterQuotaExhausted(currentModel.remainingFraction)) continue;
       if (candidate.account.kind !== "local" && currentModel.remainingFraction === null) {
         unknownQuotaSeen = true;
         continue;

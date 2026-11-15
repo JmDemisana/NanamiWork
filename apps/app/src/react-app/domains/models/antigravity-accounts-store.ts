@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Client } from "@/app/types";
 import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import { LocalRouterQuotaExhaustedError } from "./local-router-errors";
+import { isLocalRouterQuotaExhausted } from "./nanami-local-router";
 import {
   desktopFetchViaMain,
   getCachedDesktopHomeDir,
@@ -747,23 +748,46 @@ export async function fetchAccountModelsAndQuota(
     "gpt-oss-120b-medium",
   );
 
-  const resolvedModels: AntigravityModelItem[] = [];
-  resolvedModels.push(...discoverNewAntigravityModels(modelsMap, thinkingTier));
+  const pickStrictestQuotaWindow = (
+    ...windows: ReadonlyArray<{ remainingFraction: number | null; resetTime: string | null } | null | undefined>
+  ): { remainingFraction: number | null; resetTime: string | null } => {
+    const known = windows.filter(
+      (window): window is { remainingFraction: number; resetTime: string | null } =>
+        Boolean(window && typeof window.remainingFraction === "number" && Number.isFinite(window.remainingFraction)),
+    );
+    if (known.length === 0) return { remainingFraction: null, resetTime: null };
+    return known.reduce((left, right) => (left.remainingFraction <= right.remainingFraction ? left : right));
+  };
+
+  const resolvedModels: AntigravityModelItem[] = discoverNewAntigravityModels(modelsMap, thinkingTier).map((model) => {
+    const strictest = pickStrictestQuotaWindow(model, gemini5hBucket, geminiWeeklyBucket);
+    return strictest.remainingFraction === null
+      ? model
+      : { ...model, remainingFraction: strictest.remainingFraction, resetTime: strictest.resetTime ?? model.resetTime };
+  });
 
   const effectiveArgonFraction = argonWeeklyBucket?.remainingFraction ?? argonQuota.remainingFraction ?? 0;
   const effectiveArgonReset = argonWeeklyBucket?.resetTime ?? argonQuota.resetTime;
 
   const effectiveFlashWeeklyFraction = geminiWeeklyBucket?.remainingFraction ?? flashQuota.remainingFraction ?? 0;
-  const effectiveFlashWeeklyReset = geminiWeeklyBucket?.resetTime ?? argonQuota.resetTime ?? flashQuota.resetTime;
+  const effectiveFlashWeeklyReset = geminiWeeklyBucket?.resetTime ?? flashQuota.resetTime ?? argonQuota.resetTime;
 
   const effectiveFlash5hFraction = gemini5hBucket?.remainingFraction ?? flashQuota.remainingFraction ?? 0;
   const effectiveFlash5hReset = gemini5hBucket?.resetTime ?? flashQuota.resetTime;
+  const effectiveFlashModelQuota = pickStrictestQuotaWindow(
+    gemini5hBucket,
+    { remainingFraction: effectiveFlashWeeklyFraction, resetTime: effectiveFlashWeeklyReset },
+  );
 
   const effectiveClaudeWeeklyFraction = thirdPartyWeeklyBucket?.remainingFraction ?? claudeQuota.remainingFraction ?? 0;
   const effectiveClaudeWeeklyReset = thirdPartyWeeklyBucket?.resetTime ?? claudeQuota.resetTime;
 
-  const effectiveClaude5hFraction = thirdParty5hBucket?.remainingFraction ?? 1.0;
+  const effectiveClaude5hFraction = thirdParty5hBucket?.remainingFraction ?? effectiveClaudeWeeklyFraction;
   const effectiveClaude5hReset = thirdParty5hBucket?.resetTime ?? null;
+  const effectiveClaudeModelQuota = pickStrictestQuotaWindow(
+    thirdParty5hBucket,
+    { remainingFraction: effectiveClaudeWeeklyFraction, resetTime: effectiveClaudeWeeklyReset },
+  );
 
   if (isPlus) {
     const argonTierIds: Record<ThinkingTier, string> = {
@@ -797,8 +821,8 @@ export async function fetchAccountModelsAndQuota(
     modelID: flashTierIds[thinkingTier],
     rawId: `gemini-3.8-flash-${thinkingTier}`,
     displayName: "Gemini 3.8 Flash",
-    remainingFraction: effectiveFlashWeeklyFraction,
-    resetTime: effectiveFlashWeeklyReset,
+    remainingFraction: effectiveFlashModelQuota.remainingFraction,
+    resetTime: effectiveFlashModelQuota.resetTime,
     supportsThinkingTier: true,
     tierModelIds: flashTierIds,
   });
@@ -832,8 +856,8 @@ export async function fetchAccountModelsAndQuota(
         modelID: claudeSonnetTierIds[thinkingTier],
         rawId: `claude-sonnet-5-5-${thinkingTier}`,
         displayName: "Claude Sonnet 5.5",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
+        remainingFraction: effectiveClaudeModelQuota.remainingFraction,
+        resetTime: effectiveClaudeModelQuota.resetTime,
         supportsThinkingTier: true,
         tierModelIds: claudeSonnetTierIds,
       },
@@ -842,8 +866,8 @@ export async function fetchAccountModelsAndQuota(
         modelID: claudeOpusTierIds[thinkingTier],
         rawId: `claude-opus-5-5-${thinkingTier}`,
         displayName: "Claude Opus 5.5",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
+        remainingFraction: effectiveClaudeModelQuota.remainingFraction,
+        resetTime: effectiveClaudeModelQuota.resetTime,
         supportsThinkingTier: true,
         tierModelIds: claudeOpusTierIds,
       },
@@ -855,8 +879,8 @@ export async function fetchAccountModelsAndQuota(
         modelID: "antigravity-claude-sonnet-4-6",
         rawId: "claude-sonnet-4-6",
         displayName: "Claude Sonnet 4.6",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
+        remainingFraction: effectiveClaudeModelQuota.remainingFraction,
+        resetTime: effectiveClaudeModelQuota.resetTime,
         supportsThinkingTier: false,
         tierModelIds: {
           low: "antigravity-claude-sonnet-4-6",
@@ -869,8 +893,8 @@ export async function fetchAccountModelsAndQuota(
         modelID: "antigravity-claude-opus-4-6-thinking",
         rawId: "claude-opus-4-6-thinking",
         displayName: "Claude Opus 4.6",
-        remainingFraction: effectiveClaudeWeeklyFraction,
-        resetTime: effectiveClaudeWeeklyReset,
+        remainingFraction: effectiveClaudeModelQuota.remainingFraction,
+        resetTime: effectiveClaudeModelQuota.resetTime,
         supportsThinkingTier: false,
         tierModelIds: {
           low: "antigravity-claude-opus-4-6-thinking",
@@ -887,8 +911,8 @@ export async function fetchAccountModelsAndQuota(
       modelID: "antigravity-gpt-oss-120b-medium",
       rawId: "gpt-oss-120b-medium",
       displayName: "GPT-OSS 120B",
-      remainingFraction: effectiveClaudeWeeklyFraction,
-      resetTime: effectiveClaudeWeeklyReset,
+      remainingFraction: effectiveClaudeModelQuota.remainingFraction,
+      resetTime: effectiveClaudeModelQuota.resetTime,
       supportsThinkingTier: false,
     });
   }
@@ -1323,7 +1347,7 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   if (fresh.verificationRequired || !freshModel) {
     throw new Error("The selected Antigravity account or model is unavailable.");
   }
-  if (freshModel.remainingFraction !== null && freshModel.remainingFraction <= 0) {
+  if (isLocalRouterQuotaExhausted(freshModel.remainingFraction)) {
     throw new LocalRouterQuotaExhaustedError();
   }
   const { meta } = await readNanamiMetaAndConfigDir(true);

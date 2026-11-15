@@ -22,3 +22,12 @@ test("an enabled Carbon account can select its reported tier without inventing q
   assert.equal(models[0].remainingFraction, null);
   assert.deepEqual(discoverNewAntigravityModels({ "gemini-4-hydrogen-disabled": { disabled: true } }, "low"), []);
 });
+
+test("treats resetTime-only quotaInfo as 0% exhausted rather than unknown", () => {
+  const models = discoverNewAntigravityModels({
+    "gemini-4-hydrogen-medium": { quotaInfo: { resetTime: "2026-11-15T18:00:00Z" } },
+  }, "medium");
+  assert.equal(models.length, 1);
+  assert.equal(models[0].remainingFraction, 0);
+  assert.equal(models[0].resetTime, "2026-11-15T18:00:00Z");
+});

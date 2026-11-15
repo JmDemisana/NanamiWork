@@ -141,6 +141,10 @@ export function AntigravitySidebarLimits() {
                   );
                 })}
               </div>
+            ) : acc.quotaError && !acc.quotaLoading ? (
+              <div className="mt-1 text-[10px] leading-tight text-rose-400/90" title={acc.quotaError}>
+                Failed to load limits: {acc.quotaError}
+              </div>
             ) : (acc.quotaLoading || acc.quotas.length === 0) ? (
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <RefreshCw className="size-2.5 animate-spin" />

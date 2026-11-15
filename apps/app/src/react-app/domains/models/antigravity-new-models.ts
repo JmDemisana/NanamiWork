@@ -25,9 +25,16 @@ export function discoverNewAntigravityModels(
     const rawId = modelID.slice("antigravity-".length);
     const quota = catalog[rawId].quotaInfo;
     const fraction = quota?.remainingFraction;
+    // Google omits remainingFraction when a model is exhausted and only returns resetTime.
+    const hasExhaustedResetOnly = Boolean(quota?.resetTime && fraction === undefined);
+    const remainingFraction = typeof fraction === "number" && Number.isFinite(fraction)
+      ? Math.max(0, Math.min(1, fraction))
+      : hasExhaustedResetOnly
+        ? 0
+        : null;
     return [{
       familyKey, modelID, rawId, displayName,
-      remainingFraction: typeof fraction === "number" && Number.isFinite(fraction) ? Math.max(0, Math.min(1, fraction)) : null,
+      remainingFraction,
       resetTime: quota?.resetTime ?? null,
       supportsThinkingTier: true,
       tierModelIds,

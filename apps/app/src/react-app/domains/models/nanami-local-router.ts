@@ -149,6 +149,15 @@ const DEFAULT_SETTINGS: LocalRouterSettings = {
   usage: {},
 };
 
+/** Treat <= 5% remaining quota as exhausted because providers like Antigravity can report ~1% when actually out of quota. */
+export const LOCAL_ROUTER_EXHAUSTED_FRACTION = 0.05;
+
+export function isLocalRouterQuotaExhausted(remainingFraction: number | null | undefined): boolean {
+  return typeof remainingFraction === "number"
+    && Number.isFinite(remainingFraction)
+    && remainingFraction <= LOCAL_ROUTER_EXHAUSTED_FRACTION;
+}
+
 export function localRouterModelKey(providerID: string, modelID: string) {
   return modelRefKey({ providerID, modelID });
 }
@@ -363,10 +372,10 @@ export function buildLocalRouterAccounts(input: {
   };
   const currentQuota = (remainingFraction: number | null | undefined, resetTime: string | null | undefined) => {
     const resetAt = resetTime ? Date.parse(resetTime) : Number.NaN;
-    // A cached zero after its reset is unknown, not proof the new window is
-    // empty. The chosen account is refreshed before its turn is submitted.
+    // A cached exhausted quota after its reset is unknown, not proof the new
+    // window is empty. The chosen account is refreshed before its turn is submitted.
     return typeof remainingFraction === "number" && Number.isFinite(remainingFraction)
-      && !(remainingFraction <= 0 && Number.isFinite(resetAt) && resetAt <= Date.now())
+      && !(isLocalRouterQuotaExhausted(remainingFraction) && Number.isFinite(resetAt) && resetAt <= Date.now())
       ? remainingFraction : null;
   };
   const strictestQuota = (quotas: readonly { remainingFraction: number | null | undefined; resetTime: string | null | undefined }[]) => {
@@ -624,13 +633,7 @@ export function resolveLocalRouterCandidates(
   }
   if (candidates.length === 0) return [];
 
-  const usable = candidates.filter((candidate) => {
-    if (candidate.model.remainingFraction !== null) {
-      return candidate.model.remainingFraction > 0;
-    }
-    // Unknown quota can be refreshed under the router lease before admission.
-    return true;
-  });
+  const usable = candidates.filter((candidate) => !isLocalRouterQuotaExhausted(candidate.model.remainingFraction));
   if (usable.length === 0) return [];
   const pool = usable;
   const strategies: readonly LocalRouterStrategy[] = settings.strategies.slice(0, 1).flatMap((strategy) =>

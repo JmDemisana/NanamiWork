@@ -127,4 +127,23 @@ describe("local router", () => {
     expect(useLocalRouterStore.getState().strategies).toEqual([]);
     expect(resolveLocalRouterChoice(accounts, useLocalRouterStore.getState())).toBeNull();
   });
+
+  test("treats 5% or less remaining quota as exhausted and clears expired low-quota caches", () => {
+    const lowQuota: LocalRouterAccount[] = [{
+      key: "a", kind: "antigravity", providerID: "google", accountID: "a", label: "A", providerLabel: "Antigravity",
+      models: [
+        { key: "m1", modelID: "m1", label: "M1", remainingFraction: 0.01, resetTime: null },
+        { key: "m2", modelID: "m2", label: "M2", remainingFraction: 0.05, resetTime: null },
+      ],
+    }];
+    expect(resolveLocalRouterChoice(lowQuota, settings)).toBeNull();
+    const usable = [{ ...lowQuota[0]!, models: [{ ...lowQuota[0]!.models[0]!, remainingFraction: 0.06 }] }];
+    expect(resolveLocalRouterChoice(usable, settings)?.model.modelID).toBe("m1");
+
+    const resetLow = buildLocalRouterAccounts({ antigravity: [{ email: "test@example.invalid", models: [
+      { modelID: "g1", displayName: "G1", remainingFraction: 0.01, resetTime: "2000-01-01T00:00:00Z" },
+      { modelID: "g2", displayName: "G2", remainingFraction: 0.05, resetTime: "2000-01-01T00:00:00Z" },
+    ] }] });
+    expect(resetLow[0]?.models.map((m) => m.remainingFraction)).toEqual([null, null]);
+  });
 });
