@@ -25,22 +25,19 @@ function costsNothing(model: { cost?: { input?: number; output?: number } }) {
 /** The one place a connected provider's models become picker options. */
 export function runtimeModelOptions(data: ProviderList, isNewProvider: (providerId: string) => boolean = () => false): ModelOption[] {
   const options = getConnectedProviderItems(data)
-    .filter((provider) => provider.id === "nanami" || provider.id === "google")
+    .filter((provider) => provider.id === "google")
     .flatMap((provider) => {
     const providerDescription =
-      provider.id === "nanami"
-        ? "Nanami Router Models"
-        : provider.id === "opencode"
-          ? "OpenCode Zen Free Models"
-          : provider.id === "openwork-free" || provider.id === "openwork"
-            ? "OpenWork Free Models"
-            : provider.name;
+      provider.id === "opencode"
+        ? "OpenCode Zen Free Models"
+        : provider.id === "openwork-free" || provider.id === "openwork"
+          ? "OpenWork Free Models"
+          : provider.name;
     const entries = Object.entries(provider.models);
     const hasAntigravity = provider.id === "google" && entries.some(([id]) => id.startsWith("antigravity-"));
-    const visibleEntries = (hasAntigravity
+    const visibleEntries = hasAntigravity
       ? entries.filter(([id]) => id.startsWith("antigravity-"))
-      : entries
-    ).filter(([id]) => !(provider.id === "nanami" && id === "openrouter"));
+      : entries;
     return visibleEntries.map(([id, model]): ModelOption => {
       const summary = getModelBehaviorSummary(provider.id, model, null, providerDescription);
       const ref = { providerID: provider.id, modelID: id };

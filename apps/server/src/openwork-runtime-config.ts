@@ -169,8 +169,7 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
     enabled_providers: nanamiOnly
       ? [NANAMI_PROVIDER_ID]
       : [...new Set([
-        NANAMI_PROVIDER_ID,
-        ...Object.keys(provider),
+        ...Object.keys(provider).filter((id) => id !== NANAMI_PROVIDER_ID),
         // Native OpenCode catalog routes used by the local instance picker.
         "google",
         "github-copilot",
@@ -243,7 +242,7 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
           ...(((provider.google as Record<string, unknown> | undefined)?.models as Record<string, unknown>) ?? {}),
         },
       },
-      [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig(),
+      ...(nanamiOnly ? { [NANAMI_PROVIDER_ID]: nanamiLegacyProviderConfig() } : {}),
     },
   };
 }

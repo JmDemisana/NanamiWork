@@ -49,41 +49,11 @@ export const OpenWorkGatewayQuota = async () => ({
       const nanamiCfgDir = process.env.OPENCODE_CONFIG_DIR?.trim() || path.join(os.homedir(), ".config", "nanamiwork");
       fs.mkdirSync(nanamiCfgDir, { recursive: true });
 
-      config.enabled_providers ??= ["nanami", "google", "openai", "github-copilot"];
-      config.disabled_providers ??= ["opencode", "azure", "openwork-free", "anthropic"];
-
-      const nanamiMod = (name: string) => ({
-        name,
-        tool_call: true,
-        attachment: true,
-        limit: { context: 128000, output: 16384 },
-        modalities: { input: ["text", "image"], output: ["text"] },
-        capabilities: {
-          tools: true,
-          attachment: true,
-          reasoning: true,
-          input: { text: true, image: true },
-          output: { text: true },
-        },
-      });
-      const nanamiUncensoredMod = {
-        name: "Uncensored Models",
-        tool_call: true,
-        reasoning: false,
-        attachment: false,
-        limit: { context: 48000, input: 44000, output: 4096 },
-        modalities: { input: ["text"], output: ["text"] },
-        capabilities: { tools: true, attachment: false, input: { text: true }, output: { text: true } },
-      };
-      const nanamiProv = (record(config.provider) && record(config.provider.nanami) ? config.provider.nanami : {}) as Record<string, unknown>;
-      nanamiProv.name ??= "Nanami Router Models";
-      const existingNanamiModels = record(nanamiProv.models) ? { ...nanamiProv.models } : {};
-      delete existingNanamiModels.openrouter;
-      nanamiProv.models = {
-        "gemini-router": nanamiMod("Gemini"),
-        uncensored: nanamiUncensoredMod,
-        ...existingNanamiModels,
-      };
+      config.enabled_providers ??= ["google", "openai", "github-copilot"];
+      config.disabled_providers ??= ["opencode", "azure", "openwork-free", "anthropic", "nanami"];
+      if (record(config.provider)) {
+        delete config.provider.nanami;
+      }
       const copilotProv = record(config.provider) ? config.provider["github-copilot"] : undefined;
 
       const cVar = {

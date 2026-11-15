@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { appendEngineOutputTail, createEngineStartupLineReader } from "./engine-output.js";
 import { acquireEngineHistoryLease } from "./opencode-v2-history-lock.js";
 import { providerCredentialBrokerSource } from "./opencode-v2-provider-channel.js";
-import { NANAMI_PROVIDER_ID, enforceNanamiGateway, nanamiOnlyEnabled, withNanamiGateway } from "./nanami-gateway.js";
+import { NANAMI_PROVIDER_ID, enforceNanamiGateway, nanamiOnlyEnabled } from "./nanami-gateway.js";
 import { isolateNanamiEngineEnvironment } from "./nanami-engine-environment.js";
 
 export { installOpencodeV2Binary } from "./opencode-v2-binary.js";
@@ -249,7 +249,7 @@ export function renderOpencodeV2Config(input: {
   const nanamiOnly = nanamiOnlyEnabled();
   const catalogProviders = nanamiOnly
     ? enforceNanamiGateway(input.providers)
-    : withNanamiGateway(input.providers);
+    : input.providers.filter((spec) => spec.id !== NANAMI_PROVIDER_ID);
   const enabledProviders = catalogProviders.filter((provider) => !disabled.has(provider.id)
     && (!input.desktopSession || !/^ipr_/i.test(provider.id)));
   const providerConfig: Record<string, unknown> = {};
