@@ -37,9 +37,10 @@ export function runtimeModelOptions(data: ProviderList, isNewProvider: (provider
             : provider.name;
     const entries = Object.entries(provider.models);
     const hasAntigravity = provider.id === "google" && entries.some(([id]) => id.startsWith("antigravity-"));
-    const visibleEntries = hasAntigravity
+    const visibleEntries = (hasAntigravity
       ? entries.filter(([id]) => id.startsWith("antigravity-"))
-      : entries;
+      : entries
+    ).filter(([id]) => !(provider.id === "nanami" && id === "openrouter"));
     return visibleEntries.map(([id, model]): ModelOption => {
       const summary = getModelBehaviorSummary(provider.id, model, null, providerDescription);
       const ref = { providerID: provider.id, modelID: id };

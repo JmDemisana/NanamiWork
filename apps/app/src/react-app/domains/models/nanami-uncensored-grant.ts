@@ -9,6 +9,7 @@ export async function configureNanamiUncensoredGrant(client: Client | null | und
   const provider = current.provider && typeof current.provider === "object" ? current.provider : {};
   const nanami = provider.nanami && typeof provider.nanami === "object" ? provider.nanami : {};
   const models = nanami.models && typeof nanami.models === "object" ? nanami.models : {};
+  const { openrouter: _removedOpenRouter, ...remainingModels } = models as Record<string, unknown>;
   const uncensored = models.uncensored && typeof models.uncensored === "object" ? models.uncensored : {};
   const providerOptions = nanami.options && typeof nanami.options === "object" ? nanami.options : {};
   const providerOptionsHeaders =
@@ -24,7 +25,7 @@ export async function configureNanamiUncensoredGrant(client: Client | null | und
       // OpenCode forwards provider.options.headers to @ai-sdk/openai-compatible;
       // keep model-level headers in sync as well.
       options: { ...providerOptions, headers: { ...providerOptionsHeaders, "x-nami-nsfw-grant": grant } },
-      models: { ...models,
+      models: { ...remainingModels,
       uncensored: {
         ...uncensored,
         headers: { ...headers, "x-nami-nsfw-grant": grant },

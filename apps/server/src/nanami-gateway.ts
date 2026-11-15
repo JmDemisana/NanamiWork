@@ -2,8 +2,8 @@
  * Nanami Gateway default provider integration.
  *
  * This fork routes every model through `https://nanami-ai.pages.dev/api/v1`,
- * an OpenAI-compatible router. The gateway exposes three model ids
- * (`gemini-router`, `openrouter`, and `uncensored`) and rejects a `nanami/` prefix, so those
+ * an OpenAI-compatible router. The gateway exposes two model ids
+ * (`gemini-router` and `uncensored`) and rejects a `nanami/` prefix, so those
  * ids are also the ids the engine must send upstream.
  *
  * Local providers remain available by default. Set `OPENWORK_NANAMI_ONLY=1`
@@ -175,7 +175,9 @@ export function enforceNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], a
   if (!configured) return [nanamiProviderSpec(apiKey)];
   const defaults = nanamiProviderSpec(apiKey, configured.baseUrl || nanamiGatewayBaseUrl());
   const models = new Map(defaults.models.map((model) => [model.id, model]));
-  for (const model of configured.models) models.set(model.id, model);
+  for (const model of configured.models) {
+    if (model.id !== "openrouter") models.set(model.id, model);
+  }
   return [{
     ...configured,
     name: configured.name || "Nanami Gateway",
@@ -190,7 +192,9 @@ export function withNanamiGateway(specs: readonly OpencodeV2ProviderSpec[], apiK
   const configured = specs.find((spec) => spec.id === NANAMI_PROVIDER_ID);
   const defaults = nanamiProviderSpec(apiKey, configured?.baseUrl || nanamiGatewayBaseUrl());
   const models = new Map(defaults.models.map((model) => [model.id, model]));
-  for (const model of configured?.models ?? []) models.set(model.id, model);
+  for (const model of configured?.models ?? []) {
+    if (model.id !== "openrouter") models.set(model.id, model);
+  }
   const gateway = configured
     ? { ...configured, name: configured.name || "Nanami Gateway", baseUrl: configured.baseUrl || nanamiGatewayBaseUrl(), apiKey: configured.apiKey || apiKey, models: [...models.values()] }
     : nanamiProviderSpec(apiKey);
