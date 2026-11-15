@@ -10,7 +10,10 @@ test("installs the temporary grant without discarding existing provider settings
   let update: any;
   const client = { config: { get: async () => ({ data: current }), update: async (value: unknown) => { update = value; return { data: {} }; } } } as unknown as Client;
   await configureNanamiUncensoredGrant(client, "test-grant");
+  assert.equal(update.config.provider.nanami.options.headers["x-nami-nsfw-grant"], "test-grant");
+  assert.equal(update.config.provider.nanami.options.baseURL, "https://example.invalid");
   assert.equal(update.config.provider.nanami.models.uncensored.headers["x-nami-nsfw-grant"], "test-grant");
+  assert.equal(update.config.provider.nanami.models.uncensored.options.headers["x-nami-nsfw-grant"], "test-grant");
   assert.equal(update.config.provider.nanami.models.uncensored.headers.existing, "kept");
   assert.deepEqual(update.config.provider.nanami.models.gemini, current.provider.nanami.models.gemini);
   assert.deepEqual(update.config.provider.google, current.provider.google);
