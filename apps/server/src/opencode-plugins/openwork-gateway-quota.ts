@@ -92,7 +92,6 @@ export const OpenWorkGatewayQuota = async () => ({
       const existingOpenai = record(existingProviders.openai) ? existingProviders.openai : {};
       config.provider = {
         ...existingProviders,
-        nanami: nanamiProv,
         openai: {
           ...existingOpenai,
           name: existingOpenai.name ?? "OpenAI / ChatGPT",
