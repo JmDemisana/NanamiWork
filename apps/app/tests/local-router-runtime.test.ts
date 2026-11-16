@@ -25,6 +25,7 @@ mock.module("../src/app/lib/opencode", () => ({ createClient: (_url: string, _ro
 mock.module("../src/react-app/domains/connections/managed-engine-config", () => ({ readManagedDisabledProviders: async () => [] }));
 mock.module("../src/react-app/domains/models/antigravity-accounts-store", () => ({
   useAntigravityAccountsStore: { getState: () => antigravity },
+  resolveAntigravityModelForTier: (model: { modelID: string }) => model.modelID,
   activateAntigravityRouterAccount: async (email: string) => { activated.push(email); },
   restoreAntigravityRouterPin: async () => {},
 }));
