@@ -6,7 +6,7 @@ on:
       tag:
         description: "Release tag (e.g. v1.2.0)"
         required: false
-        default: "v1.2.4"
+        default: "v1.2.5"
   push:
     tags:
       - "v*"
@@ -191,24 +191,27 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.4' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.5' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.4' }}: Startup and Rendering Fixes"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.5' }}: Local Router and Experience Update"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.4' }}** improves startup recovery, math formatting, and Antigravity account selection.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.5' }}** improves Local Router quota handling and refreshes interface motion.
 
-            ### Startup recovery
-            - Recover an interrupted runtime database transaction before startup checks, preventing a read-only database error from blocking the app.
+            ### Local Router and models
+            - Switch away from accounts at or below 5% remaining quota and account for both short and weekly limits.
+            - Discover Gemini 4 Hydrogen and Carbon based on each Antigravity account's model catalog.
+            - Add Orchestrator mode for supported plans.
 
-            ### Math rendering
-            - Render multiline dollar-delimited math, including LaTeX arrays, more reliably while preserving ordinary currency and Markdown formatting.
+            ### Interface
+            - Refine button, sidebar and control motion, with reduced-motion support.
+            - Remove built-in voice input and dictation.
 
-            ### Antigravity accounts
-            - Apply the selected account before switching models and explain subscription-related access errors more clearly.
+            ### Hosted models
+            - Remove the hosted Nanami Router Models from the standard app while retaining NanamiWork Local Router.
 
             ### Notes
             - Model access still depends on the selected account's provider entitlements.
