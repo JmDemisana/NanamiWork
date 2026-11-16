@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
-import { Building, Check, ChevronDown, ChevronUp, Cloud, Laptop, Loader2, Lock, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, X, Bot } from "lucide-react";
+import { Building, Check, ChevronDown, ChevronUp, Cloud, Laptop, Loader2, Lock, Pencil, Pin, PinOff, Plus, RefreshCw, Sparkles, Trash2, Workflow, X, Bot } from "lucide-react";
 import { confirmAntigravityAuthEvent, openCodexAuthEvent, openWorkbenchInstancesEvent } from "@/react-app/shell/new-providers-listener";
 import type { ModelOption, ModelRef } from "@/app/types";
 import { useWorkspaceMaybe } from "@/react-app/shell/workspace-provider";
@@ -14,7 +14,16 @@ import { autoNotOffered, autoPickerCopy, autoQuietlyUnavailable, freeAutoSwitche
 import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
-import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem } from "./antigravity-accounts-store";
+import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem, type ThinkingTier } from "./antigravity-accounts-store";
+import {
+  ORCHESTRATOR_MODEL_ID,
+  getAntigravityOrchestratorModels,
+  getChatGptOrchestratorModels,
+  isAntigravityOrchestratorSupported,
+  isChatGptOrchestratorSupported,
+  useOrchestratorStore,
+  type OrchestratorSelectableModel,
+} from "./orchestrator-store";
 import { useCopilotAccountsStore, type CopilotAccountInfo, type CopilotModelItem } from "./copilot-accounts-store";
 import { useChatGptAccountsStore, type ChatGptAccountInfo, type ChatGptModelItem } from "./chatgpt-accounts-store";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
@@ -182,11 +191,123 @@ function AccountMoveButtons({
   </span>;
 }
 
+function OrchestratorRow({
+  providerID,
+  accountEmail,
+  models,
+  isSelected,
+  onSelect,
+  testId,
+}: {
+  providerID: "google" | "openai";
+  accountEmail: string;
+  models: readonly OrchestratorSelectableModel[];
+  isSelected: boolean;
+  onSelect: () => void;
+  testId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const configs = useOrchestratorStore((s) => s.configs);
+  const getAccountConfig = useOrchestratorStore((s) => s.getAccountConfig);
+  const setAccountConfig = useOrchestratorStore((s) => s.setAccountConfig);
+  const pair = useMemo(
+    () => getAccountConfig(providerID, accountEmail, models),
+    [configs, getAccountConfig, providerID, accountEmail, models],
+  );
+  if (models.length === 0 || !pair) return null;
+
+  return (
+    <div className="flex flex-col">
+      <div
+        role="button"
+        tabIndex={0}
+        data-testid={testId}
+        onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
+        className={`group/model flex min-h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+          isSelected ? "bg-accent/60 font-medium" : ""
+        }`}
+      >
+        <div className="flex size-4 shrink-0 items-center justify-center">
+          <Workflow className="size-4 text-dls-accent dark:text-foreground" />
+        </div>
+        <span className="min-w-0 flex-1 truncate leading-5" title="Orchestrator">
+          Orchestrator
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setEditing((v) => !v);
+          }}
+          aria-label={`Configure Orchestrator for ${accountEmail}`}
+          title="Configure Planning & Execution models"
+          className={`flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground ${
+            editing ? "bg-background/80 text-foreground" : ""
+          }`}
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
+        </span>
+      </div>
+      {editing ? (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="mx-1 mt-1 mb-1.5 flex flex-col gap-2 rounded-lg border border-border/70 bg-muted/35 p-2.5 text-xs"
+        >
+          <label className="flex flex-col gap-1">
+            <span className="font-medium text-muted-foreground">Planning Model</span>
+            <select
+              value={pair.planningModelId}
+              onChange={(e) =>
+                setAccountConfig(providerID, accountEmail, { planningModelId: e.target.value }, models)
+              }
+              className="h-7 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+            >
+              {models.map((m) => (
+                <option key={m.modelID} value={m.modelID}>
+                  {m.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-medium text-muted-foreground">Execution Model</span>
+            <select
+              value={pair.executionModelId}
+              onChange={(e) =>
+                setAccountConfig(providerID, accountEmail, { executionModelId: e.target.value }, models)
+              }
+              className="h-7 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+            >
+              {models.map((m) => (
+                <option key={m.modelID} value={m.modelID}>
+                  {m.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ConnectedAccountGroup({
   account,
   current,
   query,
   onSelectModel,
+  onSelectOrchestrator,
+  thinkingTier,
   canMoveUp = false,
   canMoveDown = false,
   onMove,
@@ -195,11 +316,22 @@ function ConnectedAccountGroup({
   current: ModelRef;
   query: string;
   onSelectModel: (account: AntigravityAccountInfo, item: AntigravityModelItem) => void;
+  onSelectOrchestrator: (account: AntigravityAccountInfo) => void;
+  thinkingTier: ThinkingTier;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: (direction: -1 | 1) => void;
 }) {
   const search = query.trim().toLowerCase();
+  const orchestratorSupported = isAntigravityOrchestratorSupported(account);
+  const orchestratorModels = useMemo(
+    () => (orchestratorSupported ? getAntigravityOrchestratorModels(account, thinkingTier) : []),
+    [account, orchestratorSupported, thinkingTier],
+  );
+  const showOrchestrator =
+    orchestratorSupported &&
+    orchestratorModels.length > 0 &&
+    (!search || `orchestrator ${account.email} antigravity`.includes(search));
   const visibleModels = useMemo(() => {
     if (!search) return account.models;
     return account.models.filter((m) =>
@@ -207,7 +339,7 @@ function ConnectedAccountGroup({
     );
   }, [account.models, account.email, search]);
 
-  if (visibleModels.length === 0 && search) return null;
+  if (visibleModels.length === 0 && !showOrchestrator && search) return null;
 
   return (
     <div className="px-2 pt-1 pb-1" data-testid={`antigravity-account-group-${account.email}`}>
@@ -268,6 +400,20 @@ function ConnectedAccountGroup({
         </div>
       </div>
       <div className="flex flex-col gap-0.5">
+        {showOrchestrator ? (
+          <OrchestratorRow
+            providerID="google"
+            accountEmail={account.email}
+            models={orchestratorModels}
+            isSelected={
+              account.isActive &&
+              current.providerID === "google" &&
+              current.modelID === ORCHESTRATOR_MODEL_ID
+            }
+            onSelect={() => onSelectOrchestrator(account)}
+            testId={`antigravity-orchestrator-${account.email}`}
+          />
+        ) : null}
         {visibleModels.map((item) => {
           const isSelected =
             account.isActive &&
@@ -312,6 +458,7 @@ function ConnectedChatGptAccountGroup({
   current,
   query,
   onSelectModel,
+  onSelectOrchestrator,
   canMoveUp = false,
   canMoveDown = false,
   onMove,
@@ -320,11 +467,21 @@ function ConnectedChatGptAccountGroup({
   current: ModelRef;
   query: string;
   onSelectModel: (account: ChatGptAccountInfo, item: ChatGptModelItem) => void;
+  onSelectOrchestrator: (account: ChatGptAccountInfo) => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: (direction: -1 | 1) => void;
 }) {
   const search = query.trim().toLowerCase();
+  const orchestratorSupported = isChatGptOrchestratorSupported(account);
+  const orchestratorModels = useMemo(
+    () => (orchestratorSupported ? getChatGptOrchestratorModels(account) : []),
+    [account, orchestratorSupported],
+  );
+  const showOrchestrator =
+    orchestratorSupported &&
+    orchestratorModels.length > 0 &&
+    (!search || `orchestrator ${account.email} openai chatgpt codex`.includes(search));
   const visibleModels = useMemo(() => {
     if (!search) return account.models;
     return account.models.filter((m) =>
@@ -332,7 +489,7 @@ function ConnectedChatGptAccountGroup({
     );
   }, [account.models, account.email, search]);
 
-  if (visibleModels.length === 0 && search) return null;
+  if (visibleModels.length === 0 && !showOrchestrator && search) return null;
 
   return (
     <div className="px-2 pt-1 pb-1" data-testid={`chatgpt-account-group-${account.email}`}>
@@ -379,6 +536,20 @@ function ConnectedChatGptAccountGroup({
         </div>
       </div>
       <div className="flex flex-col gap-0.5">
+        {showOrchestrator ? (
+          <OrchestratorRow
+            providerID="openai"
+            accountEmail={account.email}
+            models={orchestratorModels}
+            isSelected={
+              account.isActive &&
+              current.providerID === "openai" &&
+              current.modelID === ORCHESTRATOR_MODEL_ID
+            }
+            onSelect={() => onSelectOrchestrator(account)}
+            testId={`chatgpt-orchestrator-${account.email}`}
+          />
+        ) : null}
         {visibleModels.map((item) => {
           const isSelected =
             account.isActive &&
@@ -777,6 +948,45 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     }
     onSelect(option, variantObj);
   };
+  const selectAntigravityOrchestrator = (account: AntigravityAccountInfo) => {
+    if (selectingAccount.current) return;
+    const models = getAntigravityOrchestratorModels(account, thinkingTier);
+    const pair = useOrchestratorStore.getState().getAccountConfig("google", account.email, models);
+    const planningModelId = pair?.planningModelId ?? account.models[0]?.modelID;
+    if (!planningModelId) return;
+    selectingAccount.current = true;
+    setAccountPreparing(true);
+    void useAntigravityAccountsStore.getState().selectAccount(account.email, undefined, planningModelId).then(() => {
+      onSelect(
+        {
+          providerID: "google",
+          modelID: ORCHESTRATOR_MODEL_ID,
+          title: "Orchestrator",
+          description: `${account.email} (Antigravity)`,
+        } as unknown as ModelOption,
+        { variant: thinkingTier },
+      );
+    }).catch((error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Could not select Orchestrator for this Antigravity account.");
+    }).finally(() => { selectingAccount.current = false; setAccountPreparing(false); });
+  };
+  const selectChatGptOrchestrator = (account: ChatGptAccountInfo) => {
+    if (selectingAccount.current) return;
+    useAntigravityAccountsStore.getState().setSelectedModel({
+      providerID: "openai",
+      modelID: ORCHESTRATOR_MODEL_ID,
+    });
+    void useChatGptAccountsStore.getState().selectAccount(account.email);
+    onSelect(
+      {
+        providerID: "openai",
+        modelID: ORCHESTRATOR_MODEL_ID,
+        title: "Orchestrator",
+        description: `${account.email} (ChatGPT)`,
+      } as unknown as ModelOption,
+      { variant: thinkingTier },
+    );
+  };
   const selectAntigravityModel = (account: AntigravityAccountInfo, item: AntigravityModelItem) => {
     if (selectingAccount.current) return;
     selectingAccount.current = true;
@@ -1158,9 +1368,9 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
               return (
                 <div key={entry.key} className={chrome === "page" ? "min-w-0" : "break-inside-avoid"}>
                   {entry.kind === "antigravity" ? (
-                    <ConnectedAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectAntigravityModel} {...moveProps} />
+                    <ConnectedAccountGroup account={entry.account} current={current} query={query} thinkingTier={thinkingTier} onSelectModel={selectAntigravityModel} onSelectOrchestrator={selectAntigravityOrchestrator} {...moveProps} />
                   ) : entry.kind === "chatgpt" ? (
-                    <ConnectedChatGptAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectChatGptModel} {...moveProps} />
+                    <ConnectedChatGptAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectChatGptModel} onSelectOrchestrator={selectChatGptOrchestrator} {...moveProps} />
                   ) : (
                     <ConnectedCopilotAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectCopilotModel} {...moveProps} />
                   )}

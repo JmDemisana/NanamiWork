@@ -43,6 +43,7 @@ import {
 import type { OpenworkSessionHistory, OpenworkSessionSnapshot } from "@/app/lib/openwork-server";
 import type { LatestSessionHistory } from "../surface/session-render-state";
 import { applyRevertCursor, reconcileTranscriptMessages } from "./transcript-reconcile";
+import { ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT, useOrchestratorStore } from "@/react-app/domains/models/orchestrator-store";
 import { messageCreated, upsertMessageByChronology } from "./message-merge";
 import { isOrphanedInteraction, isTerminalToolPart, terminalToolCallIds, terminalTranscriptToolCallIds } from "./orphaned-interactions";
 import {
@@ -188,7 +189,7 @@ const backgroundDeltaFlushMs = 100;
 // because a transport can keep delivering message events after losing a
 // terminal status edge. This is a reconciliation cadence, not a completion
 // timeout: elapsed time never marks a task done.
-const activeSessionStatusReconcileIntervalMs = 250;
+const activeSessionStatusReconcileIntervalMs = 1000;
 // A failed read leaves the run state untouched (it is not evidence that work
 // stopped), so without backoff an unreachable engine — for example the one
 // the user just switched away from — would be polled at 4 Hz indefinitely.
@@ -301,17 +302,8 @@ const defaultRunningShellFetcher: RunningShellFetcher = async (baseUrl, token, s
 let runningShellFetcher = defaultRunningShellFetcher;
 
 const defaultDeltaFlushScheduler: DeltaFlushScheduler = (lane, run) => {
-  if (
-    lane === "foreground" &&
-    typeof window !== "undefined" &&
-    typeof window.requestAnimationFrame === "function" &&
-    (typeof document === "undefined" || document.visibilityState === "visible")
-  ) {
-    const frame = window.requestAnimationFrame(run);
-    return () => window.cancelAnimationFrame(frame);
-  }
   if (typeof window !== "undefined") {
-    const timer = window.setTimeout(run, lane === "foreground" ? 50 : backgroundDeltaFlushMs);
+    const timer = window.setTimeout(run, lane === "foreground" ? 45 : backgroundDeltaFlushMs);
     return () => window.clearTimeout(timer);
   }
   let cancelled = false;
@@ -1533,6 +1525,26 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
           ? {}
           : { sinceRunActiveMs: Math.round((observedAt - runActiveAt) * 100) / 100 }),
       });
+      if ("error" in info && info.error) {
+        const errMsg = typeof info.error === "string"
+          ? info.error
+          : typeof (info.error as { message?: unknown })?.message === "string"
+            ? (info.error as { message: string }).message
+            : "Session failed";
+        useSessionActivityStore.getState().setError(workspaceId, info.sessionID, errMsg);
+        stopTrackingLiveSession(entry, info.sessionID);
+      } else if ((info as { finish?: unknown }).finish !== "tool-calls") {
+        const completedSessionId = info.sessionID;
+        setTimeout(() => {
+          if (entry.liveSessionIds.has(completedSessionId) && !entry.statusReconcileAbort) {
+            const controller = new AbortController();
+            entry.statusReconcileAbort = controller;
+            void reconcileSessionRunStatuses(entry, entry.input, controller.signal, "active-reconcile").finally(() => {
+              if (entry.statusReconcileAbort === controller) entry.statusReconcileAbort = null;
+            });
+          }
+        }, 1500);
+      }
     }
     if (!isTrackedSession(entry, info.sessionID)) return;
     const created = info.time?.created;
@@ -1766,6 +1778,9 @@ function flushSessionDeltas(entry: SyncEntry, workspaceId: string, sessionId: st
   commitDeltas(entry, workspaceId, coalescePendingDeltas(flushing));
 }
 
+const lastDeltaObserveAtBySession = new Map<string, number>();
+const DELTA_OBSERVE_THROTTLE_MS = 400;
+
 function commitDeltas(entry: SyncEntry, workspaceId: string, items: PendingDelta[]) {
   const queryClient = getReactQueryClient();
 
@@ -1804,8 +1819,13 @@ function commitDeltas(entry: SyncEntry, workspaceId: string, items: PendingDelta
     );
     const activity = useSessionActivityStore.getState();
     if (applied && activity.recordsByWorkspaceId[workspaceId]?.[sessionId]?.runActive) {
-      activity.observeTranscript(workspaceId, sessionId,
-        queryClient.getQueryData<UIMessage[]>(transcriptKey(workspaceId, sessionId)) ?? []);
+      const now = Date.now();
+      const lastObserved = lastDeltaObserveAtBySession.get(sessionId) ?? 0;
+      if (now - lastObserved >= DELTA_OBSERVE_THROTTLE_MS) {
+        lastDeltaObserveAtBySession.set(sessionId, now);
+        activity.observeTranscript(workspaceId, sessionId,
+          queryClient.getQueryData<UIMessage[]>(transcriptKey(workspaceId, sessionId)) ?? []);
+      }
     }
   }
 }
@@ -1855,6 +1875,73 @@ function startSync(input: SyncOptions, entry: SyncEntry) {
  * `snapshotStartedAt` so they are ordered against live writes — a fetch that
  * raced a newer SSE status is dropped instead of clobbering it.
  */
+async function maybeHandoffOrchestratorTurn(
+  entry: SyncEntry,
+  workspaceId: string,
+  sessionId: string,
+) {
+  const store = useOrchestratorStore.getState();
+  const turn = store.getSessionTurn(sessionId);
+  if (!turn) return;
+  if (turn.phase === "executing") {
+    store.setSessionTurn(sessionId, null);
+    return;
+  }
+  const activity = useSessionActivityStore.getState().recordsByWorkspaceId[workspaceId]?.[sessionId];
+  if (activity?.errorActive) {
+    store.setSessionTurn(sessionId, null);
+    return;
+  }
+  const transcript = getReactQueryClient().getQueryData<UIMessage[]>(transcriptKey(workspaceId, sessionId)) ?? [];
+  const lastAssistant = [...transcript].reverse().find((m) => m.role === "assistant");
+  let planText = "";
+  let exitCalled = false;
+  for (const part of lastAssistant?.parts ?? []) {
+    if (part.type === "dynamic-tool" && part.toolName === "exit_plan_mode") {
+      exitCalled = true;
+      const inp = part.input as { plan?: unknown } | undefined;
+      if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
+      break;
+    }
+    if (part.type === "tool-exit_plan_mode") {
+      exitCalled = true;
+      const inp = (part as { input?: { plan?: unknown } }).input;
+      if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
+      break;
+    }
+  }
+  if (!exitCalled) {
+    store.setSessionTurn(sessionId, null);
+    return;
+  }
+  store.setSessionTurn(sessionId, { ...turn, phase: "executing" });
+  try {
+    const client = createSyncClient(entry.input.baseUrl, entry.openworkToken);
+    unwrap(await client.session.promptAsync({
+      sessionID: sessionId,
+      model: { providerID: turn.providerID, modelID: turn.executionModelId },
+      ...(turn.variant ? { variant: turn.variant } : {}),
+      tools: { exit_plan_mode: false },
+      system: ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT,
+      parts: [
+        {
+          type: "text",
+          text: planText
+            ? `Execute the approved plan:\n\n${planText}`
+            : "Execute the approved plan from the Planning Model above.",
+        },
+      ],
+    }));
+  } catch (err) {
+    store.setSessionTurn(sessionId, null);
+    useSessionActivityStore.getState().setError(
+      workspaceId,
+      sessionId,
+      err instanceof Error ? err.message : "Orchestrator failed to start execution phase.",
+    );
+  }
+}
+
 function applySessionRunStatus(
   entry: SyncEntry,
   workspaceId: string,
@@ -1946,6 +2033,9 @@ function applySessionRunStatus(
         queryKey: snapshotKey(workspaceId, sessionId),
         exact: true,
       });
+    }
+    if (shouldConvergeTerminal) {
+      void maybeHandoffOrchestratorTurn(entry, workspaceId, sessionId);
     }
     if (shouldRecordTerminal) {
       const assistantCompletedAt = entry.assistantMessageCompletedAt.get(sessionId);

@@ -12,7 +12,12 @@ import {
   type LocalRouterSettings,
 } from "./nanami-local-router";
 
-export type ResolvedTurnModel = { model: ModelRef | null; variant: string | null };
+export type ResolvedTurnModel = {
+  model: ModelRef | null;
+  variant: string | null;
+  tools?: Record<string, boolean>;
+  systemAppend?: string;
+};
 
 function providerRejectionStatus(error: unknown): number | null {
   const pending: unknown[] = [error];

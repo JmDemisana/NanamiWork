@@ -10,6 +10,16 @@ import { activateChatGptRouterAccount, useChatGptAccountsStore } from "./chatgpt
 import { activateCopilotRouterAccount, useCopilotAccountsStore } from "./copilot-accounts-store";
 import { dispatchLocalRouterTurn, type ResolvedTurnModel } from "./local-router-dispatch";
 import { buildLocalRouterAccounts, getLastLocalRouterCandidate, recordLocalRouterUse, useLocalRouterStore } from "./nanami-local-router";
+import {
+  ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT,
+  ORCHESTRATOR_PLAN_SYSTEM_PROMPT,
+  getAntigravityOrchestratorModels,
+  getChatGptOrchestratorModels,
+  isAntigravityOrchestratorSupported,
+  isChatGptOrchestratorSupported,
+  isOrchestratorModel,
+  useOrchestratorStore,
+} from "./orchestrator-store";
 
 /** Never send the desktop host token to a different loopback service. */
 export function isConfiguredRouterHost(baseUrl: string, settings: { urlOverride?: string; portOverride?: number }): boolean {
@@ -59,6 +69,84 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
     if (currentLeaseId && host) await host.releaseLocalRouterLease(currentLeaseId).catch(() => undefined);
   };
   try {
+  if (isOrchestratorModel(input.selected)) {
+    const providerID = input.selected!.providerID as "google" | "openai";
+    let accountEmail = "";
+    let planningModelId = "";
+    let executionModelId = "";
+    if (providerID === "google") {
+      let ag = useAntigravityAccountsStore.getState();
+      if (ag.lastLoadedAt === null) {
+        await ag.loadAccounts(input.opencodeClient);
+        ag = useAntigravityAccountsStore.getState();
+      }
+      const active = ag.accounts.find((a) => a.isActive) ?? ag.accounts[0];
+      if (!active || !isAntigravityOrchestratorSupported(active)) {
+        throw new Error("Orchestrator requires a supported Antigravity Plus or Pro account.");
+      }
+      const models = getAntigravityOrchestratorModels(active, ag.thinkingTier);
+      const pair = useOrchestratorStore.getState().getAccountConfig("google", active.email, models);
+      if (!pair) throw new Error("No models available for Orchestrator on this account.");
+      accountEmail = active.email;
+      planningModelId = pair.planningModelId;
+      executionModelId = pair.executionModelId;
+    } else {
+      let cg = useChatGptAccountsStore.getState();
+      if (!cg.hasLoadedAccounts) {
+        await cg.loadAccounts(input.opencodeClient);
+        cg = useChatGptAccountsStore.getState();
+      }
+      const active = cg.accounts.find((a) => a.isActive) ?? cg.accounts[0];
+      if (!active || !isChatGptOrchestratorSupported(active)) {
+        throw new Error("Orchestrator requires a supported ChatGPT Plus or Pro account.");
+      }
+      const models = getChatGptOrchestratorModels(active);
+      const pair = useOrchestratorStore.getState().getAccountConfig("openai", active.email, models);
+      if (!pair) throw new Error("No models available for Orchestrator on this account.");
+      accountEmail = active.email;
+      planningModelId = pair.planningModelId;
+      executionModelId = pair.executionModelId;
+    }
+
+    const existingTurn = input.steer ? useOrchestratorStore.getState().getSessionTurn(input.sessionId) : undefined;
+    const isExecutingSteer = Boolean(input.steer && existingTurn?.phase === "executing");
+    if (!input.steer) {
+      useOrchestratorStore.getState().setSessionTurn(input.sessionId, {
+        phase: "planning",
+        providerID,
+        accountEmail,
+        planningModelId,
+        executionModelId,
+        variant: input.variant,
+        systemPromptBase: "",
+      });
+    }
+    const targetModelId = isExecutingSteer ? (existingTurn?.executionModelId ?? executionModelId) : planningModelId;
+    return await dispatchLocalRouterTurn({
+      selected: { providerID, modelID: targetModelId },
+      variant: input.variant,
+      steer: input.steer,
+      localRuntime,
+      assertCurrent: input.assertCurrent,
+      settings: () => useLocalRouterStore.getState(),
+      steeringCandidate: () => getLastLocalRouterCandidate(input.sessionId),
+      accounts: async () => [],
+      release: releaseRouterLease,
+      ensureIdle: async () => undefined,
+      activate: async () => undefined,
+      record: () => undefined,
+      send: (selection) =>
+        input.send({
+          ...selection,
+          client: input.opencodeClient,
+          tools: isExecutingSteer
+            ? { exit_plan_mode: false }
+            : { edit: false, write: false, patch: false, multiedit: false, apply_patch: false, exit_plan_mode: true },
+          systemAppend: isExecutingSteer ? ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT : ORCHESTRATOR_PLAN_SYSTEM_PROMPT,
+        }),
+    });
+  }
+  useOrchestratorStore.getState().setSessionTurn(input.sessionId, null);
   return await dispatchLocalRouterTurn({
     selected: input.selected,
     variant: input.variant,
@@ -129,7 +217,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
       else if (candidate.account.kind === "copilot") await activateCopilotRouterAccount(candidate.account.accountID, candidate.model.modelID, leasedClient);
     },
     record: (candidate) => recordLocalRouterUse(candidate, input.sessionId),
-    send: (selection) => input.send({ ...selection, client: leasedClient ?? input.opencodeClient }),
+    send: (selection) => input.send({ ...selection, tools: { exit_plan_mode: false }, client: leasedClient ?? input.opencodeClient }),
   });
   } finally {
     await releaseRouterLease();

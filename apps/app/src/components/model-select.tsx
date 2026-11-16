@@ -18,6 +18,7 @@ import { newProvidersEvent } from "@/app/lib/provider-events";
 import { openComposerModelPickerEvent } from "@/app/lib/inference-access";
 import { fixedModelTitle, managesOwnBehavior, modelTitle, nonDefaultModelSummary, type RetainedModelSelection } from "@/react-app/domains/models/model-catalog";
 import { DEFAULT_ANTIGRAVITY_IDE_MODELS, findAntigravityModelItem, resolveAntigravityModelForTier, useAntigravityAccountsStore, type ThinkingTier } from "@/react-app/domains/models/antigravity-accounts-store";
+import { isOrchestratorModel } from "@/react-app/domains/models/orchestrator-store";
 import { useChatGptAccountsStore } from "@/react-app/domains/models/chatgpt-accounts-store";
 import { useCopilotAccountsStore } from "@/react-app/domains/models/copilot-accounts-store";
 import { useModelPickerCatalogStore } from "@/react-app/domains/session/models/model-collections-store";
@@ -154,18 +155,22 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   const openProvider = () => { onOpenChange(false); window.dispatchEvent(new Event(openWorkbenchInstancesEvent)); };
   const openSettings = () => { onOpenChange(false); openAutoProviderSettings(); };
 
-  const activeAntigravityItem = value.providerID === "google"
+  const isOrchestrator = isOrchestratorModel(value);
+  const activeAntigravityItem = value.providerID === "google" && !isOrchestrator
     ? findAntigravityModelItem(activeAntigravityAccount?.models ?? DEFAULT_ANTIGRAVITY_IDE_MODELS, value.modelID)
     : undefined;
   const supportsThinking = Boolean(
-    activeAntigravityItem?.supportsThinkingTier || (value.providerID === "openai" && activeChatGptAccount),
+    isOrchestrator || activeAntigravityItem?.supportsThinkingTier || (value.providerID === "openai" && activeChatGptAccount),
   );
 
   const cycleThinkingTier = () => {
     const nextTier: ThinkingTier =
       thinkingTier === "low" ? "medium" : thinkingTier === "medium" ? "high" : "low";
     void useAntigravityAccountsStore.getState().setThinkingTier(nextTier);
-    if (activeAntigravityItem) {
+    if (isOrchestrator) {
+      onChange(value, nextTier);
+      onBehaviorChange?.(nextTier);
+    } else if (activeAntigravityItem) {
       const nextModelId = resolveAntigravityModelForTier(activeAntigravityItem, nextTier);
       onChange({ providerID: "google", modelID: nextModelId }, nextTier);
       onBehaviorChange?.(nextTier);
@@ -176,14 +181,16 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   };
 
   const antigravityModelLabel = value.providerID === "google"
-    ? (activeAntigravityItem?.displayName
+    ? (isOrchestrator
+      ? "Orchestrator"
+      : activeAntigravityItem?.displayName
       ?? (value.modelID === "antigravity-gemini-4-argon" ? "Gemini 4 Argon" : value.modelID === "antigravity-gemini-4-argon-high" ? "Gemini 4 Argon (High)" : undefined))
     : undefined;
-  const activeChatGptItem = value.providerID === "openai"
+  const activeChatGptItem = value.providerID === "openai" && !isOrchestrator
     ? activeChatGptAccount?.models.find((m) => m.modelID === value.modelID)
     : undefined;
   const chatGptModelLabel = value.providerID === "openai" && activeChatGptAccount
-    ? (activeChatGptItem?.displayName ?? value.modelID)
+    ? (isOrchestrator ? "Orchestrator" : activeChatGptItem?.displayName ?? value.modelID)
     : undefined;
   const activeCopilotItem = value.providerID === "github-copilot"
     ? activeCopilotAccount?.models.find((m) => m.modelID === value.modelID)
@@ -197,7 +204,8 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     value?.modelID &&
     value.providerID !== "" &&
     value.modelID !== "" &&
-    (value.providerID === "nanami" ||
+    (isOrchestrator ||
+      value.providerID === "nanami" ||
       (isAntigravity ? Boolean(activeAntigravityItem) : true))
   );
 

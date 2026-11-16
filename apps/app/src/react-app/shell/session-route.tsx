@@ -1954,7 +1954,7 @@ export function SessionRoute() {
                   });
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
                     const result = await sendWithModelUnavailableRetry({
                       request: {
                         sessionID: targetSessionId,
@@ -1963,7 +1963,8 @@ export function SessionRoute() {
                         model: model ?? undefined,
                         agent: sendAgent ?? undefined,
                         ...(variant ? { variant } : {}),
-                        system,
+                        ...(tools ? { tools } : {}),
+                        system: systemAppend ? `${system}\n\n${systemAppend}` : system,
                       },
                       send: (request) => turnClient.session.promptAsync(request),
                       refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
@@ -2355,7 +2356,7 @@ export function SessionRoute() {
                   });
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
                     const result = await sendWithModelUnavailableRetry({
                       request: {
                         sessionID: targetSessionId,
@@ -2364,7 +2365,8 @@ export function SessionRoute() {
                         model: model ?? undefined,
                         agent: sendAgent ?? undefined,
                         ...(variant ? { variant } : {}),
-                        system,
+                        ...(tools ? { tools } : {}),
+                        system: systemAppend ? `${system}\n\n${systemAppend}` : system,
                       },
                       send: (request) => turnClient.session.promptAsync(request),
                       refreshModels: () => ensureProviderListQuery(getReactQueryClient(), {
