@@ -718,10 +718,34 @@ select:disabled {
 }
 
 .nanami-rise {
-  animation: nanami-rise 240ms cubic-bezier(.16, 1, 0.3, 1) both;
+  animation: nanami-rise 200ms cubic-bezier(.2, .8, .2, 1) both;
 }
 .nanami-fade {
-  animation: nanami-fade 280ms ease-out both;
+  animation: nanami-fade 180ms ease-out both;
+}
+
+/* Shared feedback keeps controls and navigation responsive without moving
+   conversation content as it streams or remounts. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="sidebar-menu-button"] {
+    transition: background-color 160ms ease-out, color 160ms ease-out, box-shadow 160ms ease-out;
+  }
+  [data-slot="switch"], [data-slot="checkbox"] {
+    transition: background-color 160ms ease-out, border-color 160ms ease-out, box-shadow 160ms ease-out;
+  }
+  [data-slot="switch-thumb"] {
+    transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+  }
+  [data-slot="checkbox-indicator"] {
+    transition: opacity 150ms ease-out, transform 150ms ease-out;
+  }
+  [data-composer-menu-open], [data-composer-toolbar] {
+    transition: border-color 160ms ease-out, background-color 160ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="switch"], [data-slot="switch-thumb"], [data-slot="checkbox"],
+  [data-slot="checkbox-indicator"] { transition: none; }
 }
 /* A slow breath on the brand mark. Faint on purpose: it should read as alive,
    not as a loading spinner. */
@@ -736,6 +760,7 @@ select:disabled {
 @media (prefers-reduced-motion: reduce) {
   .nanami-rise, .nanami-fade { animation: none; }
   .nanami-breathe { animation: none; }
+  .nanami-pulse-beacon { animation: none; }
 }
 
 

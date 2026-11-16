@@ -118,7 +118,7 @@ function infoPlist() {
 
 /** This PC: the Windows helper, built with the .NET Framework compiler every
  * Windows 10/11 install carries, so it needs no SDK. electron-builder signs it
- * with OpenWork's identity like openwork-dictation.exe. A missing compiler is
+ * with OpenWork's identity. A missing compiler is
  * not fatal: This PC then reports the helper missing. */
 function prepareWindowsHelper() {
   const source = resolve(repoRoot, "packages", "computer-use", "windows", "ComputerUse.cs");

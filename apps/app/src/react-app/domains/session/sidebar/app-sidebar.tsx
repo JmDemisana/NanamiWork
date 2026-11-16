@@ -169,7 +169,7 @@ import { SESSION_DRAG_TYPE, SessionDragScope, SessionReorderList, useDraggedSess
 const OUTCOME_DOT_UNREAD = "#2FBE54";
 const OUTCOME_DOT_NEEDS_ACTION = "#E8933A";
 
-const SESSION_ROW_BUTTON_CLASS = "relative h-8 rounded-md transition-[background-color] duration-75 pe-2.5 group-hover/menu-sub-item:bg-black/[0.05] dark:group-hover/menu-sub-item:bg-white/[0.09] data-active:bg-black/[0.07] dark:data-active:bg-white/[0.12] text-[13px] text-sidebar-foreground/80 data-active:text-sidebar-foreground";
+const SESSION_ROW_BUTTON_CLASS = "relative h-8 rounded-md transition-[background-color,color] duration-150 ease-out motion-reduce:transition-none pe-2.5 group-hover/menu-sub-item:bg-black/[0.05] dark:group-hover/menu-sub-item:bg-white/[0.09] data-active:bg-black/[0.07] dark:data-active:bg-white/[0.12] text-[13px] text-sidebar-foreground/80 data-active:text-sidebar-foreground";
 const SESSION_ROW_METADATA_CLASS = "min-w-[1.25rem] text-right text-[11px] tabular-nums text-muted-foreground/80";
 
 const SidebarReorderContext = React.createContext<{

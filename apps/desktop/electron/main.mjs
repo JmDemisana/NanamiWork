@@ -29,7 +29,6 @@ import { registerUpdaterIpc, resolveAppVersion, isStoreBuild } from "./updater.m
 import { createUiControlServer } from "./ui-control-server.mjs";
 import { createApplicationMenu } from "./app-menu.mjs";
 import { createNativeContextMenus } from "./context-menu.mjs";
-import { createNativeDictation, createSpeechDictation } from "./native-dictation.mjs";
 import { applyBrandAppName } from "./brand-app-name.mjs";
 import { createBrowserPanel } from "./browser-panel.mjs";
 import { createComputerControl } from "@openwork/computer-use/computer-control";
@@ -152,17 +151,6 @@ const {
   session,
   shell,
 } = require("electron");
-const startNativeDictation = createNativeDictation({
-  platform: process.platform, menu: Menu, processId: process.pid, systemRoot: process.env.SystemRoot,
-});
-const speechDictation = createSpeechDictation({
-  platform: process.platform,
-  helperPath: path.join(app.isPackaged ? path.join(process.resourcesPath, "helpers") : path.resolve(__dirname, "..", "resources", "helpers"),
-    process.platform === "win32" ? "openwork-dictation.exe" : "openwork-dictation"),
-  infoPlist: path.resolve(path.dirname(process.execPath), "..", "Info.plist"),
-  exists: existsSync,
-  readText: (file) => readFileSync(file, "utf8"),
-});
 const pty = require(["node", "pty"].join("-"));
 const NATIVE_DEEP_LINK_EVENT = "openwork:deep-link-native";
 const AUTOMATION_RUNNER_CREDENTIAL_REJECTED_EVENT = "openwork:automation-runner:credential-rejected";
@@ -2076,12 +2064,6 @@ function applyNativeTheme(mode) {
 // typecheck:electron`.
 /** @type {import("@openwork/types/desktop-ipc").DesktopCommandHandlers<import("electron").IpcMainInvokeEvent>} */
 const desktopCommandHandlers = {
-  "__startNativeDictation": async (event, requestId) => startNativeDictation.start(event, mainWindow, requestId),
-  "__cancelNativeDictationStart": async (event, requestId) => startNativeDictation.cancel(event, requestId),
-  "__speechDictationMode": async (event) => speechDictation.mode(),
-  "__startSpeechDictation": async (event, requestId, language) => speechDictation.start(event, mainWindow, requestId, language),
-  "__stopSpeechDictation": async (event, requestId) => speechDictation.stop(event, requestId),
-  "__abortSpeechDictation": async (event, requestId) => speechDictation.abort(event, requestId),
   "workspaceBootstrap": async (event, ...args) => {
       return workspaceStore.readWorkspaceState();
   },

@@ -1,6 +1,5 @@
 /** @jsxImportSource react */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
 import type { Agent } from "@opencode-ai/sdk/v2/client";
 import { Cloud, Monitor, Check, ChevronDown, FileText, RefreshCw, Terminal, Zap, X } from "lucide-react";
 import { ComposerSendButton } from "./composer-send-button";
@@ -53,12 +52,6 @@ import { composerDiagnosticBlockers } from "./composer-diagnostics";
 import { resolveComposerSubmit } from "./composer-submit";
 import { ModelRecoveryNote } from "./model-recovery-note";
 import { modelRecoveryChatKey, useModelRecoveryStore } from "../model-recovery-store";
-import { useNativeDictation } from "@openwork/ui/react";
-import { useNativeDictationFeature } from "./use-native-dictation-feature";
-import { startNativeDictation } from "./start-native-dictation";
-import { useDesktopSpeechDictation } from "./desktop-speech-dictation";
-import { isDesktopRuntime } from "@/app/lib/runtime-env";
-import { NativeDictationControl } from "./native-dictation-control";
 import { useSessionReferencesMaybe, type SessionReferenceCandidate } from "@/components/chat/session-reference-context";
 import { formatRelativeTime } from "@/app/utils";
 import { filterSessionReferenceCandidates } from "./session-reference-search";
@@ -286,26 +279,6 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
   // compositionstart/compositionend events below.
   const imeComposingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const nativeDictationEnabled = useNativeDictationFeature();
-  const speechDictation = useDesktopSpeechDictation();
-  const dictationInput = () => rootRef.current?.querySelector<HTMLElement>("[contenteditable='true']") ?? null;
-  const dictation = useNativeDictation({
-    enabled: nativeDictationEnabled,
-    scope: props.sessionId,
-    text: props.draft,
-    onText: props.onDraftChange,
-    selection: () => editorRef.current?.draftSelectionRange() ?? { start: props.draft.length, end: props.draft.length },
-    focusInput: () => dictationInput()?.focus(),
-    startNative: isDesktopRuntime() ? startNativeDictation : undefined,
-    ...speechDictation,
-  });
-  const prepareVoiceSubmission = () => {
-    if (!nativeDictationEnabled) return latestProps.current;
-    const text = dictation.commit();
-    const current = latestProps.current;
-    if (text !== current.draft) flushSync(() => current.onDraftChange(text));
-    return latestProps.current;
-  };
   const draftRef = useRef(props.draft);
   useEffect(() => {
     draftRef.current = props.draft;
@@ -378,7 +351,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
       return;
     }
     if (!canSend) return;
-    const current = prepareVoiceSubmission();
+    const current = latestProps.current;
     const action = resolveComposerSubmit({
       hasContent: current.draft.trim().length > 0 || current.attachments.length > 0,
       disabled: current.disabled,
@@ -1508,7 +1481,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
               attachments={[]}
               submitDisabled={props.disabled}
               placeholder={t("composer.placeholder")}
-              onChange={nativeDictationEnabled ? dictation.edit : props.onDraftChange}
+              onChange={props.onDraftChange}
               onMentionQueryChange={setActiveMentionQuery}
               onSessionReferenceQueryChange={sessionReferencesEnabled ? handleSessionTriggerChange : undefined}
               onOpenSessionReference={sessionReferences?.openReference}
@@ -1715,7 +1688,6 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
                   Cmd/Ctrl+Enter still steers).
               */}
               <div data-composer-actions className="col-start-2 row-start-2 ml-auto flex shrink-0 items-center gap-1.5">
-                {nativeDictationEnabled ? <NativeDictationControl dictation={dictation} disabled={props.disabled} text={props.draft} /> : null}
                 <ComposerSendButton
                   mode={props.stopping ? "stopping" : showStop ? "stop" : props.submissionPreparing ? "preparing" : "send"}
                   ready={canSend && !props.disabled}
@@ -1728,7 +1700,7 @@ export const ReactSessionComposer = memo(function ReactSessionComposer(props: Co
                       ? () => void props.onStop()
                       : !canSend || props.submissionPreparing
                         ? undefined
-                        : () => void prepareVoiceSubmission().onSend()
+                        : () => void latestProps.current.onSend()
                   }
                   disabled={
                     props.disabled

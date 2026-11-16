@@ -4,9 +4,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 const ownsDom = !GlobalRegistrator.isRegistered;
 if (ownsDom) GlobalRegistrator.register({ url: "http://localhost/" });
 
-mock.module("../src/react-app/domains/session/surface/composer/use-native-dictation-feature", () => ({
-  useNativeDictationFeature: () => false,
-}));
 mock.module("../src/components/model-select", () => ({ ModelSelect: () => null }));
 mock.module("../src/react-app/domains/connections/use-org-mcp-connections", () => ({
   useOrgMcpConnections: () => ({ connections: [], loading: false, refresh: () => {} }),

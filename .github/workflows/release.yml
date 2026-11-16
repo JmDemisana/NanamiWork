@@ -213,7 +213,6 @@ jobs:
             ### Notes
             - Model access still depends on the selected account's provider entitlements.
             - Windows installers are unsigned, and macOS packages are not notarized.
-            - Windows dictation uses Windows voice typing if its bundled helper is unavailable.
 
             ### Downloads
             - **Windows**: NSIS installer and AppX package
