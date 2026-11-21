@@ -52,6 +52,8 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
   localWorkspace: boolean;
   restrictToCloud: boolean;
   enabled: boolean;
+  isCommand?: boolean;
+  systemPromptBase?: string;
   send: (selection: ResolvedTurnModel & { client: Client }) => Promise<T>;
   assertCurrent?: () => void;
 }): Promise<T> {
@@ -110,7 +112,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
 
     const existingTurn = input.steer ? useOrchestratorStore.getState().getSessionTurn(input.sessionId) : undefined;
     const isExecutingSteer = Boolean(input.steer && existingTurn?.phase === "executing");
-    if (!input.steer) {
+    if (!input.steer && !input.isCommand) {
       useOrchestratorStore.getState().setSessionTurn(input.sessionId, {
         phase: "planning",
         providerID,
@@ -118,7 +120,7 @@ export async function dispatchConfiguredLocalRouterTurn<T>(input: {
         planningModelId,
         executionModelId,
         variant: input.variant,
-        systemPromptBase: "",
+        systemPromptBase: input.systemPromptBase ?? "",
       });
     }
     const targetModelId = isExecutingSteer ? (existingTurn?.executionModelId ?? executionModelId) : planningModelId;

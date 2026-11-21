@@ -12,6 +12,7 @@ import { createClientV2, isOpencodeV2BaseUrl } from "@/app/lib/opencode-v2-adapt
 import type { ComposerDraft, ModelRef } from "@/app/types";
 import { isAutoModel } from "@/react-app/domains/models/model-catalog";
 import { isLocalRouterModel } from "@/app/lib/local-router-ref";
+import { isOrchestratorModel } from "../../models/orchestrator-store";
 import { modelAdmissionFence } from "@/app/lib/model-admission-fence";
 import { dispatchConfiguredLocalRouterTurn } from "@/react-app/domains/models/local-router-runtime";
 import { AutoAccessRejected, autoAccessWallFromError, preflightAutoSubmission } from "@/app/lib/inference-access";
@@ -172,14 +173,14 @@ async function performQueuedDraftSend(
   try {
     if (draft.command) {
       const command = draft.command;
-      await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+      await dispatchConfiguredLocalRouterTurn({ ...routerContext, isCommand: true, send: async ({ model, variant, client: turnClient }) => {
         const result = await sendSessionCommand(context.opencodeBaseUrl, turnClient, {
           sessionID: sessionId,
           messageID: draft.messageId,
           command: command.name,
           arguments: command.arguments,
-          ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
-          ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+          ...(model && (isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+          ...((isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel)) && variant ? { variant } : {}),
         });
         if (result.error) throw new Error(serializeSDKError(result.error));
         return result;
@@ -201,7 +202,7 @@ async function performQueuedDraftSend(
     ]);
     assertQueuedSendCurrent(sessionId, generation);
     if (sessionWorkHeld(context.opencodeBaseUrl, sessionId) || context.isCurrent?.() === false) return "cancelled";
-    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
+    await dispatchConfiguredLocalRouterTurn({ ...routerContext, systemPromptBase: system, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
       const result = await sendWithModelUnavailableRetry({
         request: {
           sessionID: sessionId,

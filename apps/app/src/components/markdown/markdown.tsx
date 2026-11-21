@@ -14,7 +14,7 @@ import { contextualizeFileTarget, precedingDirectory } from "@/react-app/domains
 import type { OpenTarget } from "@/react-app/domains/session/artifacts/open-target";
 import { openTargetForHref, openTargetFromLocalPath, planFileOpen, resolveCollectibleOpenTarget } from "@/react-app/domains/session/artifacts/resolve-open-target";
 
-import { applyTextHighlights } from "./text-highlights";
+import { applyTextHighlights, SEARCH_HIGHLIGHT_SELECTOR } from "./text-highlights";
 import {
   createStreamingMarkdownRenderer,
   hasFencedCodeBlock,
@@ -204,7 +204,7 @@ function MarkdownBlockInner({
     }
 
     const query = highlightQuery ?? "";
-    if (streaming && !query) {
+    if (streaming && !query && !root.querySelector(SEARCH_HIGHLIGHT_SELECTOR)) {
       return;
     }
 

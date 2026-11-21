@@ -1884,11 +1884,14 @@ function startSync(input: SyncOptions, entry: SyncEntry) {
  * `snapshotStartedAt` so they are ordered against live writes — a fetch that
  * raced a newer SSE status is dropped instead of clobbering it.
  */
+const orchestratorHandoffsInFlight = new Set<string>();
+
 async function maybeHandoffOrchestratorTurn(
   entry: SyncEntry,
   workspaceId: string,
   sessionId: string,
 ) {
+  if (orchestratorHandoffsInFlight.has(sessionId)) return;
   const store = useOrchestratorStore.getState();
   const turn = store.getSessionTurn(sessionId);
   if (!turn) return;
@@ -1902,27 +1905,32 @@ async function maybeHandoffOrchestratorTurn(
     return;
   }
   const transcript = getReactQueryClient().getQueryData<UIMessage[]>(transcriptKey(workspaceId, sessionId)) ?? [];
-  const lastAssistant = [...transcript].reverse().find((m) => m.role === "assistant");
   let planText = "";
   let exitCalled = false;
-  for (const part of lastAssistant?.parts ?? []) {
-    if (part.type === "dynamic-tool" && part.toolName === "exit_plan_mode") {
-      exitCalled = true;
-      const inp = part.input as { plan?: unknown } | undefined;
-      if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
-      break;
-    }
-    if (part.type === "tool-exit_plan_mode") {
-      exitCalled = true;
-      const inp = (part as { input?: { plan?: unknown } }).input;
-      if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
-      break;
+  for (let i = transcript.length - 1; i >= 0 && !exitCalled; i -= 1) {
+    const msg = transcript[i];
+    if (msg.role === "user") break;
+    if (msg.role !== "assistant") continue;
+    for (const part of msg.parts ?? []) {
+      if (part.type === "dynamic-tool" && part.toolName === "exit_plan_mode") {
+        exitCalled = true;
+        const inp = part.input as { plan?: unknown } | undefined;
+        if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
+        break;
+      }
+      if (part.type === "tool-exit_plan_mode") {
+        exitCalled = true;
+        const inp = (part as { input?: { plan?: unknown } }).input;
+        if (typeof inp?.plan === "string" && inp.plan.trim()) planText = inp.plan.trim();
+        break;
+      }
     }
   }
   if (!exitCalled) {
     store.setSessionTurn(sessionId, null);
     return;
   }
+  orchestratorHandoffsInFlight.add(sessionId);
   store.setSessionTurn(sessionId, { ...turn, phase: "executing" });
   try {
     const client = createSyncClient(entry.input.baseUrl, entry.openworkToken);
@@ -1931,7 +1939,11 @@ async function maybeHandoffOrchestratorTurn(
       model: { providerID: turn.providerID, modelID: turn.executionModelId },
       ...(turn.variant ? { variant: turn.variant } : {}),
       tools: { exit_plan_mode: false },
-      system: ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT,
+      system: turn.systemPromptBase
+        ? `${turn.systemPromptBase}
+
+${ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT}`
+        : ORCHESTRATOR_EXECUTE_SYSTEM_PROMPT,
       parts: [
         {
           type: "text",
@@ -1948,6 +1960,8 @@ async function maybeHandoffOrchestratorTurn(
       sessionId,
       err instanceof Error ? err.message : "Orchestrator failed to start execution phase.",
     );
+  } finally {
+    orchestratorHandoffsInFlight.delete(sessionId);
   }
 }
 

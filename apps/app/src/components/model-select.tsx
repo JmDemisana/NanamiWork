@@ -184,7 +184,17 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
     ? (isOrchestrator
       ? "Orchestrator"
       : activeAntigravityItem?.displayName
-      ?? (value.modelID === "antigravity-gemini-4-argon" ? "Gemini 4 Argon" : value.modelID === "antigravity-gemini-4-argon-high" ? "Gemini 4 Argon (High)" : undefined))
+      ?? (value.modelID === "antigravity-gemini-4-argon"
+        ? "Gemini 4 Argon"
+        : value.modelID === "antigravity-gemini-4-argon-high"
+          ? "Gemini 4 Argon (High)"
+          : value.modelID.startsWith("antigravity-gemini-4-neon-")
+            ? "Gemini 4 Neon"
+            : value.modelID.startsWith("antigravity-gemini-4-hydrogen-")
+              ? "Gemini 4 Hydrogen"
+              : value.modelID.startsWith("antigravity-gemini-4-carbon-")
+                ? "Gemini 4 Carbon"
+                : undefined))
     : undefined;
   const activeChatGptItem = value.providerID === "openai" && !isOrchestrator
     ? activeChatGptAccount?.models.find((m) => m.modelID === value.modelID)

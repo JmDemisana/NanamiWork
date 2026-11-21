@@ -337,6 +337,12 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
     }
 
     const lowerTarget = (email ?? "").toLowerCase();
+    if (
+      lastActivatedAntigravityRouterSession &&
+      (!options?.exactAccount || lowerTarget !== lastActivatedAntigravityRouterSession.email)
+    ) {
+      lastActivatedAntigravityRouterSession = null;
+    }
     const previousPin = await readRouterPin();
     const needsRecovery = options?.exactAccount && (data.accounts.some((account) => !String(account.email ?? "").trim())
       || !data.accounts.some((account) => String(account.email ?? "").toLowerCase() === lowerTarget));
@@ -454,6 +460,7 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
 export async function syncDiskAccountsViaTerminal(
   action?: { type: "select"; email: string } | { type: "delete"; email: string },
 ): Promise<void> {
+  lastActivatedAntigravityRouterSession = null;
   const terminal = typeof window !== "undefined" ? window.__OPENWORK_ELECTRON__?.terminal : undefined;
   if (!terminal?.create || !terminal?.write) return;
   try {
@@ -1154,6 +1161,16 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
         nextAccounts[0].isActive = true;
       }
 
+      const activeAfterLoad = nextAccounts.find((a) => a.isActive);
+      if (
+        lastActivatedAntigravityRouterSession &&
+        (!activeAfterLoad ||
+          activeAfterLoad.email.toLowerCase() !== lastActivatedAntigravityRouterSession.email ||
+          activeAfterLoad.refreshToken !== lastActivatedAntigravityRouterSession.refreshToken)
+      ) {
+        lastActivatedAntigravityRouterSession = null;
+      }
+
       set({
         accounts: nextAccounts,
         thinkingTier: savedTier,
@@ -1266,6 +1283,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       const activeIndex = currentAccounts.findIndex((a) => a.email.toLowerCase() === lower);
       await writeNanamiMeta((prev) => ({ ...prev, activeEmail: target.email, activeIndex }), true);
     } catch (error) {
+      lastActivatedAntigravityRouterSession = null;
       // The pin is written first, so a later disk failure may leave a partial switch.
       let pinUnreadable = false;
       const pinAfterFailure = await readRouterPin().catch(() => { pinUnreadable = true; return null; });

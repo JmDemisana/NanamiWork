@@ -313,6 +313,7 @@ import { SettingsSurface } from "./settings-route";
 import { readStoredDefaultModel, readWorkspaceDefaultModel, setWorkspaceDefaultModel, useWorkspaceDefaultModel, workspaceModelScope, writeStoredDefaultModel } from "@/react-app/kernel/model-config";
 import { useWorkspaceDefaultModelSync } from "@/react-app/kernel/workspace-default-model-sync";
 import { isLocalRouterModel } from "@/app/lib/local-router-ref";
+import { isOrchestratorModel } from "../domains/models/orchestrator-store";
 import { useWorkspaceModelProfile } from "@/react-app/kernel/use-workspace-model-default";
 import {
   ensureProviderListQuery,
@@ -1929,14 +1930,14 @@ export function SessionRoute() {
                   if (draft.command) {
                     onPrepared?.();
                     const command = draft.command;
-                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, isCommand: true, send: async ({ model, variant, client: turnClient }) => {
                       const result = await sendSessionCommand(opencodeBaseUrl, turnClient, {
                         sessionID: targetSessionId,
                         messageID: draft.messageId,
                         command: command.name,
                         arguments: command.arguments,
-                        ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
-                        ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+                        ...(model && (isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+                        ...((isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel)) && variant ? { variant } : {}),
                       });
                       if (result.error) throw new Error(serializeSDKError(result.error));
                       return result;
@@ -1955,7 +1956,7 @@ export function SessionRoute() {
                   ]);
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, systemPromptBase: system, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
                     const result = await sendWithModelUnavailableRetry({
                       request: {
                         sessionID: targetSessionId,
@@ -2333,14 +2334,14 @@ export function SessionRoute() {
                   if (draft.command) {
                     onPrepared?.();
                     const command = draft.command;
-                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, client: turnClient }) => {
+                    await dispatchConfiguredLocalRouterTurn({ ...routerContext, isCommand: true, send: async ({ model, variant, client: turnClient }) => {
                       const result = await sendSessionCommand(endpoint.opencodeBaseUrl, turnClient, {
                         sessionID: targetSessionId,
                         messageID: draft.messageId,
                         command: command.name,
                         arguments: command.arguments,
-                        ...(model && (isLocalRouterModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
-                        ...(isLocalRouterModel(sendModel) && variant ? { variant } : {}),
+                        ...(model && (isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel) || isAutoModel(model)) ? { model: `${model.providerID}/${model.modelID}` } : {}),
+                        ...((isLocalRouterModel(sendModel) || isOrchestratorModel(sendModel)) && variant ? { variant } : {}),
                       });
                       if (result.error) throw new Error(serializeSDKError(result.error));
                       return result;
@@ -2358,7 +2359,7 @@ export function SessionRoute() {
                   ]);
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
-                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
+                  await dispatchConfiguredLocalRouterTurn({ ...routerContext, systemPromptBase: system, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
                     const result = await sendWithModelUnavailableRetry({
                       request: {
                         sessionID: targetSessionId,
