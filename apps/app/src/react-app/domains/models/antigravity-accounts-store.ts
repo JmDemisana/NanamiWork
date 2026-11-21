@@ -798,22 +798,37 @@ export async function fetchAccountModelsAndQuota(
     "gpt-oss-120b-medium",
   );
 
-  const pickStrictestQuotaWindow = (
-    ...windows: ReadonlyArray<{ remainingFraction: number | null; resetTime: string | null } | null | undefined>
+  const pickDisplayQuotaWindow = (
+    weekly: { remainingFraction: number | null; resetTime: string | null } | null | undefined,
+    short5h: { remainingFraction: number | null; resetTime: string | null } | null | undefined,
+    fallback?: { remainingFraction: number | null; resetTime: string | null } | null,
   ): { remainingFraction: number | null; resetTime: string | null } => {
-    const known = windows.filter(
-      (window): window is { remainingFraction: number; resetTime: string | null } =>
-        Boolean(window && typeof window.remainingFraction === "number" && Number.isFinite(window.remainingFraction)),
-    );
-    if (known.length === 0) return { remainingFraction: null, resetTime: null };
-    return known.reduce((left, right) => (left.remainingFraction <= right.remainingFraction ? left : right));
+    const isKnown = (
+      window: { remainingFraction: number | null; resetTime: string | null } | null | undefined,
+    ): window is { remainingFraction: number; resetTime: string | null } =>
+      Boolean(window && typeof window.remainingFraction === "number" && Number.isFinite(window.remainingFraction));
+    const hasWeekly = isKnown(weekly);
+    const has5h = isKnown(short5h);
+    const hasFallback = isKnown(fallback);
+    // Prefer the 7-day weekly window for model rows; only surface the 5h window
+    // when 5h is actively exhausted (<= 5%) while weekly still has quota left.
+    if (has5h && isLocalRouterQuotaExhausted(short5h.remainingFraction)) {
+      if (hasWeekly && isLocalRouterQuotaExhausted(weekly.remainingFraction)) {
+        return weekly;
+      }
+      return short5h;
+    }
+    if (hasWeekly) return weekly;
+    if (hasFallback) return fallback;
+    if (has5h) return short5h;
+    return { remainingFraction: null, resetTime: null };
   };
 
   const resolvedModels: AntigravityModelItem[] = discoverNewAntigravityModels(modelsMap, thinkingTier).map((model) => {
-    const strictest = pickStrictestQuotaWindow(model, gemini5hBucket, geminiWeeklyBucket);
-    return strictest.remainingFraction === null
+    const chosen = pickDisplayQuotaWindow(geminiWeeklyBucket, gemini5hBucket, model);
+    return chosen.remainingFraction === null
       ? model
-      : { ...model, remainingFraction: strictest.remainingFraction, resetTime: strictest.resetTime ?? model.resetTime };
+      : { ...model, remainingFraction: chosen.remainingFraction, resetTime: chosen.resetTime ?? model.resetTime };
   });
 
   const effectiveArgonFraction = argonWeeklyBucket?.remainingFraction ?? argonQuota.remainingFraction ?? 0;
@@ -824,9 +839,9 @@ export async function fetchAccountModelsAndQuota(
 
   const effectiveFlash5hFraction = gemini5hBucket?.remainingFraction ?? flashQuota.remainingFraction ?? 0;
   const effectiveFlash5hReset = gemini5hBucket?.resetTime ?? flashQuota.resetTime;
-  const effectiveFlashModelQuota = pickStrictestQuotaWindow(
-    gemini5hBucket,
+  const effectiveFlashModelQuota = pickDisplayQuotaWindow(
     { remainingFraction: effectiveFlashWeeklyFraction, resetTime: effectiveFlashWeeklyReset },
+    gemini5hBucket,
   );
 
   const effectiveClaudeWeeklyFraction = thirdPartyWeeklyBucket?.remainingFraction ?? claudeQuota.remainingFraction ?? 0;
@@ -834,9 +849,9 @@ export async function fetchAccountModelsAndQuota(
 
   const effectiveClaude5hFraction = thirdParty5hBucket?.remainingFraction ?? effectiveClaudeWeeklyFraction;
   const effectiveClaude5hReset = thirdParty5hBucket?.resetTime ?? null;
-  const effectiveClaudeModelQuota = pickStrictestQuotaWindow(
-    thirdParty5hBucket,
+  const effectiveClaudeModelQuota = pickDisplayQuotaWindow(
     { remainingFraction: effectiveClaudeWeeklyFraction, resetTime: effectiveClaudeWeeklyReset },
+    thirdParty5hBucket,
   );
 
   if (isPlus) {

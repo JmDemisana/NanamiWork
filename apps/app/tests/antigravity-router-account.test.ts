@@ -314,3 +314,39 @@ test("model quotas use the stricter of 5h and weekly windows", async () => {
   expect(flash?.remainingFraction).toBe(0.01);
   expect(claude?.remainingFraction).toBe(0);
 });
+
+test("model rows display the 7-day weekly window when 5h quota is healthy", async () => {
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) {
+      return Response.json({
+        models: {
+          "gemini-4-neon-medium": { quotaInfo: { remainingFraction: 0.96, resetTime: "5h-neon" } },
+          "gemini-4-hydrogen-medium": { quotaInfo: { remainingFraction: 0.96, resetTime: "5h-hydrogen" } },
+          "gemini-3.8-flash-medium": { quotaInfo: { remainingFraction: 0.96, resetTime: "5h-flash" } },
+        },
+      });
+    }
+    if (url.includes("retrieveUserQuotaSummary")) {
+      return Response.json({
+        groups: [{
+          buckets: [
+            { bucketId: "gemini-5h", remainingFraction: 0.96, resetTime: "5h-gemini" },
+            { bucketId: "gemini-weekly", remainingFraction: 0.99, resetTime: "weekly-gemini" },
+          ],
+        }],
+      });
+    }
+    throw new Error("Unexpected request");
+  };
+  const result = await fetchAccountModelsAndQuota({ email: "pro@example.invalid", refreshToken: "test-pro", projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0, isActive: false, isPlus: true, models: [], quotas: [], quotaLoading: false, quotaError: null }, "medium");
+  const neon = result.models.find((m) => m.familyKey === "gemini-4-neon");
+  const hydrogen = result.models.find((m) => m.familyKey === "gemini-4-hydrogen");
+  const flash = result.models.find((m) => m.familyKey === "gemini-3.8-flash");
+  expect(neon?.remainingFraction).toBe(0.99);
+  expect(neon?.resetTime).toBe("weekly-gemini");
+  expect(hydrogen?.remainingFraction).toBe(0.99);
+  expect(hydrogen?.resetTime).toBe("weekly-gemini");
+  expect(flash?.remainingFraction).toBe(0.99);
+  expect(flash?.resetTime).toBe("weekly-gemini");
+});
