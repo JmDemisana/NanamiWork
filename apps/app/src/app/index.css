@@ -740,12 +740,19 @@ select:disabled {
     transition: opacity 150ms ease-out, transform 150ms ease-out;
   }
   [data-composer-menu-open], [data-composer-toolbar] {
-    transition: border-color 160ms ease-out, background-color 160ms ease-out;
+    transition: border-color 160ms ease-out, background-color 160ms ease-out, box-shadow 160ms ease-out;
+  }
+  [data-slot="autocomplete-item"], [data-slot="collapsible-trigger"] {
+    transition: background-color 140ms ease-out, color 140ms ease-out;
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  [data-slot="sidebar-menu-button"],
   [data-slot="switch"], [data-slot="switch-thumb"], [data-slot="checkbox"],
-  [data-slot="checkbox-indicator"] { transition: none; }
+  [data-slot="checkbox-indicator"], [data-slot="autocomplete-item"],
+  [data-slot="collapsible-trigger"], [data-composer-menu-open], [data-composer-toolbar] {
+    transition: none;
+  }
 }
 /* A slow breath on the brand mark. Faint on purpose: it should read as alive,
    not as a loading spinner. */
