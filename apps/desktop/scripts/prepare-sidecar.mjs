@@ -312,16 +312,25 @@ if (shouldDownloadOpencode) {
   }
 
   if (process.platform === "win32") {
-    const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
-    const extractScript = [
-      "$ErrorActionPreference = 'Stop'",
-      `Expand-Archive -Path ${psQuote(archivePath)} -DestinationPath ${psQuote(extractDir)} -Force`,
-    ].join("; ");
-    const extractRes = spawnSync("powershell", ["-NoProfile", "-Command", extractScript], {
+    mkdirSync(extractDir, { recursive: true });
+    // Prefer built-in bsdtar on Windows: faster and immune to the PowerShell 5.1
+    // Expand-Archive 3-arg ZipFile.ExtractToDirectory overload mismatch on runners.
+    const tarRes = spawnSync("tar", ["-xf", archivePath, "-C", extractDir], {
       stdio: "inherit",
     });
-    if (extractRes.status !== 0) {
-      process.exit(extractRes.status ?? 1);
+    if (tarRes.status !== 0) {
+      const psQuote = (value) => `'${value.replace(/'/g, "''")}'`;
+      const extractScript = [
+        "$ErrorActionPreference = 'Stop'",
+        "Add-Type -AssemblyName System.IO.Compression.FileSystem",
+        `[System.IO.Compression.ZipFile]::ExtractToDirectory(${psQuote(archivePath)}, ${psQuote(extractDir)})`,
+      ].join("; ");
+      const extractRes = spawnSync("powershell", ["-NoProfile", "-Command", extractScript], {
+        stdio: "inherit",
+      });
+      if (extractRes.status !== 0) {
+        process.exit(extractRes.status ?? 1);
+      }
     }
   } else {
     if (opencodeAsset.endsWith(".zip")) {
