@@ -502,10 +502,19 @@ export const useSessionActivityStore = create<SessionActivityStore>((set, get) =
       if (!record.runActive) return record;
       if (message && record.messageRoles[message] && record.messageRoles[message] !== "assistant") return record;
       if (message && !record.messageRoles[message] && options?.allowUnknownMessageRole !== true) return record;
+      const now = options?.markDeltaProgress ? Date.now() : 0;
+      // Avoid mutating lastProgressAt on every SSE token delta (30-100+/sec):
+      // stall detection works on multi-second windows, and MessageList subscribes
+      // to lastProgressAt directly.
+      const shouldAdvanceProgress = Boolean(
+        options?.markDeltaProgress &&
+        (!record.assistantOutput || now - record.lastProgressAt >= 1000),
+      );
+      if (record.assistantOutput && !shouldAdvanceProgress) return record;
       return {
         ...record,
         assistantOutput: true,
-        lastProgressAt: options?.markDeltaProgress ? Math.max(record.lastProgressAt, Date.now()) : record.lastProgressAt,
+        lastProgressAt: shouldAdvanceProgress ? Math.max(record.lastProgressAt, now) : record.lastProgressAt,
       };
     }));
   },

@@ -293,6 +293,7 @@ function recoverAntigravityIdentities(accounts: Array<Record<string, unknown>>, 
 
 /** Restore only the flags the router pinned, without replacing account records. */
 export async function restoreAntigravityRouterPin(): Promise<void> {
+  lastActivatedAntigravityRouterSession = null;
   const pin = await readRouterPin();
   if (!pin) return;
   const saved = await readNanamiConfigFile("antigravity-accounts.json");
@@ -582,21 +583,23 @@ if (fs.existsSync(accFile)) {
   }
 }
 
-export async function fetchAccountModelsAndQuota(
-  account: AntigravityAccountInfo,
-  thinkingTier: ThinkingTier,
-): Promise<{
-  isPlus: boolean;
-  models: AntigravityModelItem[];
-  quotas: AntigravityFamilyQuota[];
-  verificationRequired?: boolean;
-  verificationUrl?: string;
-  verificationReason?: string;
-}> {
+const OAUTH_ACCESS_TOKEN_CACHE = new Map<string, { accessToken: string; expiresAt: number }>();
+const ROUTER_QUOTA_FRESH_TTL_MS = 45_000;
+const ROUTER_QUOTA_BG_REFRESH_MS = 15_000;
+const lastQuotaFetchedAtByEmail = new Map<string, number>();
+let lastActivatedAntigravityRouterSession: { email: string; refreshToken: string } | null = null;
+
+async function getAntigravityAccessToken(refreshToken: string, bypassCache = false): Promise<{ accessToken: string; fromCache: boolean }> {
+  if (!bypassCache) {
+    const cached = OAUTH_ACCESS_TOKEN_CACHE.get(refreshToken);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { accessToken: cached.accessToken, fromCache: true };
+    }
+  }
   const tokenBody = new URLSearchParams({
     client_id: ANTIGRAVITY_CLIENT_ID,
     client_secret: ANTIGRAVITY_CLIENT_SECRET,
-    refresh_token: account.refreshToken,
+    refresh_token: refreshToken,
     grant_type: "refresh_token",
   }).toString();
 
@@ -612,10 +615,31 @@ export async function fetchAccountModelsAndQuota(
   if (!tokenRes.ok) {
     throw new Error(`OAuth token refresh failed (${tokenRes.status})`);
   }
-  const tokenData = (await tokenRes.json()) as { access_token?: string };
+  const tokenData = (await tokenRes.json()) as { access_token?: string; expires_in?: number };
   if (!tokenData.access_token) {
     throw new Error("Missing access_token from Google OAuth");
   }
+  if (typeof tokenData.expires_in === "number" && tokenData.expires_in > 180) {
+    OAUTH_ACCESS_TOKEN_CACHE.set(refreshToken, {
+      accessToken: tokenData.access_token,
+      expiresAt: Date.now() + (tokenData.expires_in - 120) * 1000,
+    });
+  }
+  return { accessToken: tokenData.access_token, fromCache: false };
+}
+
+export async function fetchAccountModelsAndQuota(
+  account: AntigravityAccountInfo,
+  thinkingTier: ThinkingTier,
+): Promise<{
+  isPlus: boolean;
+  models: AntigravityModelItem[];
+  quotas: AntigravityFamilyQuota[];
+  verificationRequired?: boolean;
+  verificationUrl?: string;
+  verificationReason?: string;
+}> {
+  let { accessToken, fromCache } = await getAntigravityAccessToken(account.refreshToken);
 
   const project = account.projectId || account.managedProjectId || "aicode-consumers";
   // These two quota reads use the same refreshed token and do not depend on
@@ -626,11 +650,11 @@ export async function fetchAccountModelsAndQuota(
       buckets?: Array<{ bucketId?: string; window?: string; remainingFraction?: number; resetTime?: string }>;
     }>;
   };
-  const summaryPromise: Promise<QuotaSummaryResponse | null> = (async () => {
+  const fetchSummary = (token: string): Promise<QuotaSummaryResponse | null> => (async () => {
     try {
       const response = await desktopFetchViaMain(
         "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
-        { method: "POST", headers: { Authorization: `Bearer ${tokenData.access_token}`,
+        { method: "POST", headers: { Authorization: `Bearer ${token}`,
           "Content-Type": "application/json", "User-Agent": ANTIGRAVITY_HUB_USER_AGENT },
           body: JSON.stringify({ project }) },
         10_000,
@@ -638,13 +662,14 @@ export async function fetchAccountModelsAndQuota(
       return response.ok ? await response.json() as QuotaSummaryResponse : null;
     } catch { return null; }
   })();
+  let summaryPromise = fetchSummary(accessToken);
 
-  const modelsRes = await desktopFetchViaMain(
+  let modelsRes = await desktopFetchViaMain(
     ANTIGRAVITY_MODELS_ENDPOINT,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "User-Agent": ANTIGRAVITY_HUB_USER_AGENT,
       },
@@ -652,6 +677,24 @@ export async function fetchAccountModelsAndQuota(
     },
     12_000,
   );
+  if (modelsRes.status === 401 && fromCache) {
+    OAUTH_ACCESS_TOKEN_CACHE.delete(account.refreshToken);
+    ({ accessToken } = await getAntigravityAccessToken(account.refreshToken, true));
+    summaryPromise = fetchSummary(accessToken);
+    modelsRes = await desktopFetchViaMain(
+      ANTIGRAVITY_MODELS_ENDPOINT,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "User-Agent": ANTIGRAVITY_HUB_USER_AGENT,
+        },
+        body: JSON.stringify({ project }),
+      },
+      12_000,
+    );
+  }
   if (!modelsRes.ok) {
     if (modelsRes.status === 403) {
       const errText = await modelsRes.text().catch(() => "");
@@ -976,6 +1019,7 @@ export async function fetchAccountModelsAndQuota(
     );
   }
 
+  lastQuotaFetchedAtByEmail.set(account.email.toLowerCase(), Date.now());
   return { isPlus, models: resolvedModels, quotas, verificationRequired: false };
 }
 
@@ -1242,6 +1286,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       }
       throw error;
     }
+    lastActivatedAntigravityRouterSession = { email: lower, refreshToken: target.refreshToken };
     set({
       selectedModel: { providerID: "google", modelID: selectedModelID },
       accounts: get().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === lower })),
@@ -1293,6 +1338,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     }
     const nextActive = remaining.find((a) => a.isActive);
 
+    lastActivatedAntigravityRouterSession = null;
     set({ accounts: remaining });
 
     await writeNanamiMeta((prev) => ({
@@ -1333,15 +1379,67 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
 /** Called only after the router has confirmed that the local engine is idle. */
 export async function activateAntigravityRouterAccount(email: string, modelID: string, client: Client): Promise<void> {
   const state = useAntigravityAccountsStore.getState();
-  const target = state.accounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+  const lower = email.toLowerCase();
+  const target = state.accounts.find((account) => account.email.toLowerCase() === lower);
   if (!target || target.verificationRequired || !findAntigravityModelItem(target.models, modelID)) {
     throw new Error("The selected Antigravity account or model is no longer available.");
   }
+  const alreadyActivated = Boolean(
+    target.isActive &&
+    lastActivatedAntigravityRouterSession &&
+    lastActivatedAntigravityRouterSession.email === lower &&
+    lastActivatedAntigravityRouterSession.refreshToken === target.refreshToken,
+  );
+  const cachedModel = findAntigravityModelItem(target.models, modelID);
+  const lastFetchedAt = lastQuotaFetchedAtByEmail.get(lower) ?? 0;
+  const quotaAgeMs = Date.now() - lastFetchedAt;
+
+  // Fast path: when Local Router stays on the same already-active account and
+  // its quota was recently verified, skip blocking OAuth/quota fetches and
+  // avoid tearing down the OpenCode engine via instance.dispose().
+  if (
+    alreadyActivated &&
+    cachedModel &&
+    cachedModel.remainingFraction !== null &&
+    !isLocalRouterQuotaExhausted(cachedModel.remainingFraction) &&
+    quotaAgeMs < ROUTER_QUOTA_FRESH_TTL_MS
+  ) {
+    useAntigravityAccountsStore.setState({ selectedModel: { providerID: "google", modelID } });
+    if (quotaAgeMs >= ROUTER_QUOTA_BG_REFRESH_MS) {
+      void fetchAccountModelsAndQuota(target, state.thinkingTier)
+        .then((fresh) => {
+          const freshModels = fresh.models.map((model) => ({
+            ...model,
+            modelID: resolveAntigravityModelForTier(model, useAntigravityAccountsStore.getState().thinkingTier),
+          }));
+          useAntigravityAccountsStore.setState((current) => ({
+            accounts: current.accounts.map((account) =>
+              account.email.toLowerCase() === lower
+                ? {
+                    ...account,
+                    isPlus: fresh.isPlus,
+                    models: freshModels,
+                    quotas: fresh.quotas,
+                    quotaLoading: false,
+                    quotaError: null,
+                    verificationRequired: Boolean(fresh.verificationRequired),
+                    verificationUrl: fresh.verificationUrl,
+                    verificationReason: fresh.verificationReason,
+                  }
+                : account,
+            ),
+          }));
+        })
+        .catch(() => undefined);
+    }
+    return;
+  }
+
   const fresh = await fetchAccountModelsAndQuota(target, state.thinkingTier);
   const freshModels = fresh.models.map((model) => ({ ...model, modelID: resolveAntigravityModelForTier(model, state.thinkingTier) }));
   const freshModel = findAntigravityModelItem(freshModels, modelID);
   useAntigravityAccountsStore.setState((current) => ({ accounts: current.accounts.map((account) =>
-    account.email.toLowerCase() === email.toLowerCase() ? { ...account, isPlus: fresh.isPlus, models: freshModels,
+    account.email.toLowerCase() === lower ? { ...account, isPlus: fresh.isPlus, models: freshModels,
       quotas: fresh.quotas, quotaLoading: false, quotaError: null, verificationRequired: Boolean(fresh.verificationRequired),
       verificationUrl: fresh.verificationUrl, verificationReason: fresh.verificationReason } : account) }));
   if (fresh.verificationRequired || !freshModel) {
@@ -1350,8 +1448,12 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   if (isLocalRouterQuotaExhausted(freshModel.remainingFraction)) {
     throw new LocalRouterQuotaExhaustedError();
   }
+  if (alreadyActivated) {
+    useAntigravityAccountsStore.setState({ selectedModel: { providerID: "google", modelID } });
+    return;
+  }
   const { meta } = await readNanamiMetaAndConfigDir(true);
-  const index = (meta.accounts ?? []).findIndex((account) => account.email?.toLowerCase() === email.toLowerCase());
+  const index = (meta.accounts ?? []).findIndex((account) => account.email?.toLowerCase() === lower);
   if (index < 0) throw new Error("The selected Antigravity account is missing from local storage.");
   await writeNanamiMeta((previous) => ({ ...previous, activeEmail: target.email, activeIndex: index }), true);
   await syncAntigravityDiskState(target.email, modelID, { exactAccount: true, strict: true, expectedRefreshToken: target.refreshToken });
@@ -1367,8 +1469,9 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   if (auth.error || auth.data !== true) throw new Error("Could not activate the Antigravity account.");
   const disposed = await client.instance.dispose();
   if (disposed.error || disposed.data !== true) throw new Error("Could not refresh the Antigravity provider.");
+  lastActivatedAntigravityRouterSession = { email: lower, refreshToken: target.refreshToken };
   useAntigravityAccountsStore.setState({
     selectedModel: { providerID: "google", modelID },
-    accounts: useAntigravityAccountsStore.getState().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === target.email.toLowerCase() })),
+    accounts: useAntigravityAccountsStore.getState().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === lower })),
   });
 }

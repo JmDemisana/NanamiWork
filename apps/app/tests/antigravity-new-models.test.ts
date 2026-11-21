@@ -31,3 +31,18 @@ test("treats resetTime-only quotaInfo as 0% exhausted rather than unknown", () =
   assert.equal(models[0].remainingFraction, 0);
   assert.equal(models[0].resetTime, "2026-11-15T18:00:00Z");
 });
+
+test("discovers enabled Gemini 4 Neon tiers and hides disabled Neon entries", () => {
+  const models = discoverNewAntigravityModels({
+    "gemini-4-neon-low": { quotaInfo: { remainingFraction: 0.9, resetTime: "later" } },
+    "gemini-4-neon-medium": { quotaInfo: { remainingFraction: 0.9, resetTime: "later" } },
+    "gemini-4-neon-high": { quotaInfo: { remainingFraction: 0.9, resetTime: "later" } },
+  }, "medium");
+  assert.equal(models.length, 1);
+  assert.equal(models[0].familyKey, "gemini-4-neon");
+  assert.equal(models[0].displayName, "Gemini 4 Neon");
+  assert.equal(models[0].modelID, "antigravity-gemini-4-neon-medium");
+  assert.equal(models[0].tierModelIds?.low, "antigravity-gemini-4-neon-low");
+  assert.equal(models[0].tierModelIds?.high, "antigravity-gemini-4-neon-high");
+  assert.deepEqual(discoverNewAntigravityModels({ "gemini-4-neon-disabled": { disabled: true } }, "high"), []);
+});

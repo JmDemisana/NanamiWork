@@ -47,6 +47,7 @@ export function isChatGptOrchestratorSupported(
 }
 
 const ANTIGRAVITY_ALLOWED_FAMILY_PREFIXES = [
+  "gemini-4-neon",
   "gemini-4-carbon",
   "gemini-4-argon",
   "gemini-4-hydrogen",
@@ -167,11 +168,11 @@ export function resolveOrchestratorPair(
   if (models.length === 0) return null;
   const planPrefs =
     providerID === "google"
-      ? ["gemini-4-argon", "gemini-4-carbon", "claude-opus", "claude-sonnet", "gemini-4-hydrogen", "gemini-3.8-flash"]
+      ? ["gemini-4-argon", "gemini-4-neon", "gemini-4-carbon", "claude-opus", "claude-sonnet", "gemini-4-hydrogen", "gemini-3.8-flash"]
       : ["gpt-6.1-sol", "gpt-6-astra", "gpt-6.1-terra", "gpt-6-sol"];
   const execPrefs =
     providerID === "google"
-      ? ["gemini-4-hydrogen", "gemini-3.8-flash", "claude-sonnet", "gemini-4-argon", "gemini-4-carbon"]
+      ? ["gemini-4-neon", "gemini-4-hydrogen", "gemini-3.8-flash", "claude-sonnet", "gemini-4-argon", "gemini-4-carbon"]
       : ["gpt-6-luna", "gpt-5.6-luna", "gpt-6.1-terra", "gpt-5.6-terra"];
 
   const plan = findMatchingModel(models, saved?.planningModelId, planPrefs);

@@ -203,21 +203,28 @@ function MarkdownBlockInner({
       return;
     }
 
+    const query = highlightQuery ?? "";
+    if (streaming && !query) {
+      return;
+    }
+
     queueMicrotask(() => {
       if (!rootRef.current || rootRef.current !== root) {
         return;
       }
 
-      applyTextHighlights(root, highlightQuery ?? "");
-      syncCodeWrapStates();
+      applyTextHighlights(root, query);
+      if (!streaming) {
+        syncCodeWrapStates();
+      }
     });
-  }, [highlightQuery, rendered]);
+  }, [highlightQuery, rendered, streaming]);
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || !githubReferences) return;
+    if (!root || !githubReferences || streaming) return;
     decorateGitHubReferences(root);
-  }, [githubReferences, rendered]);
+  }, [githubReferences, rendered, streaming]);
 
   useEffect(() => {
     const root = rootRef.current;

@@ -2025,6 +2025,49 @@ export function MessageList({ messages, messageIdReplacements, status, activityS
   const createdSkills = useCreatedSkillsModel(messages, appRunActive && !syncDegraded)
   const steadyLiveTurn = useSteadyLiveTurnStore(state => state.enabled)
 
+  const getGroupKey = React.useCallback(
+    (item: (typeof items)[number]) =>
+      isMessageGroup(item) ? item.messages[0]?.message.id ?? "empty-assistant-group" : item.message.id,
+    [],
+  )
+  const getMessageIds = React.useCallback(
+    (item: (typeof items)[number]) =>
+      isMessageGroup(item)
+        ? item.messages.flatMap(({ message }) => [message.id, `${message.id}:steps`])
+        : [item.message.id],
+    [],
+  )
+  const renderGroup = React.useCallback(
+    (item: (typeof items)[number]) => {
+      if (isMessageGroup(item)) {
+        return (
+          <MemoizedMessageGroup
+            key={item.messages[0]?.message.id ?? "empty-assistant-group"}
+            items={item.messages}
+            isLastGroup={item.messages.at(-1)?.index === lastVisibleIndex}
+            isStreaming={isStreaming && item.messages.at(-1)?.index === lastVisibleIndex}
+            newestAppCallIds={newestAppCallIds}
+          />
+        )
+      }
+
+      const isLastMessage = item.index === lastVisibleIndex
+      const isLastStep =
+        !visibleMessages[item.index + 1] || visibleMessages[item.index + 1].role !== item.message.role
+
+      return (
+        <StandaloneMessage
+          key={item.message.id}
+          message={item.message}
+          isLastMessage={isLastMessage}
+          isStreaming={isLastMessage && isStreaming}
+          isLastStep={isLastStep}
+        />
+      )
+    },
+    [isStreaming, lastVisibleIndex, newestAppCallIds, visibleMessages],
+  )
+
   return (
     <CreatedSkillsContext.Provider value={createdSkills}>
     <ParentRunActiveContext.Provider value={appRunActive}>
@@ -2040,36 +2083,10 @@ export function MessageList({ messages, messageIdReplacements, status, activityS
         priorityMessageId={latestUserMessageId}
         viewport={viewport}
         className="@container/message-list"
-        getGroupKey={(item) => isMessageGroup(item) ? item.messages[0]?.message.id ?? "empty-assistant-group" : item.message.id}
-        getMessageIds={(item) => isMessageGroup(item) ? item.messages.flatMap(({ message }) => [message.id, `${message.id}:steps`]) : [item.message.id]}
+        getGroupKey={getGroupKey}
+        getMessageIds={getMessageIds}
         header={messages.length === 0 && <TaskSuggestions className="mx-auto w-full max-w-3xl shrink-0 px-3 pb-3 md:px-5 md:pb-5 grow" />}
-        renderGroup={(item) => {
-        if (isMessageGroup(item)) {
-          return (
-            <MemoizedMessageGroup
-              key={item.messages[0]?.message.id ?? "empty-assistant-group"}
-              items={item.messages}
-              isLastGroup={item.messages.at(-1)?.index === lastVisibleIndex}
-              isStreaming={isStreaming && item.messages.at(-1)?.index === lastVisibleIndex}
-              newestAppCallIds={newestAppCallIds}
-            />
-          )
-        }
-
-        const isLastMessage = item.index === lastVisibleIndex
-        const isLastStep =
-          !visibleMessages[item.index + 1] || visibleMessages[item.index + 1].role !== item.message.role
-
-        return (
-          <StandaloneMessage
-            key={item.message.id}
-            message={item.message}
-            isLastMessage={isLastMessage}
-            isStreaming={isLastMessage && isStreaming}
-            isLastStep={isLastStep}
-          />
-        )
-        }}
+        renderGroup={renderGroup}
       >
         {!runActive && backgroundCount > 0 && <div data-background-agents className="mx-auto flex w-full max-w-3xl items-center gap-3 px-2 py-2 text-sm text-muted-foreground md:px-10">
           <span>{syncDegraded ? "Background activity — reconnecting…" : `${backgroundCount} ${backgroundCount === 1 ? "agent" : "agents"} running`}</span>

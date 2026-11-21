@@ -187,17 +187,18 @@ async function performQueuedDraftSend(
       return "sent";
     }
 
-    const parts = await draftToParts(draft, context.workspaceRoot, sessionId, {
-      client: context.client,
-      workspaceId: context.workspaceId,
-    });
-    assertQueuedSendCurrent(sessionId, generation);
-    const system = await buildOpenworkSessionSystemContext(context.client, {
-      workspaceId: context.workspaceId,
-      cacheKey: sessionId,
-      runtimeKey: context.environmentRuntimeKey,
-      ...transport,
-    });
+    const [parts, system] = await Promise.all([
+      draftToParts(draft, context.workspaceRoot, sessionId, {
+        client: context.client,
+        workspaceId: context.workspaceId,
+      }),
+      buildOpenworkSessionSystemContext(context.client, {
+        workspaceId: context.workspaceId,
+        cacheKey: sessionId,
+        runtimeKey: context.environmentRuntimeKey,
+        ...transport,
+      }),
+    ]);
     assertQueuedSendCurrent(sessionId, generation);
     if (sessionWorkHeld(context.opencodeBaseUrl, sessionId) || context.isCurrent?.() === false) return "cancelled";
     await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {

@@ -1944,14 +1944,15 @@ export function SessionRoute() {
                     return;
                   }
 
-                  const parts = await draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint);
-                  assertCurrent();
-                  const system = await buildOpenworkSessionSystemContext(client, {
-                    workspaceId: selectedWorkspaceId,
-                    cacheKey: targetSessionId,
-                    runtimeKey: environmentRuntimeKey,
-                    desktopTransport: isOpencodeV2BaseUrl(opencodeBaseUrl) ? undefined : "main",
-                  });
+                  const [parts, system] = await Promise.all([
+                    draftToParts(draft, selectedWorkspaceRoot, targetSessionId, selectedWorkspaceEndpoint),
+                    buildOpenworkSessionSystemContext(client, {
+                      workspaceId: selectedWorkspaceId,
+                      cacheKey: targetSessionId,
+                      runtimeKey: environmentRuntimeKey,
+                      desktopTransport: isOpencodeV2BaseUrl(opencodeBaseUrl) ? undefined : "main",
+                    }),
+                  ]);
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
                   await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {
@@ -2346,14 +2347,15 @@ export function SessionRoute() {
                     } });
                     return;
                   }
-                  const parts = await draftToParts(draft, workspaceRoot, targetSessionId, endpoint);
-                  assertCurrent();
-                  const system = await buildOpenworkSessionSystemContext(endpoint.client, {
-                    workspaceId: workspace.id,
-                    cacheKey: targetSessionId,
-                    runtimeKey: environmentRuntimeKey,
-                    desktopTransport: isOpencodeV2BaseUrl(endpoint.opencodeBaseUrl) ? undefined : "main",
-                  });
+                  const [parts, system] = await Promise.all([
+                    draftToParts(draft, workspaceRoot, targetSessionId, endpoint),
+                    buildOpenworkSessionSystemContext(endpoint.client, {
+                      workspaceId: workspace.id,
+                      cacheKey: targetSessionId,
+                      runtimeKey: environmentRuntimeKey,
+                      desktopTransport: isOpencodeV2BaseUrl(endpoint.opencodeBaseUrl) ? undefined : "main",
+                    }),
+                  ]);
                   assertCurrent();
                   onPrepared?.(v2AcknowledgementText(parts));
                   await dispatchConfiguredLocalRouterTurn({ ...routerContext, send: async ({ model, variant, tools, systemAppend, client: turnClient }) => {

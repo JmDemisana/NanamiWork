@@ -42,10 +42,14 @@ const DEFAULT_ANTIGRAVITY_MODALITIES = {
 };
 
 const ANTIGRAVITY_GOOGLE_MODELS: Record<string, unknown> = {
-  ...Object.fromEntries(["hydrogen", "carbon"].flatMap((model) =>
+  ...Object.fromEntries(([
+    ["neon", "Neon"],
+    ["hydrogen", "Hydrogen"],
+    ["carbon", "Carbon"],
+  ] as const).flatMap(([model, label]) =>
     ["low", "medium", "high"].map((tier) => [
       `antigravity-gemini-4-${model}-${tier}`,
-      { name: `Gemini 4 ${model === "hydrogen" ? "Hydrogen" : "Carbon"} (${tier})`,
+      { name: `Gemini 4 ${label} (${tier})`,
         limit: { context: 1048576, output: 65536 }, modalities: DEFAULT_ANTIGRAVITY_MODALITIES },
     ]),
   )),
@@ -242,7 +246,7 @@ export async function ensureAntigravityPluginInstalled(): Promise<boolean> {
       changed = true;
     }
     const existingGoogleModels = parsed.provider?.google?.models ?? {};
-    if (!existingGoogleModels["antigravity-gemini-3.8-flash-high"] || !existingGoogleModels["antigravity-claude-sonnet-5-5-high"] || !existingGoogleModels["antigravity-gemini-4-hydrogen-high"] || !existingGoogleModels["antigravity-gemini-4-carbon-high"] || existingGoogleModels["antigravity-gemini-3.1-pro"]) {
+    if (!existingGoogleModels["antigravity-gemini-3.8-flash-high"] || !existingGoogleModels["antigravity-claude-sonnet-5-5-high"] || !existingGoogleModels["antigravity-gemini-4-neon-high"] || !existingGoogleModels["antigravity-gemini-4-hydrogen-high"] || !existingGoogleModels["antigravity-gemini-4-carbon-high"] || existingGoogleModels["antigravity-gemini-3.1-pro"]) {
       const googleConfig = {
         ...(parsed.provider?.google ?? {}),
         name: "Google Antigravity",

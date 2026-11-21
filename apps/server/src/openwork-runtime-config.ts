@@ -54,10 +54,14 @@ const ANTIGRAVITY_MODALITIES = { input: ["text", "image", "pdf"], output: ["text
 const ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG: Record<string, unknown> = {
   name: "Google Antigravity",
   models: {
-    ...Object.fromEntries(["hydrogen", "carbon"].flatMap((model) =>
+    ...Object.fromEntries(([
+      ["neon", "Neon"],
+      ["hydrogen", "Hydrogen"],
+      ["carbon", "Carbon"],
+    ] as const).flatMap(([model, label]) =>
       ["low", "medium", "high"].map((tier) => [
         `antigravity-gemini-4-${model}-${tier}`,
-        { name: `Gemini 4 ${model === "hydrogen" ? "Hydrogen" : "Carbon"} (${tier})`,
+        { name: `Gemini 4 ${label} (${tier})`,
           limit: { context: 1048576, output: 65536 }, modalities: ANTIGRAVITY_MODALITIES },
       ]),
     )),

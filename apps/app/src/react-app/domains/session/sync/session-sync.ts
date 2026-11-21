@@ -302,8 +302,17 @@ const defaultRunningShellFetcher: RunningShellFetcher = async (baseUrl, token, s
 let runningShellFetcher = defaultRunningShellFetcher;
 
 const defaultDeltaFlushScheduler: DeltaFlushScheduler = (lane, run) => {
+  if (
+    lane === "foreground" &&
+    typeof window !== "undefined" &&
+    typeof window.requestAnimationFrame === "function" &&
+    (typeof document === "undefined" || document.visibilityState === "visible")
+  ) {
+    const frame = window.requestAnimationFrame(run);
+    return () => window.cancelAnimationFrame(frame);
+  }
   if (typeof window !== "undefined") {
-    const timer = window.setTimeout(run, lane === "foreground" ? 45 : backgroundDeltaFlushMs);
+    const timer = window.setTimeout(run, lane === "foreground" ? 32 : backgroundDeltaFlushMs);
     return () => window.clearTimeout(timer);
   }
   let cancelled = false;
@@ -2369,7 +2378,13 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
   retireOtherEngineSyncs(input);
   const existing = syncs.get(key);
   if (existing) {
-    existing.input = input;
+    existing.input = {
+      ...input,
+      visibleSessionId:
+        input.visibleSessionId !== undefined
+          ? input.visibleSessionId
+          : existing.input.visibleSessionId,
+    };
     if (existing.openworkToken !== input.openworkToken) {
       // Reattachment with a rotated token (or a restarted runtime's fresh
       // credential) is a new connection generation: restart a stream parked

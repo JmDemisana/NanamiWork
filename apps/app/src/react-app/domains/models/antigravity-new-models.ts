@@ -12,6 +12,7 @@ export function discoverNewAntigravityModels(
   tier: ThinkingTier,
 ): AntigravityModelItem[] {
   return ([
+    ["gemini-4-neon", "Gemini 4 Neon"],
     ["gemini-4-hydrogen", "Gemini 4 Hydrogen"],
     ["gemini-4-carbon", "Gemini 4 Carbon"],
   ] as const).flatMap(([familyKey, displayName]) => {
