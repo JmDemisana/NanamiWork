@@ -1962,7 +1962,7 @@ export function SessionPage(props: SessionPageProps) {
                             {pendingSideConversation && pendingSideConversation.scope === props.newTaskComposer?.draftScope ? (
                               <PendingConversationView conversation={pendingSideConversation} composer={props.newTaskComposer ?? null} />
                             ) : splitSession.draftDestination && props.newTaskComposer ? (
-                              <div className="min-h-0 flex-1 overflow-y-auto py-6">
+                              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
                                 <SessionEmptyHero
                                   key={splitSession.sessionId}
                                   providerCount={providerCount}
@@ -2043,7 +2043,7 @@ export function SessionPage(props: SessionPageProps) {
               ) : null}
 
               {!props.primarySlot && !hasMainContentTakeover && !showDelayedSessionLoadingState && !canRenderReactSurface && !showStartupSkeleton ? (
-                <div className={`mx-auto flex w-full flex-1 flex-col max-md:h-full max-md:min-h-0 max-md:w-full max-md:px-0 max-md:pt-0 md:h-full md:justify-end pb-4 ${showWorkspaceSetupEmptyState ? "pt-20 md:pt-0" : "pt-10 md:pt-0"}`}>
+                <div className={`mx-auto flex w-full flex-1 flex-col max-md:h-full max-md:min-h-0 max-md:w-full max-md:px-0 max-md:pt-0 md:h-full md:justify-end ${showWorkspaceSetupEmptyState ? "pt-20 md:pt-0" : "pt-10 md:pt-0"}`}>
                   {props.notFoundMessage ? (
                     <div className="px-6 py-16 text-center">
                       <div className="mx-auto max-w-md rounded-2xl border border-dls-border bg-dls-card px-5 py-6 shadow-[var(--dls-card-shadow)]">

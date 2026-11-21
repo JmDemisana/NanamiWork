@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.2.0)"
+        description: "Release tag (e.g. v1.2.6)"
         required: false
-        default: "v1.2.5"
+        default: "v1.2.6"
   push:
     tags:
       - "v*"
@@ -191,27 +191,28 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.5' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.6' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.5' }}: Local Router and Experience Update"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.6' }}: Gemini 4 Neon, Speed & Fluid Motion"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.5' }}** improves Local Router quota handling and refreshes interface motion.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.6' }}** adds Gemini 4 Neon support, cuts turn and streaming latency, fixes Orchestrator and router edge cases, and introduces an iOS-inspired fluid spring motion system.
 
-            ### Local Router and models
-            - Switch away from accounts at or below 5% remaining quota and account for both short and weekly limits.
-            - Discover Gemini 4 Hydrogen and Carbon based on each Antigravity account's model catalog.
-            - Add Orchestrator mode for supported plans.
+            ### Models & Speed
+            - Add account-aware **Gemini 4 Neon** (`low`/`medium`/`high`) across the model picker, Local Router, and Orchestrator mode.
+            - Cache Antigravity OAuth access tokens and fast-path same-account Local Router turns to avoid unnecessary quota round-trips and engine cold restarts.
+            - Eliminate per-token `MessageList` re-render storms, preserve foreground 60fps `requestAnimationFrame` streaming, skip non-essential DOM passes while streaming, and parallelize prompt preparation.
 
-            ### Interface
-            - Refine button, sidebar and control motion, with reduced-motion support.
-            - Remove built-in voice input and dictation.
+            ### Interface & Motion
+            - Introduce GPU-light iOS-style spring motion curves across dialogs, popovers, menus, tooltips, command palette, tabs, collapsibles, and sidebar controls, with full `prefers-reduced-motion` support.
+            - Align the New Session composer box height and bottom position with active conversation threads.
 
-            ### Hosted models
-            - Remove the hosted Nanami Router Models from the standard app while retaining NanamiWork Local Router.
+            ### Fixes
+            - Preserve workspace system context on Orchestrator execution handoff, detect `exit_plan_mode` across multi-step planning turns, and forward the resolved model for Orchestrator slash commands.
+            - Harden Antigravity router session cache invalidation and fix clearing search highlights mid-stream.
 
             ### Notes
             - Model access still depends on the selected account's provider entitlements.
