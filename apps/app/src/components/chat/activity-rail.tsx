@@ -18,7 +18,7 @@ export function TrailingChevron({ open, className }: { open: boolean; className?
     <ChevronRight
       aria-hidden="true"
       data-text-rail-chevron=""
-      className={cn("size-3 shrink-0 text-muted-foreground/70 transition-transform duration-150 ease-out motion-reduce:transition-none", open && "rotate-90", className)}
+      className={cn("size-3 shrink-0 text-muted-foreground/70 transition-transform duration-250 ease-[cubic-bezier(0.34,1.38,0.64,1)] motion-reduce:transition-none", open && "rotate-90", className)}
     />
   )
 }
