@@ -480,6 +480,13 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
           checkedReleaseChannel = result.channel ?? checkedReleaseChannel;
         }
       }
+      if ((result as { supported?: boolean }).supported === false) {
+        setUpdateStatus({
+          state: "idle",
+          message: result.reason ?? "Updates are managed by your app store.",
+        });
+        return;
+      }
       if (result.reason === "unavailable") {
         setUpdateStatus({
           state: "idle",
@@ -498,7 +505,15 @@ export function useElectronUpdaterState(options: UseElectronUpdaterStateOptions)
               const latestTag = String(ghData.tag_name || "").replace(/^v/i, "");
               const current = String(appVersion || result.currentVersion || "1.1.0").replace(/^v/i, "");
               const isNewer = compareVersions(latestTag, current) === 1;
-              const asset = ghData.assets?.find((a: any) => a.name.endsWith(".exe"));
+              const ua = typeof navigator !== "undefined" ? `${navigator.userAgent} ${navigator.platform}`.toLowerCase() : "";
+              const preferredExts = ua.includes("mac")
+                ? [".dmg", ".zip"]
+                : ua.includes("linux")
+                  ? [".AppImage", ".deb", ".tar.gz"]
+                  : [".exe", ".appx"];
+              const asset = ghData.assets?.find((a: any) =>
+                typeof a?.name === "string" && preferredExts.some((ext) => a.name.endsWith(ext)),
+              );
               setUpdateStatus({
                 state: isNewer ? "available" : "idle",
                 lastCheckedAt: Date.now(),

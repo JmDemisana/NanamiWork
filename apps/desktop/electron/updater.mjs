@@ -296,7 +296,7 @@ function runDefaults(args) {
 
 // Squirrel.Mac's `ShipIt` helper (which swaps the .app on macOS) reads its
 // options from this NSUserDefaults domain.
-const SHIP_IT_DEFAULTS_DOMAIN = "com.differentai.openwork.ShipIt";
+const SHIP_IT_DEFAULTS_DOMAIN = "ai.nanami.workbench.ShipIt";
 
 // Squirrel.Mac defaults to moving the *entire* app bundle through a temp
 // directory. On repeat installs that move can leave the staged bundle missing,
@@ -735,6 +735,9 @@ export function registerUpdaterIpc({
   }));
 
   ipcMain.handle("openwork:updater:setChannel", async (_event, rawChannel) => queueUpdaterOperation(async () => {
+    if (isStoreBuild(env)) {
+      return updaterChannelState(app, "store", null, manifestChannel, env);
+    }
     const channel = await writeElectronUpdaterChannel(app, rawChannel, manifestChannel);
     checkedUpdateVersion = null;
     checkedUpdateTargetVersion = null;

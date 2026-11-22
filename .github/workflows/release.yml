@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.2.7)"
+        description: "Release tag (e.g. v1.2.8)"
         required: false
-        default: "v1.2.7"
+        default: "v1.2.8"
   push:
     tags:
       - "v*"
@@ -191,23 +191,31 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.7' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.8' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.7' }}: Background Tasks, Queue/Steer & Stale Auth Pills"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.8' }}: Microsoft Store, Cross-Platform & Safety Update"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.7' }}** adds Antigravity-style reactive background tasks on OpenCode v1, separates follow-up queueing from immediate steering, and surfaces clickable Stale auth pills for expired ChatGPT accounts.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.8' }}** hardens the Microsoft Store (AppX/MSIX) package, fixes macOS and Linux updater and process-management bugs, and removes OS-level Computer Use while keeping the embedded browser intact.
 
-            ### Background Tasks & Steering
-            - Add the reactive `openwork-background-tasks` plugin (`run_background_task`, `list_background_tasks`, `stop_background_task`): long commands move to the background so the agent goes idle while waiting and wakes up automatically with the exit code and output tail on completion.
-            - Properly separate follow-up **Queue** (`onQueue`) from immediate **Steer** (`onSteer`) so queued messages no longer interrupt ongoing tasks.
+            ### Microsoft Store (AppX/MSIX) Fixes
+            - Ship real NanamiWork AppX tile icons (`StoreLogo`, `Square44x44Logo`, `Square150x150Logo`, `Wide310x150Logo`) so Windows Store and Start Menu tiles display NanamiWork branding instead of default Electron placeholders.
+            - Guard `app.setAppUserModelId`, protocol client registration, and custom Start Menu shortcut writes when running inside the Microsoft Store MSIX sandbox (`process.windowsStore`).
+            - Properly report Store-managed builds as `supported: false` in `updaterEnvironment` and `setChannel`, and show an idle Store-managed status instead of an error state in Settings.
 
-            ### Account Auth & Quotas
-            - Show a clickable **Stale** pill (instead of blank or stale limits) on expired ChatGPT accounts in both the model picker and sidebar Account Limits panel; clicking it opens sign-in and replaces stale credentials in-place.
-            - Allow manual 🔄 refresh buttons on ChatGPT accounts to rotate expired OAuth access tokens.
+            ### macOS & Linux Cross-Platform Fixes
+            - Fix macOS Squirrel.Mac `ShipIt` defaults domain to `ai.nanami.workbench.ShipIt` so macOS updates use DirectContentsWrite and clean stale ShipIt caches properly.
+            - Fix architecture mismatch manifest matching and fallback asset names to match `NanamiWork-<version>-<os>-<arch>.<ext>`, and pick platform-appropriate release assets in the GitHub updater fallback.
+            - Spawn POSIX background tasks in their own process group (`detached: true`) and terminate the full process group (`-pid`) on stop so grandchild processes are never orphaned on macOS/Linux.
+            - Enrich macOS/Linux desktop terminal `PATH` with `/opt/homebrew/bin` and `/usr/local/bin`, and use UTF-8 safe base64 encoding for account sync and OAuth scripts so non-ASCII usernames never break.
+            - Update macOS `Info.plist` permission descriptions (`NSMicrophoneUsageDescription`, `NSAppleEventsUsageDescription`) to NanamiWork wording.
+
+            ### Safety, Browser & Session Polish
+            - Disable OS-level Computer Use completely across runtime config, agent tools, and renderer UI while preserving the embedded NanamiWork browser and its Chrome DevTools integration.
+            - Restore automatic AI session title generation by letting OpenCode generate concise task titles instead of pre-filling the raw first chat message as the session name.
 
             ### Notes
             - Model access still depends on the selected account's provider entitlements.

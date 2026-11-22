@@ -563,7 +563,12 @@ if (fs.existsSync(accFile)) {
   }
 }
 `.trim();
-    const b64 = btoa(script);
+    const bytes = new TextEncoder().encode(script);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binary);
     const { terminalId } = await terminal.create({ cwd: home, cols: 80, rows: 10 });
     await new Promise<void>((resolve) => {
       let settled = false;

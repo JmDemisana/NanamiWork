@@ -62,13 +62,23 @@ function killProcessTree(child: ChildProcess | null) {
         stdio: "ignore",
         windowsHide: true,
       });
+    } else if (typeof child.pid === "number") {
+      process.kill(-child.pid, "SIGTERM");
     } else {
       child.kill("SIGTERM");
     }
   } catch {
     try {
-      child.kill("SIGKILL");
-    } catch {}
+      if (process.platform !== "win32" && typeof child.pid === "number") {
+        process.kill(-child.pid, "SIGKILL");
+      } else {
+        child.kill("SIGKILL");
+      }
+    } catch {
+      try {
+        child.kill("SIGKILL");
+      } catch {}
+    }
   }
 }
 
@@ -173,6 +183,7 @@ export const OpenWorkBackgroundTasks = async (factoryInput?: PluginFactoryInput)
           const child = spawn(parsed.command, {
             cwd,
             shell: true,
+            detached: process.platform !== "win32",
             windowsHide: true,
             stdio: ["ignore", "pipe", "pipe"],
           });

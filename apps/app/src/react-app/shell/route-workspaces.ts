@@ -97,14 +97,12 @@ export async function routeSessionEndpoint(endpoint: ResolvedWorkspaceEndpoint):
 export async function createRouteSessionOnEngine(
   endpoint: ResolvedWorkspaceEndpoint,
   directory?: string,
-  initialPrompt?: string,
 ): Promise<{ session: Session; endpoint: ResolvedWorkspaceEndpoint }> {
   const native = await routeSessionEndpoint(endpoint);
   const client = isOpencodeV2BaseUrl(native.opencodeBaseUrl)
     ? createClientV2(native.opencodeBaseUrl, directory, { token: native.token })
     : createClient(native.opencodeBaseUrl, directory, { token: native.token, mode: "openwork" });
-  const title = initialPrompt?.replace(/\s+/g, " ").trim().slice(0, 80) || undefined;
-  return { session: unwrap(await client.session.create({ directory, ...(title ? { title } : {}) })), endpoint: native };
+  return { session: unwrap(await client.session.create({ directory })), endpoint: native };
 }
 
 export async function createRouteSession(endpoint: ResolvedWorkspaceEndpoint, directory?: string): Promise<Session> {

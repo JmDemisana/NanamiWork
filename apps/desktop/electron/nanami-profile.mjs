@@ -51,6 +51,15 @@ export async function nanamiTerminalEnvironment(env, { home, platform = process.
   const result = { ...env };
   const opts = { platform };
   const get = (key) => result[envKey(result, key, opts) ?? key];
+  if (platform !== "win32") {
+    const pathKey = envKey(result, "PATH", opts) ?? "PATH";
+    const currentPath = String(result[pathKey] ?? "");
+    const parts = currentPath.split(":").filter(Boolean);
+    for (const dir of ["/opt/homebrew/bin", "/usr/local/bin"]) {
+      if (!parts.includes(dir)) parts.push(dir);
+    }
+    setEnv(result, pathKey, parts.join(":"), opts);
+  }
   if (get("NANAMIWORK_ISOLATED") !== "1") return result;
   const engineHome = String(get("NANAMIWORK_ENGINE_HOME") ?? "").trim();
   if (!engineHome) throw new Error("NanamiWork's private engine home is not configured.");

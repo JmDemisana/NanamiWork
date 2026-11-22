@@ -25,7 +25,7 @@ import { configureFakeMediaForTests, installMediaPermissionHandlers } from "./me
 import { registerMigrationIpc } from "./migration.mjs";
 import { registerSessionPins } from "./session-pins.mjs";
 import { createRuntimeManager, createSystemCaCertificateVerifyProc } from "./runtime.mjs";
-import { registerUpdaterIpc, resolveAppVersion, isStoreBuild } from "./updater.mjs";
+import { registerUpdaterIpc, resolveAppVersion, isStoreBuild, storeUpdaterReason } from "./updater.mjs";
 import { createUiControlServer } from "./ui-control-server.mjs";
 import { createApplicationMenu } from "./app-menu.mjs";
 import { createNativeContextMenus } from "./context-menu.mjs";
@@ -411,10 +411,13 @@ function killTerminalsForWebContents(webContentsId) {
 // wins over everything; then OPENWORK_ELECTRON_APP_IDENTIFIER; then
 // OPENWORK_DEV_PROFILE in unpackaged dev; then the legacy identifier default.
 app.setName(APP_NAME);
-app.setAppUserModelId(APP_IDENTIFIER);
+if (!process.windowsStore) {
+  app.setAppUserModelId(APP_IDENTIFIER);
+}
 if (BLANK_SLATE_LAUNCH.homePath) app.setPath("home", BLANK_SLATE_LAUNCH.homePath);
 if (
   app.isPackaged
+  && !process.windowsStore
   && !BLANK_SLATE_LAUNCH.enabled
   && process.env.OPENWORK_ELECTRON_DISABLE_PROTOCOL_REGISTRATION !== "1"
   && !(process.platform === "linux" && process.env.APPIMAGE)
@@ -551,9 +554,9 @@ function parseUpdaterManifestFiles(raw) {
 
 function selectDownloadFile(files, arch) {
   const assetArch = downloadAssetArch(arch);
-  const expected = `-${assetArch}-`;
+  const archPattern = new RegExp(`-${assetArch}(?:[.-]|$)`, "i");
   const extension = downloadAssetExtension();
-  const matchingArch = files.filter((file) => file.url.includes(expected));
+  const matchingArch = files.filter((file) => archPattern.test(file.url));
   return (
     matchingArch.find((file) => file.url.endsWith(`.${extension}`)) ||
     matchingArch.find((file) => file.url.endsWith(".zip")) ||
@@ -590,7 +593,7 @@ async function resolveArchitectureInfo() {
   const systemArch = resolveSystemArch();
   const version = app.getVersion();
   const targetArch = systemArch === "arm64" || systemArch === "x64" ? systemArch : appArch;
-  const assetName = `openwork-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}-${version}.${downloadAssetExtension()}`;
+  const assetName = `NanamiWork-${version}-${platformDownloadSlug()}-${downloadAssetArch(targetArch)}.${downloadAssetExtension()}`;
   // The public release manifest only matters when the installed build does not
   // match the machine; a matching install never shows a download, so it must
   // not contact the release host (an unactivated enterprise install in
@@ -726,7 +729,7 @@ const scheduleWindowsShortcut = createWindowsShortcutScheduler({
 });
 
 function registerWindowsBrandShortcut(appId, appIconPath) {
-  if (process.platform !== "win32") return;
+  if (process.platform !== "win32" || process.windowsStore) return;
   scheduleWindowsShortcut({
     shell,
     shortcutPath: windowsBrandShortcutPath(),
@@ -742,7 +745,7 @@ function registerWindowsBrandShortcut(appId, appIconPath) {
 }
 
 async function removeWindowsBrandShortcut() {
-  if (process.platform !== "win32") return;
+  if (process.platform !== "win32" || process.windowsStore) return;
   const shortcutPath = await readWindowsBrandShortcutMarker();
   if (shortcutPath) await rm(shortcutPath, { force: true });
   await rm(windowsBrandShortcutMarkerPath(), { force: true });
@@ -1049,7 +1052,7 @@ async function ensureWindowsBrandIcon(image) {
 }
 
 function registerWindowsDisplayShortcut() {
-  if (process.platform !== "win32") return;
+  if (process.platform !== "win32" || process.windowsStore) return;
   runDetachedTask("prepare Windows shortcut icon", async () => {
     await Promise.all([shortcutWindowReady, shortcutRuntimeReady]);
     await prepareWindowsDisplayShortcut();
@@ -1076,7 +1079,7 @@ async function applyCachedBrandIcon(image, sourceUrl, expectedSequence = null) {
   let taskbarAppId = APP_IDENTIFIER;
   try {
     taskbarIconPath = await ensureWindowsBrandIcon(image);
-    if (process.platform === "win32") {
+    if (process.platform === "win32" && !process.windowsStore) {
       taskbarAppId = windowsBrandAppUserModelId(APP_IDENTIFIER, sourceUrl);
       registerWindowsBrandShortcut(taskbarAppId, taskbarIconPath);
       app.setAppUserModelId(taskbarAppId);
@@ -2456,9 +2459,10 @@ const desktopCommandHandlers = {
   },
   "updaterEnvironment": async (event, ...args) => {
       const executablePath = app.isPackaged ? app.getPath("exe") : process.execPath;
+      const storeBuild = isStoreBuild();
       return {
-        supported: true,
-        reason: null,
+        supported: !storeBuild,
+        reason: storeBuild ? storeUpdaterReason() : null,
         executablePath,
         appBundlePath:
           process.platform === "darwin"
@@ -3286,7 +3290,7 @@ or use: pnpm dev:worktree`);
       applicationMenu,
       },
     );
-    if (process.platform === "win32" && !BLANK_SLATE_LAUNCH.enabled) {
+    if (process.platform === "win32" && !process.windowsStore && !BLANK_SLATE_LAUNCH.enabled) {
       registerWindowsDisplayShortcut();
     }
     if (process.platform !== "linux" && !BLANK_SLATE_LAUNCH.enabled) {

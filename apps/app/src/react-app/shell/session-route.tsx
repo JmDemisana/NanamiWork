@@ -3954,7 +3954,7 @@ export function SessionRoute() {
       if (!prepared) throw new Error("Workspace is unavailable. Reconnect and retry.");
       bindPendingConversationWorkspace(pending.id, prepared.workspaceId);
       const refreshed = workspacesRef.current.find((workspace) => workspace.id === prepared?.workspaceId);
-      return createRouteSessionOnEngine((refreshed && endpointForWorkspace(refreshed)) || prepared.endpoint, prepared.path || undefined, prompt);
+      return createRouteSessionOnEngine((refreshed && endpointForWorkspace(refreshed)) || prepared.endpoint, prepared.path || undefined);
     }, (created) => {
       const current = usePendingConversationStore.getState().conversations[pending.id];
       if (current) publishCreatedConversation(current, created, newTaskAgent, prepared?.title);
@@ -4312,7 +4312,7 @@ export function SessionRoute() {
           handoff?.consume?.();
           if (destination.parent) {
             const workbench = useWorkbenchStore.getState();
-            const tab = { workspaceId, sessionId: newSessionDraftSlot(destination), title: prompt.trim() || "New session", draftDestination: destination, pendingConversationId: pending.id };
+            const tab = { workspaceId, sessionId: newSessionDraftSlot(destination), title: "New session", draftDestination: destination, pendingConversationId: pending.id };
             workbench.openTab(tab);
             workbench.setSideChat(destination.parent, tab);
           } else {
@@ -4326,7 +4326,7 @@ export function SessionRoute() {
             if (!currentWorkspace) throw new Error("Workspace is unavailable. Try again.");
             const workspaceEndpoint = endpointForWorkspace(currentWorkspace);
             if (!workspaceEndpoint?.token) throw new Error("Workspace is disconnected. Reconnect and try again.");
-            return createRouteSessionOnEngine(workspaceEndpoint, currentWorkspace.path?.trim() || undefined, prompt);
+            return createRouteSessionOnEngine(workspaceEndpoint, currentWorkspace.path?.trim() || undefined);
           }, (created) => publishCreatedConversation(pending, created, agent, workspace?.displayNameResolved));
         },
         onOpenRenameWorkspace: handleOpenRenameWorkspace,

@@ -7,6 +7,10 @@ protocols:
       - nanamiwork
 linux:
   executableName: nanamiwork
+mac:
+  extendInfo:
+    NSMicrophoneUsageDescription: NanamiWork uses the microphone when you allow a page to access audio input.
+    NSAppleEventsUsageDescription: NanamiWork uses Apple Events when you interact with supported desktop integrations.
 artifactName: NanamiWork-${version}-${os}-${arch}.${ext}
 
 appx:

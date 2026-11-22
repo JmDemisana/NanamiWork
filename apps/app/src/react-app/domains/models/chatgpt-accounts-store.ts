@@ -1277,7 +1277,12 @@ server.listen(1455, '127.0.0.1', () => console.log('__NANAMI_CODEX_OAUTH_READY__
 setTimeout(() => process.exit(0), 180000);
 `.trim();
 
-    const b64 = btoa(script);
+    const bytes = new TextEncoder().encode(script);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binary);
     const { terminalId } = await terminal.create({ cwd: home, cols: 80, rows: 10 });
     if (signal.aborted) { await terminal.kill?.(terminalId); return false; }
     return await new Promise<boolean>((resolve) => {
@@ -1355,7 +1360,12 @@ const codexModels={'gpt-6.1-sol':mDef('GPT-6.1 Sol'),'gpt-6-astra':mDef('GPT-6 A
 for(const f of[jsoncFile,jsonFile]){if(fs.existsSync(f)){try{const cfg=parseJ(fs.readFileSync(f,'utf8'));cfg.x_nanami_codex=meta;if(!Array.isArray(cfg.enabled_providers))cfg.enabled_providers=['nanami','google','openai','github-copilot'];else if(!cfg.enabled_providers.includes('openai'))cfg.enabled_providers.push('openai');if(!cfg.provider)cfg.provider={};if(!cfg.provider.openai||!cfg.provider.openai.options||!cfg.provider.openai.options.apiKey)cfg.provider.openai={name:'OpenAI / ChatGPT',models:codexModels};fs.writeFileSync(f,JSON.stringify(cfg,null,2)+'\\n','utf8');}catch{}}}
 `.trim();
 
-    const b64 = btoa(script);
+    const bytes = new TextEncoder().encode(script);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binary);
     const { terminalId } = await terminal.create({ cwd: home, cols: 80, rows: 10 });
     await new Promise<void>((resolve) => {
       let settled = false;
