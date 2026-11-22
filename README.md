@@ -13,7 +13,7 @@
 
 **NanamiWork** is a desktop agent workspace and instance manager designed to effortlessly unify your developer accounts across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot**.
 
-Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane desktop frontend. Connect multiple personal, student, or team accounts, route turns automatically across accounts with **NanamiWork Local Router**, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free profile.
+Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane desktop frontend. Connect your free, promo, student, personal, or paid subscription accounts, route turns automatically across them with **NanamiWork Local Router**, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free profile.
 
 ## ✨ Features
 
@@ -27,10 +27,10 @@ Instead of juggling scattered CLI tokens, separate login flows, or conflicting g
   Two-phase Planning and Execution workflow for supported Antigravity and ChatGPT plans: a dedicated planning model investigates read-only, produces a concrete plan, and hands off seamlessly to an execution model.
 
 * **📊 Live Quotas, Rolling Limits & Stale Auth Recovery**  
-  Track independent account health and quota exhaustion at a glance:
-  * **Antigravity**: Account-aware discovery for Gemini 4 (Neon, Hydrogen, Carbon, Argon), Gemini 3.8 Flash, Claude, and GPT-OSS models, displaying 7-day weekly limits with 5-hour exhaustion awareness.
-  * **Codex (ChatGPT)**: Adaptive rolling limit trackers distinguishing Free allowances from Paid 5-hour and weekly limits, reasoning effort controls (Low / Medium / High), manual OAuth refresh, and clickable **Stale** pills to re-authenticate expired sessions in-place.
-  * **GitHub Copilot**: 1-click GitHub device flow for Student Pack and Individual accounts with automatic model discovery and monthly quota tracking.
+  Track independent account health and quota exhaustion across free, promo, student, and paid tiers at a glance:
+  * **Antigravity**: Adapts to each account's active tier with account-aware discovery for Gemini 4 (Neon, Hydrogen, Carbon, Argon), Gemini 3.8 Flash, Claude, and GPT-OSS models, displaying 7-day weekly limits with 5-hour exhaustion awareness.
+  * **Codex (ChatGPT)**: Works across free, promo, student, and paid plans with adaptive rolling limit trackers (Free allowances vs Paid 5-hour and weekly limits), reasoning effort controls (Low / Medium / High), manual OAuth refresh, and clickable **Stale** pills to re-authenticate expired sessions in-place.
+  * **GitHub Copilot**: 1-click GitHub device flow across free, Student Pack, and paid plans with automatic model discovery and monthly quota tracking.
 
 * **⚙️ Reactive Background Tasks & Queue / Steer**  
   Long-running commands run in the background so Nanami goes idle while waiting and wakes up automatically with the exit code and output tail on completion. Follow-up queueing and immediate steering stay cleanly separated.
