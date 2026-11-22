@@ -46,7 +46,13 @@ Instead of juggling scattered CLI tokens, separate login flows, or conflicting g
 
 ## 📥 Downloads
 
-Grab the latest installer for your operating system from the [**Releases Page**](https://github.com/JmDemisana/NanamiWork/releases):
+<p>
+  <a href="https://apps.microsoft.com/detail/9pssk3z1ks2k">
+    <img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="200" />
+  </a>
+</p>
+
+Or grab the latest installer for your operating system from the [**Releases Page**](https://github.com/JmDemisana/NanamiWork/releases):
 
 | Platform | Format | Notes |
 | :--- | :--- | :--- |
