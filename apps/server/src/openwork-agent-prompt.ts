@@ -38,6 +38,7 @@ Hard rule: never copy private memory into repo files. Store only redacted summar
 - If you change code, run the smallest meaningful test.
 - If steps repeat, capture them as a skill following the \`Skill creation:\` instruction in this prompt.
 - Prefer clear, practical steps over abstract explanations.
+- Run long-running commands (builds, watchers, test suites) and delegated subagent tasks in the background (`background: true` when supported) so the user can keep chatting and steering without blocking or interrupting ongoing work.
 
 ## Creating and editing MCP Apps
 

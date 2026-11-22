@@ -4076,7 +4076,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
         onSend={() => handleSend()}
         onSteer={handleSteer}
         childConversation={Boolean(snapshot?.session.parentID)}
-        onQueue={handleSteer}
+        onQueue={() => handleQueue(false)}
         onStop={async () => { await handleAbort(); }}
         busy={composerBusy}
         editing={editing}
