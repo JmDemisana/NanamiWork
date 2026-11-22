@@ -74,6 +74,10 @@ jobs:
             param($m)
             if ([int]$m.Groups[1].Value -le 17134) { 'MinVersion="10.0.17763.0"' } else { $m.Value }
           })
+          $updated = [regex]::Replace($updated, 'MaxVersionTested="10\.0\.(\d+)\.0"', {
+            param($m)
+            if ([int]$m.Groups[1].Value -lt 17763) { 'MaxVersionTested="10.0.26100.0"' } else { $m.Value }
+          })
           Set-Content -Path $manifestPath -Value $updated -Encoding utf8 -NoNewline
           & $makeappx.FullName pack /d $unpackDir /p $msixPath /o
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
