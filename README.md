@@ -61,6 +61,9 @@ Or grab the latest installer for your operating system from the [**Releases Page
 | **Linux (Universal)** | `.AppImage` | Portable `x86_64` binary for modern distributions |
 | **macOS** | `.dmg` / `.zip` | Apple Silicon (`arm64`) builds |
 
+> [!NOTE]
+> Installing the **GitHub Release** (`.exe`) is recommended over the Microsoft Store version. While both can be installed on the same PC at the same time, **do not run them both simultaneously**, as doing so may cause conflicts or break expected behavior.
+
 ## 🚀 Quick Start
 
 1. **Launch NanamiWork**.
