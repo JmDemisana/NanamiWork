@@ -32,7 +32,6 @@ import {
   openworkOfficeAttachmentsPluginPath,
   openworkSpreadsheetsPluginPath,
   openworkChromeDevtoolsPluginPath,
-  openworkComputerUsePluginPath,
   openworkPdfAttachmentsPluginPath,
 } from "./openwork-extensions-plugin-path.js";
 import type { ServerConfig } from "./types.js";
@@ -218,7 +217,6 @@ export function buildOpenworkRuntimeConfigObjectFromSnapshot(
     },
     plugin: [
       openworkChromeDevtoolsPluginPath(),
-      openworkComputerUsePluginPath(),
       // Registration order is prompt order: the knowledge plugin appends the
       // operating rules first, then the extensions plugin adds app-control
       // mechanics, live Connect steering, and the remote skill and Automation

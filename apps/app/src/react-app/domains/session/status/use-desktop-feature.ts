@@ -15,22 +15,29 @@ type DesktopFeatureKey = "computerUse" | "computerSessionHistory" | "remoteCompu
  * active organization through the shared org-feature hook; signed out, the
  * deployment switch (`GET /v1/features`). Unreachable or missing means off.
  */
+const DISABLED_DESKTOP_FEATURES = new Set<DesktopFeatureKey>([
+  "computerUse",
+  "computerSessionHistory",
+  "remoteComputers",
+])
+
 export function useDesktopFeature(key: DesktopFeatureKey, active = true): boolean {
+  const effectiveActive = active && !DISABLED_DESKTOP_FEATURES.has(key)
   const denAuth = useDenAuth()
   const context = useAutomationsDenContext()
   const baseUrl = readDenSettings().baseUrl
   const deploymentClient = useMemo(() => createDenClient({ baseUrl }), [baseUrl])
   // Not desktopOnly: the web app shows the cloud computer from these flags too.
-  const organization = useOrgFeatureState(key, { active })
+  const organization = useOrgFeatureState(key, { active: effectiveActive })
   const deployment = useQuery({
     queryKey: ["den", "deployment-features", baseUrl],
     queryFn: () => deploymentClient.getDeploymentFeatures(),
-    enabled: active && !context.ready && denAuth.status === "signed_out",
+    enabled: effectiveActive && !context.ready && denAuth.status === "signed_out",
     staleTime: FEATURE_STALE_MS,
     refetchInterval: FEATURE_STALE_MS,
     refetchIntervalInBackground: true,
     retry: false,
     select: (features) => features[key] === true,
   })
-  return active && (context.ready ? organization.enabled : denAuth.status === "signed_out" && !deployment.isError && deployment.data === true)
+  return effectiveActive && (context.ready ? organization.enabled : denAuth.status === "signed_out" && !deployment.isError && deployment.data === true)
 }
