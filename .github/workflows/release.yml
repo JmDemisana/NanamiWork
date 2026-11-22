@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.2.6)"
+        description: "Release tag (e.g. v1.2.7)"
         required: false
-        default: "v1.2.6"
+        default: "v1.2.7"
   push:
     tags:
       - "v*"
@@ -191,28 +191,23 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.6' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.7' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.6' }}: Gemini 4 Neon, Speed & Fluid Motion"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.7' }}: Background Tasks, Queue/Steer & Stale Auth Pills"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.6' }}** adds Gemini 4 Neon support, cuts turn and streaming latency, fixes Orchestrator and router edge cases, and introduces an iOS-inspired fluid spring motion system.
+            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.7' }}** adds Antigravity-style reactive background tasks on OpenCode v1, separates follow-up queueing from immediate steering, and surfaces clickable Stale auth pills for expired ChatGPT accounts.
 
-            ### Models & Speed
-            - Add account-aware **Gemini 4 Neon** (`low`/`medium`/`high`) across the model picker, Local Router, and Orchestrator mode.
-            - Cache Antigravity OAuth access tokens and fast-path same-account Local Router turns to avoid unnecessary quota round-trips and engine cold restarts.
-            - Eliminate per-token `MessageList` re-render storms, preserve foreground 60fps `requestAnimationFrame` streaming, skip non-essential DOM passes while streaming, and parallelize prompt preparation.
+            ### Background Tasks & Steering
+            - Add the reactive `openwork-background-tasks` plugin (`run_background_task`, `list_background_tasks`, `stop_background_task`): long commands move to the background so the agent goes idle while waiting and wakes up automatically with the exit code and output tail on completion.
+            - Properly separate follow-up **Queue** (`onQueue`) from immediate **Steer** (`onSteer`) so queued messages no longer interrupt ongoing tasks.
 
-            ### Interface & Motion
-            - Introduce GPU-light iOS-style spring motion curves across dialogs, popovers, menus, tooltips, command palette, tabs, collapsibles, and sidebar controls, with full `prefers-reduced-motion` support.
-            - Align the New Session composer box height and bottom position with active conversation threads.
-
-            ### Fixes
-            - Preserve workspace system context on Orchestrator execution handoff, detect `exit_plan_mode` across multi-step planning turns, and forward the resolved model for Orchestrator slash commands.
-            - Harden Antigravity router session cache invalidation and fix clearing search highlights mid-stream.
+            ### Account Auth & Quotas
+            - Show a clickable **Stale** pill (instead of blank or stale limits) on expired ChatGPT accounts in both the model picker and sidebar Account Limits panel; clicking it opens sign-in and replaces stale credentials in-place.
+            - Allow manual 🔄 refresh buttons on ChatGPT accounts to rotate expired OAuth access tokens.
 
             ### Notes
             - Model access still depends on the selected account's provider entitlements.
