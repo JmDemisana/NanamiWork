@@ -1,0 +1,90 @@
+name: Publish to Microsoft Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "GitHub Release tag containing the .appx (e.g. v1.2.8). Leave blank for latest."
+        required: false
+        default: ""
+      no_commit:
+        description: "Upload package to draft submission without committing for certification"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish-store:
+    name: Upload AppX to Microsoft Partner Center
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate Microsoft Store secrets
+        shell: pwsh
+        env:
+          MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+        run: |
+          $missing = @()
+          foreach ($name in @("MSSTORE_TENANT_ID", "MSSTORE_SELLER_ID", "MSSTORE_CLIENT_ID", "MSSTORE_CLIENT_SECRET")) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+              $missing += $name
+            }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Error "Missing required repository secrets: $($missing -join ', ')"
+            exit 1
+          }
+
+      - name: Download AppX from GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          New-Item -ItemType Directory -Force -Path store-pkg | Out-Null
+          if ([string]::IsNullOrWhiteSpace($env:INPUT_TAG)) {
+            gh release download --repo "${{ github.repository }}" --pattern "*.appx" --dir store-pkg --clobber
+          } else {
+            gh release download $env:INPUT_TAG --repo "${{ github.repository }}" --pattern "*.appx" --dir store-pkg --clobber
+          }
+          $pkg = Get-ChildItem -Path store-pkg -Filter "*.appx" | Select-Object -First 1
+          if (-not $pkg) {
+            Write-Error "No .appx asset found in the selected GitHub Release."
+            exit 1
+          }
+          Write-Host "Found package: $($pkg.FullName) ($($pkg.Length) bytes)"
+          "APPX_PATH=$($pkg.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Setup Microsoft Store CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.4
+
+      - name: Configure Microsoft Store CLI
+        shell: pwsh
+        env:
+          MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+        run: |
+          msstore reconfigure `
+            --tenantId $env:MSSTORE_TENANT_ID `
+            --sellerId $env:MSSTORE_SELLER_ID `
+            --clientId $env:MSSTORE_CLIENT_ID `
+            --clientSecret $env:MSSTORE_CLIENT_SECRET
+
+      - name: Upload and Publish to Partner Center
+        shell: pwsh
+        env:
+          NO_COMMIT: ${{ inputs.no_commit }}
+        run: |
+          $argsList = @("publish", $env:APPX_PATH, "-id", "9PSSK3Z1KS2K")
+          if ($env:NO_COMMIT -eq "true") {
+            $argsList += "--noCommit"
+          }
+          & msstore @argsList
