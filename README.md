@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">🌸 NanamiWork</h1>
   <p align="center">
-    <strong>An agent instance manager and unified desktop frontend bringing your Antigravity, Codex, and GitHub Copilot accounts together.</strong>
+    <strong>An agent instance manager, local router, and unified desktop frontend bringing your Antigravity, Codex, and GitHub Copilot accounts together.</strong>
   </p>
 </p>
 
@@ -13,33 +13,40 @@
 
 ## 🌟 Overview
 
-**NanamiWork** is a desktop agent workspace and instance manager designed to effortlessly unify your developer accounts across the three major agent platforms: **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot**.
+**NanamiWork** is a desktop agent workspace and instance manager designed to effortlessly unify your developer accounts across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot**.
 
-Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane-of-glass desktop frontend. Connect multiple personal, student, or team accounts, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free sandbox.
-
-*(Note: The built-in Nanami Gateway section is a private, optional utility reserved for trusted peers with a Gate PIN. The core application is entirely powered by your own connected developer instances and accounts.)*
+Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane desktop frontend. Connect multiple personal, student, or team accounts, route turns automatically across accounts with **NanamiWork Local Router**, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free profile.
 
 ---
 
 ## ✨ Features
 
 * **🛡️ 3-in-1 Agent Instance Manager**  
-  Easily link, manage, and switch between your instances across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot** with 1-click device & browser authorization.
+  Link, manage, and switch between your instances across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot** with 1-click device and browser authorization.
 
-* **📊 Live Quotas & Rolling Limits**  
+* **🔀 NanamiWork Local Router**  
+  Automatically route turns across your connected accounts and models using configurable strategies (Model order, Account order, Round robin, Highest/Lowest quota, Earliest/Latest reset) with automatic quota-exhaustion failover (`<= 5%` remaining).
+
+* **🧭 Orchestrator Mode**  
+  Two-phase Planning and Execution workflow for supported Antigravity and ChatGPT plans: a dedicated planning model investigates read-only, produces a concrete plan, and hands off seamlessly to an execution model.
+
+* **📊 Live Quotas, Rolling Limits & Stale Auth Recovery**  
   Track independent account health and quota exhaustion at a glance:
-  * **Antigravity**: Real-time bucket trackers for Gemini, Claude, and GPT-OSS models with accurate reset timers.
-  * **Codex (ChatGPT)**: Adaptive rolling limit trackers distinguishing Free allowances from Paid 5-hour and weekly limits, with reasoning effort controls (Low / Medium / High).
+  * **Antigravity**: Account-aware discovery for Gemini 4 (Neon, Hydrogen, Carbon, Argon), Gemini 3.8 Flash, Claude, and GPT-OSS models, displaying 7-day weekly limits with 5-hour exhaustion awareness.
+  * **Codex (ChatGPT)**: Adaptive rolling limit trackers distinguishing Free allowances from Paid 5-hour and weekly limits, reasoning effort controls (Low / Medium / High), manual OAuth refresh, and clickable **Stale** pills to re-authenticate expired sessions in-place.
   * **GitHub Copilot**: 1-click GitHub device flow for Student Pack and Individual accounts with automatic model discovery and monthly quota tracking.
+
+* **⚙️ Reactive Background Tasks & Queue / Steer**  
+  Long-running commands run in the background so Nanami goes idle while waiting and wakes up automatically with the exit code and output tail on completion. Follow-up queueing and immediate steering stay cleanly separated.
 
 * **⚡ Complete Sandbox Isolation**  
   NanamiWork operates strictly inside its isolated profile (`~/.config/nanamiwork`). It never modifies or pollutes your global OpenCode, OpenWork, VS Code Copilot, Antigravity, or Codex installations.
 
-* **⏪ "Undo Up to This Point"**  
-  Rewind any turn on the fly. Restores your exact previous prompt back into the composer with instant autofocus so you can refine instructions without losing context.
+* **⏪ "Undo Up to This Point" & Fluid Motion**  
+  Rewind any turn on the fly with instant composer restoration, paired with 60fps streaming and GPU-light spring animations with full `prefers-reduced-motion` support.
 
-* **💻 Fully Cross-Platform & Portable**  
-  Zero hardcoded paths or assumptions. Works seamlessly out of the box across Windows, Linux, and macOS.
+* **💻 Cross-Platform & Portable**  
+  Zero hardcoded paths or assumptions. Works out of the box across Windows, Linux, and macOS.
 
 ---
 
@@ -49,10 +56,10 @@ Grab the latest installer for your operating system from the [**Releases Page**]
 
 | Platform | Format | Notes |
 | :--- | :--- | :--- |
-| **Windows** | `.exe` | Windows 10 / 11 NSIS setup |
-| **Linux (Debian / Ubuntu)** | `.deb` | Standard package installer |
-| **Linux (Universal)** | `.AppImage` | Portable binary for all modern distributions |
-| **macOS** | `.dmg` / `.zip` | Universal support for Apple Silicon and Intel |
+| **Windows** | `.exe` / `.appx` | Windows 10 / 11 NSIS setup and AppX package |
+| **Linux (Debian / Ubuntu)** | `.deb` | `x86_64` Debian package installer |
+| **Linux (Universal)** | `.AppImage` | Portable `x86_64` binary for modern distributions |
+| **macOS** | `.dmg` / `.zip` | Apple Silicon (`arm64`) builds |
 
 ---
 
@@ -60,10 +67,10 @@ Grab the latest installer for your operating system from the [**Releases Page**]
 
 1. **Launch NanamiWork**.
 2. **Connect Your Platforms**:
-   * Open the Model Picker modal (`Select Model`).
-   * Connect your desired platform (**Antigravity**, **Copilot**, or **ChatGPT**) via 1-click device or browser authorization.
-3. **Choose Your Instance & Code**:
-   * Pick any model from your connected accounts.
+   * Open the Model Picker (`Select Model`).
+   * Connect **Antigravity**, **Copilot**, or **ChatGPT** via 1-click device or browser authorization.
+3. **Choose an Account, Local Router, or Orchestrator**:
+   * Pick any model from your connected accounts, or enable **NanamiWork Local Router** / **Orchestrator**.
    * Open your local workspace folder and start building!
 
 ---
