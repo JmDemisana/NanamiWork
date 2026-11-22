@@ -27,10 +27,10 @@ Instead of juggling scattered CLI tokens, separate login flows, or conflicting g
   Two-phase Planning and Execution workflow for supported Antigravity and ChatGPT plans: a dedicated planning model investigates read-only, produces a concrete plan, and hands off seamlessly to an execution model.
 
 * **📊 Live Quotas, Rolling Limits & Stale Auth Recovery**  
-  Track independent account health and quota exhaustion across free, promo, student, and paid tiers at a glance:
-  * **Antigravity**: Adapts to each account's active tier with account-aware discovery for Gemini 4 (Neon, Hydrogen, Carbon, Argon), Gemini 3.8 Flash, Claude, and GPT-OSS models, displaying 7-day weekly limits with 5-hour exhaustion awareness.
-  * **Codex (ChatGPT)**: Works across free, promo, student, and paid plans with adaptive rolling limit trackers (Free allowances vs Paid 5-hour and weekly limits), reasoning effort controls (Low / Medium / High), manual OAuth refresh, and clickable **Stale** pills to re-authenticate expired sessions in-place.
-  * **GitHub Copilot**: 1-click GitHub device flow across free, Student Pack, and paid plans with automatic model discovery and monthly quota tracking.
+  Track independent account health and quota exhaustion at a glance:
+  * **Antigravity**: Account-aware discovery for Gemini 4 (Neon, Hydrogen, Carbon, Argon), Gemini 3.8 Flash, Claude, and GPT-OSS models, showing 7-day weekly limits with 5-hour exhaustion awareness.
+  * **Codex (ChatGPT)**: Adaptive rolling limit trackers, reasoning effort controls (Low / Medium / High), manual OAuth refresh, and clickable **Stale** pills to re-authenticate expired sessions in-place.
+  * **GitHub Copilot**: 1-click GitHub device flow with automatic model discovery and monthly quota tracking.
 
 * **⚙️ Reactive Background Tasks & Queue / Steer**  
   Long-running commands run in the background so Nanami goes idle while waiting and wakes up automatically with the exit code and output tail on completion. Follow-up queueing and immediate steering stay cleanly separated.
