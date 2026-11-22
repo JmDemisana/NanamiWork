@@ -58,8 +58,10 @@ jobs:
             Write-Error "No .appx asset found in the selected GitHub Release."
             exit 1
           }
-          Write-Host "Found package: $($pkg.FullName) ($($pkg.Length) bytes)"
-          "APPX_PATH=$($pkg.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $msixPath = [System.IO.Path]::ChangeExtension($pkg.FullName, ".msix")
+          Copy-Item -Path $pkg.FullName -Destination $msixPath -Force
+          Write-Host "Prepared package: $msixPath ($($pkg.Length) bytes)"
+          "APPX_PATH=$msixPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Microsoft Store CLI
         uses: microsoft/microsoft-store-apppublisher@v1.4
