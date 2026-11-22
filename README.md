@@ -9,15 +9,11 @@
   <img src="./docs/images/nanamiwork-preview.png" alt="NanamiWork Preview" width="850" />
 </p>
 
----
-
 ## 🌟 Overview
 
 **NanamiWork** is a desktop agent workspace and instance manager designed to effortlessly unify your developer accounts across **Google Antigravity**, **Codex (ChatGPT)**, and **GitHub Copilot**.
 
 Instead of juggling scattered CLI tokens, separate login flows, or conflicting global configurations, NanamiWork provides a clean, single-pane desktop frontend. Connect multiple personal, student, or team accounts, route turns automatically across accounts with **NanamiWork Local Router**, monitor live quotas and rolling limits in real time, and run agent tasks in an isolated, conflict-free profile.
-
----
 
 ## ✨ Features
 
@@ -48,8 +44,6 @@ Instead of juggling scattered CLI tokens, separate login flows, or conflicting g
 * **💻 Cross-Platform & Portable**  
   Zero hardcoded paths or assumptions. Works out of the box across Windows, Linux, and macOS.
 
----
-
 ## 📥 Downloads
 
 Grab the latest installer for your operating system from the [**Releases Page**](https://github.com/JmDemisana/NanamiWork/releases):
@@ -61,8 +55,6 @@ Grab the latest installer for your operating system from the [**Releases Page**]
 | **Linux (Universal)** | `.AppImage` | Portable `x86_64` binary for modern distributions |
 | **macOS** | `.dmg` / `.zip` | Apple Silicon (`arm64`) builds |
 
----
-
 ## 🚀 Quick Start
 
 1. **Launch NanamiWork**.
@@ -72,8 +64,6 @@ Grab the latest installer for your operating system from the [**Releases Page**]
 3. **Choose an Account, Local Router, or Orchestrator**:
    * Pick any model from your connected accounts, or enable **NanamiWork Local Router** / **Orchestrator**.
    * Open your local workspace folder and start building!
-
----
 
 ## 🛠️ Building from Source
 
@@ -92,13 +82,9 @@ pnpm --filter @openwork/desktop build:electron
 pnpm --dir apps/desktop exec electron-builder --config electron-builder.yml
 ```
 
----
-
 ## ⚖️ Provider Terms & Compliance
 
 NanamiWork provides multi-account profile switching to help developers organize personal, educational, and workplace credentials across distinct workspace contexts. All API interactions and authentication flows occur directly between the user's client and the upstream services (Google, OpenAI, GitHub). Users are solely responsible for complying with the Terms of Service, Acceptable Use Policies, and rate limits of each respective provider. NanamiWork does not alter, bypass, or circumvent provider access controls.
-
----
 
 ## 📄 License & Attribution
 
