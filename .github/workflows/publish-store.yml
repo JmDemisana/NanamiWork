@@ -85,7 +85,8 @@ jobs:
         env:
           NO_COMMIT: ${{ inputs.no_commit }}
         run: |
-          $argsList = @("publish", $env:APPX_PATH, "-id", "9PSSK3Z1KS2K")
+          msstore apps list -v
+          $argsList = @("publish", $env:APPX_PATH, "-id", "9PSSK3Z1KS2K", "-v")
           if ($env:NO_COMMIT -eq "true") {
             $argsList += "--noCommit"
           }
