@@ -894,6 +894,17 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
                 item.email.toLowerCase() === acc.email.toLowerCase()
                   ? {
                       ...item,
+                      ...(res.status === 401
+                        ? {
+                            primaryWindow: undefined,
+                            secondaryWindow: undefined,
+                            models: item.models.map((m) => ({
+                              ...m,
+                              remainingFraction: null,
+                              resetTime: null,
+                            })),
+                          }
+                        : {}),
                       quotaLoading: false,
                       quotaError: `Quota HTTP ${res.status}`,
                     }
@@ -1049,6 +1060,21 @@ export const useChatGptAccountsStore = create<ChatGptAccountsStore>((set, get) =
     }
   },
 }));
+
+export function isChatGptAccountStale(
+  account: Pick<ChatGptAccountInfo, "planType" | "quotaError" | "accessToken">,
+): boolean {
+  if (account.planType === "api") return false;
+  if (
+    account.quotaError === "Quota HTTP 401" ||
+    account.quotaError?.includes("Could not update ChatGPT account settings")
+  ) {
+    return true;
+  }
+  if (!account.accessToken) return true;
+  const exp = accessTokenExpiry(account.accessToken);
+  return exp > 0 && exp <= Date.now();
+}
 
 function accessTokenExpiry(token: string): number {
   try {

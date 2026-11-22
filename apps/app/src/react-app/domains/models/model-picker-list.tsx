@@ -25,7 +25,7 @@ import {
   type OrchestratorSelectableModel,
 } from "./orchestrator-store";
 import { useCopilotAccountsStore, type CopilotAccountInfo, type CopilotModelItem } from "./copilot-accounts-store";
-import { useChatGptAccountsStore, type ChatGptAccountInfo, type ChatGptModelItem } from "./chatgpt-accounts-store";
+import { isChatGptAccountStale, useChatGptAccountsStore, type ChatGptAccountInfo, type ChatGptModelItem } from "./chatgpt-accounts-store";
 import { modelRefKey, useModelCollectionsStore } from "@/react-app/domains/session/models/model-collections-store";
 import { PickerNotice } from "./picker-notice";
 import { resolveSearchIntent, searchIntentSummary, searchIntentTag, searchModels } from "./model-search";
@@ -459,6 +459,7 @@ function ConnectedChatGptAccountGroup({
   query,
   onSelectModel,
   onSelectOrchestrator,
+  onReauth,
   canMoveUp = false,
   canMoveDown = false,
   onMove,
@@ -468,10 +469,12 @@ function ConnectedChatGptAccountGroup({
   query: string;
   onSelectModel: (account: ChatGptAccountInfo, item: ChatGptModelItem) => void;
   onSelectOrchestrator: (account: ChatGptAccountInfo) => void;
+  onReauth: () => void;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
   onMove?: (direction: -1 | 1) => void;
 }) {
+  const isStale = !account.quotaLoading && isChatGptAccountStale(account);
   const search = query.trim().toLowerCase();
   const orchestratorSupported = isChatGptOrchestratorSupported(account);
   const orchestratorModels = useMemo(
@@ -498,6 +501,21 @@ function ConnectedChatGptAccountGroup({
           <span className="truncate" title={`${account.email} (ChatGPT)`}>
             {account.email} (ChatGPT)
           </span>
+          {isStale ? (
+            <button
+              type="button"
+              data-testid={`chatgpt-stale-pill-${account.email}`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onReauth();
+              }}
+              title="Session expired. Click to sign in again and replace stale auth."
+              className="shrink-0 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-400 transition-colors hover:bg-amber-500/20"
+            >
+              Stale
+            </button>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {onMove ? <AccountMoveButtons label={account.email} canMoveUp={canMoveUp} canMoveDown={canMoveDown} onMove={onMove} /> : null}
@@ -511,7 +529,7 @@ function ConnectedChatGptAccountGroup({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void useChatGptAccountsStore.getState().refreshQuotas(account.email);
+              void useChatGptAccountsStore.getState().refreshQuotas(account.email, { allowTokenRefresh: true });
             }}
           >
             <RefreshCw className={`size-3 ${account.quotaLoading ? "animate-spin" : ""}`} />
@@ -572,7 +590,30 @@ function ConnectedChatGptAccountGroup({
                 {item.displayName}
               </span>
 
-              <AccountQuotaPill item={item} />
+              {isStale ? (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onReauth();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onReauth();
+                    }
+                  }}
+                  title="Session expired. Click to sign in again and replace stale auth."
+                  className="shrink-0 cursor-pointer rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium leading-none text-amber-400 transition-colors hover:bg-amber-500/20"
+                >
+                  Stale
+                </span>
+              ) : (
+                <AccountQuotaPill item={item} />
+              )}
 
               <span className="flex size-4 shrink-0 items-center justify-center">
                 {isSelected ? <Check aria-hidden="true" className="size-4 text-foreground" /> : null}
@@ -1370,7 +1411,21 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
                   {entry.kind === "antigravity" ? (
                     <ConnectedAccountGroup account={entry.account} current={current} query={query} thinkingTier={thinkingTier} onSelectModel={selectAntigravityModel} onSelectOrchestrator={selectAntigravityOrchestrator} {...moveProps} />
                   ) : entry.kind === "chatgpt" ? (
-                    <ConnectedChatGptAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectChatGptModel} onSelectOrchestrator={selectChatGptOrchestrator} {...moveProps} />
+                    <ConnectedChatGptAccountGroup
+                      account={entry.account}
+                      current={current}
+                      query={query}
+                      onSelectModel={selectChatGptModel}
+                      onSelectOrchestrator={selectChatGptOrchestrator}
+                      onReauth={() => {
+                        if (onConnectCodex) onConnectCodex();
+                        else {
+                          onClose?.();
+                          window.dispatchEvent(new Event(openCodexAuthEvent));
+                        }
+                      }}
+                      {...moveProps}
+                    />
                   ) : (
                     <ConnectedCopilotAccountGroup account={entry.account} current={current} query={query} onSelectModel={selectCopilotModel} {...moveProps} />
                   )}

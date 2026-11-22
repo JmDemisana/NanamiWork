@@ -6,9 +6,11 @@ import {
   useAntigravityAccountsStore,
 } from "@/react-app/domains/models/antigravity-accounts-store";
 import {
+  isChatGptAccountStale,
   useChatGptAccountsStore,
   type QuotaWindow,
 } from "@/react-app/domains/models/chatgpt-accounts-store";
+import { openCodexAuthEvent } from "@/react-app/shell/new-providers-listener";
 import { useWorkspace } from "@/react-app/shell/workspace-provider";
 
 function RemainingQuotaBar({ label, window }: { label: string; window: QuotaWindow }) {
@@ -83,7 +85,7 @@ export function CodexSidebarLimits() {
         <button
           type="button"
           onClick={() => {
-            void refreshQuotas(activeAccount?.email);
+            void refreshQuotas(activeAccount?.email, { allowTokenRefresh: true });
           }}
           title="Refresh account limits"
           aria-label="Refresh account limits"
@@ -98,6 +100,7 @@ export function CodexSidebarLimits() {
           const primaryLabel =
             acc.planType === "free" ? "Monthly Limit" : "5-Hour Limit";
           const secondaryLabel = "Weekly Limit";
+          const isStale = !acc.quotaLoading && isChatGptAccountStale(acc);
 
           return (
             <div
@@ -115,7 +118,11 @@ export function CodexSidebarLimits() {
                 >
                   <span
                     className={`size-1.5 shrink-0 rounded-full ${
-                      acc.isActive ? "bg-emerald-400" : "bg-muted-foreground/40"
+                      isStale
+                        ? "bg-amber-400"
+                        : acc.isActive
+                          ? "bg-emerald-400"
+                          : "bg-muted-foreground/40"
                     }`}
                   />
                   <span className="truncate text-[11px] font-medium text-sidebar-foreground">
@@ -127,7 +134,21 @@ export function CodexSidebarLimits() {
                 </div>
               </div>
 
-              {acc.primaryWindow || acc.secondaryWindow ? (
+              {isStale ? (
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    data-testid="sidebar-codex-stale-pill"
+                    onClick={() => {
+                      window.dispatchEvent(new Event(openCodexAuthEvent));
+                    }}
+                    title="Session expired. Click to sign in again and replace stale auth."
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+                  >
+                    <span>Stale · Sign in again</span>
+                  </button>
+                </div>
+              ) : acc.primaryWindow || acc.secondaryWindow ? (
                 <div className="mt-1.5 flex flex-col gap-1">
                   {acc.primaryWindow ? (
                     <RemainingQuotaBar label={primaryLabel} window={acc.primaryWindow} />
