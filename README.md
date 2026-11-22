@@ -47,7 +47,7 @@ Instead of juggling scattered CLI tokens, separate login flows, or conflicting g
 ## 📥 Downloads
 
 <p>
-  <a href="https://apps.microsoft.com/detail/9pssk3z1ks2k">
+  <a href="https://apps.microsoft.com/detail/9p5sk3z1ks2k">
     <img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" width="200" />
   </a>
 </p>
