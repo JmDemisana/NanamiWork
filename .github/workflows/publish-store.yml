@@ -59,8 +59,25 @@ jobs:
             exit 1
           }
           $msixPath = [System.IO.Path]::ChangeExtension($pkg.FullName, ".msix")
-          Copy-Item -Path $pkg.FullName -Destination $msixPath -Force
-          Write-Host "Prepared package: $msixPath ($($pkg.Length) bytes)"
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\makeappx.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $makeappx) {
+            Write-Error "makeappx.exe not found in Windows SDK."
+            exit 1
+          }
+          $unpackDir = Join-Path $PWD "store-unpack"
+          if (Test-Path $unpackDir) { Remove-Item -Recurse -Force $unpackDir }
+          & $makeappx.FullName unpack /p $pkg.FullName /d $unpackDir /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifestPath = Join-Path $unpackDir "AppxManifest.xml"
+          $manifest = Get-Content -Raw -Path $manifestPath -Encoding utf8
+          $updated = [regex]::Replace($manifest, 'MinVersion="10\.0\.(\d+)\.0"', {
+            param($m)
+            if ([int]$m.Groups[1].Value -le 17134) { 'MinVersion="10.0.17763.0"' } else { $m.Value }
+          })
+          Set-Content -Path $manifestPath -Value $updated -Encoding utf8 -NoNewline
+          & $makeappx.FullName pack /d $unpackDir /p $msixPath /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host "Prepared MSIX package: $msixPath ($((Get-Item $msixPath).Length) bytes)"
           "APPX_PATH=$msixPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Setup Microsoft Store CLI
