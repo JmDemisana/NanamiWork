@@ -42,6 +42,7 @@ export const openworkSpreadsheetsPluginPath = () => openworkPluginPath("openwork
 export const openworkPdfAttachmentsPluginPath = () => openworkPluginPath("openwork-pdf-attachments");
 export const openworkTitleRecoveryPluginPath = () => openworkPluginPath("openwork-title-recovery");
 export const openworkOrchestratorPluginPath = () => openworkPluginPath("openwork-orchestrator");
+export const openworkBackgroundTasksPluginPath = () => openworkPluginPath("openwork-background-tasks");
 export const openworkGatewayQuotaPluginPath = () => openworkPluginPath("openwork-gateway-quota");
 export const openworkGatewayQuotaV2PluginPath = () => openworkPluginPath("openwork-gateway-quota-v2");
 export const openworkProviderSyncV2PluginPath = () => {
