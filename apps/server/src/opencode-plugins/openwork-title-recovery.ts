@@ -1,4 +1,4 @@
-/** Recover only explicitly rejected, optional title-generation parameters.
+/** Select a compatible small model and recover explicitly rejected title parameters.
  * The correlation header is removed unless already covered by an AWS signature.
  * No prompts, response bodies, URLs, or credentials enter diagnostics.
  */
@@ -6,6 +6,20 @@ const HEADER = "x-openwork-title-attempt";
 const DEADLINE_MS = 60_000;
 const MAX_ERROR_BYTES = 16_384;
 const MAX_TITLE_REQUEST_BYTES = 1_048_576;
+const ANTIGRAVITY_SMALL_MODELS = [
+  "antigravity-gemini-3.8-flash-low",
+  "antigravity-gemini-3.8-flash-tiered-low",
+  "antigravity-gemini-3.8-flash-medium",
+  "antigravity-gemini-3-flash",
+];
+const COPILOT_SMALL_MODELS = ["gpt-4.1", "gpt-5-mini", "gpt-4.1-mini", "gpt-4o-mini"];
+
+type SmallModel = { id: string; providerID: string; status?: string };
+type SmallModelProvider = {
+  id: string;
+  options?: Record<string, unknown>;
+  models: Record<string, SmallModel>;
+};
 
 type Diagnostic = {
   sessionID: string;
@@ -191,6 +205,26 @@ export const OpenWorkTitleRecovery = async (input: {
     } }).catch(() => undefined);
   };
   return {
+    "experimental.provider.small_model": async (
+      { provider }: { provider: SmallModelProvider },
+      output: { model?: SmallModel },
+    ) => {
+      if (output.model) return;
+      // The native small-model heuristic can choose the public Flash model
+      // for both catalogs. The OAuth route requires the Antigravity alias,
+      // while Copilot's automatic selection already uses its own GPT model.
+      const ids = provider.id === "google" && provider.options?.apiKey === "antigravity-oauth"
+        ? ANTIGRAVITY_SMALL_MODELS
+        : provider.id === "github-copilot" || provider.id.startsWith("github-copilot-")
+          ? COPILOT_SMALL_MODELS
+          : [];
+      for (const id of ids) {
+        const model = provider.models[id];
+        if (model?.providerID !== provider.id || model.status === "deprecated") continue;
+        output.model = model;
+        break;
+      }
+    },
     "chat.headers": async (request: {
       sessionID: string; agent: string; model: { id: string; providerID: string };
     }, output: { headers: Record<string, string> }) => {

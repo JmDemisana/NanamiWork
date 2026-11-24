@@ -41,3 +41,37 @@ test("recovers an unsigned JSON Request and leaves signed payloads intact", asyn
     globalThis.fetch = originalFetch;
   }
 });
+
+test("uses a provider-native small model for Antigravity OAuth and Copilot", async () => {
+  const plugin = await OpenWorkTitleRecovery({ client: { app: { log: async () => undefined } } });
+  const choose = plugin["experimental.provider.small_model"];
+  const googleFlash = { id: "gemini-3.8-flash", providerID: "google" };
+  const oauthFlash = { id: "antigravity-gemini-3.8-flash-low", providerID: "google" };
+  const google = {
+    id: "google",
+    options: { apiKey: "antigravity-oauth" },
+    models: { [googleFlash.id]: googleFlash, [oauthFlash.id]: oauthFlash },
+  };
+  const oauth: { model?: typeof oauthFlash } = {};
+  await choose({ provider: google }, oauth);
+  expect(oauth.model).toBe(oauthFlash);
+
+  const api = {};
+  await choose({ provider: { ...google, options: {} } }, api);
+  expect(api).toEqual({});
+
+  const copilot = { id: "gpt-4.1", providerID: "github-copilot" };
+  const copilotCatalog = { id: copilot.providerID, models: { [copilot.id]: copilot } };
+  const selected: { model?: typeof copilot } = {};
+  await choose({ provider: copilotCatalog }, selected);
+  expect(selected.model).toBe(copilot);
+
+  const otherProvider = {};
+  await choose({ provider: { ...copilotCatalog, models: { [copilot.id]: oauthFlash } } }, otherProvider);
+  expect(otherProvider).toEqual({});
+
+  const override = { model: googleFlash };
+  await choose({ provider: google }, override);
+  expect(override.model).toBe(googleFlash);
+  await plugin.dispose();
+});
