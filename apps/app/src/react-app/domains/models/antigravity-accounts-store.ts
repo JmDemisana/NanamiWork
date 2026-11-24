@@ -257,17 +257,34 @@ async function writeNanamiMeta(updater: (prev: NanamiAntigravityMeta) => NanamiA
 const ROUTER_PIN_FILE = "nanami-local-router-antigravity.json";
 type RouterPin = { version: 1; selectedEmail: string; originalEnabled: Record<string, boolean | null> };
 
+async function clearRouterPin(): Promise<boolean> {
+  const cleared = await writeNanamiConfigFile(ROUTER_PIN_FILE, "{}\n");
+  return Boolean(cleared.ok);
+}
+
 async function readRouterPin(): Promise<RouterPin | null> {
   const saved = await readNanamiConfigFile(ROUTER_PIN_FILE);
   if (!saved.exists || !saved.content?.trim()) return null;
-  const parsed: unknown = JSON.parse(saved.content);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved.content);
+  } catch {
+    // A corrupt pin cannot be restored from, and keeping it would block every
+    // later account selection. Drop it and treat the router as unpinned.
+    await clearRouterPin();
+    return null;
+  }
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0) return null;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Reflect.get(parsed, "version") !== 1
-    || typeof Reflect.get(parsed, "selectedEmail") !== "string") throw new Error("Could not safely read the previous Local Router account state.");
+    || typeof Reflect.get(parsed, "selectedEmail") !== "string") {
+    await clearRouterPin();
+    return null;
+  }
   const flags: unknown = Reflect.get(parsed, "originalEnabled");
   if (!flags || typeof flags !== "object" || Array.isArray(flags)
     || Object.values(flags).some((value) => value !== null && typeof value !== "boolean")) {
-    throw new Error("Could not safely read the previous Local Router account state.");
+    await clearRouterPin();
+    return null;
   }
   return { version: 1, selectedEmail: Reflect.get(parsed, "selectedEmail"), originalEnabled: flags as Record<string, boolean | null> };
 }
@@ -314,7 +331,11 @@ export async function restoreAntigravityRouterPin(): Promise<void> {
     recoverAntigravityIdentities(data.accounts, meta);
   }
   if (!Array.isArray(data.accounts) || !matchesRouterPin(data.accounts, pin)) {
-    throw new Error("Antigravity accounts changed while Local Router was active. Choose an account manually and retry.");
+    // The upstream plugin rewrote the account file while the router was
+    // pinned, so the recorded flags no longer describe it. Leave the file
+    // untouched and drop the unusable pin instead of failing forever.
+    await clearRouterPin();
+    return;
   }
   for (const account of data.accounts) {
     const email = String(account.email ?? "").trim().toLowerCase();
@@ -353,16 +374,12 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
     ) {
       lastActivatedAntigravityRouterSession = null;
     }
-    const previousPin = await readRouterPin();
+    let previousPin = await readRouterPin();
     const needsRecovery = options?.exactAccount && (data.accounts.some((account) => !String(account.email ?? "").trim())
       || !data.accounts.some((account) => String(account.email ?? "").toLowerCase() === lowerTarget));
     if (needsRecovery) {
       const { meta } = await readNanamiMetaAndConfigDir(true);
       const savedAccounts = recoverAntigravityIdentities(data.accounts, meta);
-      // Validate a previous pin before adding a newly selected account.
-      if (previousPin && !matchesRouterPin(data.accounts, previousPin)) {
-        throw new Error("Antigravity accounts changed while Local Router was active.");
-      }
       if (!data.accounts.some((account) => String(account.email ?? "").toLowerCase() === lowerTarget)) {
         const matches = savedAccounts.filter((account) => account.email?.trim().toLowerCase() === lowerTarget);
         if (matches.length !== 1 || matches[0]?.refreshToken !== options.expectedRefreshToken
@@ -371,6 +388,15 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
         }
         data.accounts.push({ ...matches[0] });
       }
+    }
+    // The upstream plugin rewrites the account file whenever it rotates. That
+    // makes the recorded pin stale, and a stale pin can neither be restored
+    // nor validated. Drop it instead of blocking account selection forever.
+    if (previousPin && !matchesRouterPin(data.accounts, previousPin)) {
+      if (options?.exactAccount && !(await clearRouterPin())) {
+        throw new Error("Could not reset the previous Local Router account state.");
+      }
+      previousPin = null;
     }
     if (data.accounts.length === 0) {
       if (options?.strict) throw new Error("No Antigravity accounts are available.");
@@ -392,9 +418,6 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
       }
     }
     if (!options?.exactAccount && previousPin && options?.skipIfRouterPinned) return;
-    if (options?.exactAccount && previousPin && !needsRecovery && !matchesRouterPin(data.accounts, previousPin)) {
-      throw new Error("Antigravity accounts changed while Local Router was active.");
-    }
 
     const currentModel = modelId ?? "";
     const isClaude55 = currentModel.includes("5-5");
@@ -462,7 +485,10 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
     const configWrite = await writeNanamiConfigFile("antigravity.json", JSON.stringify(cfg, null, 2) + "\n");
     if (options?.strict && !configWrite.ok) throw new Error("Could not save Antigravity routing settings.");
   } catch (err) {
-    if (options?.strict) throw new Error("Could not prepare the selected Antigravity account.", { cause: err });
+    if (options?.strict) {
+      const reason = err instanceof Error && err.message ? `: ${err.message.replace(/\.$/, "")}` : "";
+      throw new Error(`Could not prepare the selected Antigravity account${reason}`, { cause: err });
+    }
     console.warn("Could not sync Antigravity disk state:", err);
   }
 }

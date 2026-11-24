@@ -323,8 +323,29 @@ test("a concurrent manual account change is never overwritten during restoration
   const changed = JSON.parse(accountsFile);
   changed.accounts[1].enabled = true;
   accountsFile = JSON.stringify(changed);
-  await expect(restoreAntigravityRouterPin()).rejects.toThrow("accounts changed");
+  await restoreAntigravityRouterPin();
   expect(JSON.parse(accountsFile).accounts[1].enabled).toBe(true);
+  expect(JSON.parse(pinFile || "{}")).toEqual({});
+});
+
+test("a pin left stale by a plugin rewrite cannot block account selection", async () => {
+  await syncAntigravityDiskState("first@example.invalid", "model", { exactAccount: true, strict: true, expectedRefreshToken: "first-token" });
+  const rotated = JSON.parse(accountsFile);
+  rotated.accounts[1].enabled = true;
+  rotated.accounts[0].enabled = false;
+  accountsFile = JSON.stringify(rotated);
+  await syncAntigravityDiskState("second@example.invalid", "model", { exactAccount: true, strict: true, expectedRefreshToken: "second-token" });
+  const saved = JSON.parse(accountsFile);
+  expect(saved.accounts.map((account: { enabled: boolean }) => account.enabled)).toEqual([false, true, false]);
+  expect(saved.accounts[saved.activeIndex].email).toBe("second@example.invalid");
+  expect(JSON.parse(pinFile || "{}").selectedEmail).toBe("second@example.invalid");
+});
+
+test("a corrupt pin is discarded instead of failing account selection", async () => {
+  pinFile = "{ not json";
+  await syncAntigravityDiskState("second@example.invalid", "model", { exactAccount: true, strict: true, expectedRefreshToken: "second-token" });
+  expect(JSON.parse(accountsFile).accounts.map((account: { enabled: boolean }) => account.enabled)).toEqual([false, true, false]);
+  expect(JSON.parse(pinFile || "{}").selectedEmail).toBe("second@example.invalid");
 });
 
 test("a passive model render cannot silently unpin a routed account", async () => {
