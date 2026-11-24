@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.2.8)"
+        description: "Release tag (e.g. v1.2.9)"
         required: false
-        default: "v1.2.8"
+        default: "v1.2.9"
   push:
     tags:
       - "v*"
@@ -191,39 +191,23 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.8' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.9' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.8' }}: Microsoft Store, Cross-Platform & Safety Update"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.9' }}: Task Tracking and Chat Reliability"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            **NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.8' }}** hardens the Microsoft Store (AppX/MSIX) package, fixes macOS and Linux updater and process-management bugs, and removes OS-level Computer Use while keeping the embedded browser intact.
+            Background tasks now appear above the composer while running. Their completions show as task updates in the transcript.
 
-            ### Microsoft Store (AppX/MSIX) Fixes
-            - Ship real NanamiWork AppX tile icons (`StoreLogo`, `Square44x44Logo`, `Square150x150Logo`, `Wide310x150Logo`) so Windows Store and Start Menu tiles display NanamiWork branding instead of default Electron placeholders.
-            - Guard `app.setAppUserModelId`, protocol client registration, and custom Start Menu shortcut writes when running inside the Microsoft Store MSIX sandbox (`process.windowsStore`).
-            - Properly report Store-managed builds as `supported: false` in `updaterEnvironment` and `setChannel`, and show an idle Store-managed status instead of an error state in Settings.
+            - Keep active subagents visible across follow-up messages and open the correct child chat from Review.
+            - Show Carbon and its available tiers when the connected account reports access.
+            - Select compatible models for automatic chat titles on Antigravity and Copilot.
+            - Shorten interface transitions and keep chat rows steady while scrolling.
 
-            ### macOS & Linux Cross-Platform Fixes
-            - Fix macOS Squirrel.Mac `ShipIt` defaults domain to `ai.nanami.workbench.ShipIt` so macOS updates use DirectContentsWrite and clean stale ShipIt caches properly.
-            - Fix architecture mismatch manifest matching and fallback asset names to match `NanamiWork-<version>-<os>-<arch>.<ext>`, and pick platform-appropriate release assets in the GitHub updater fallback.
-            - Spawn POSIX background tasks in their own process group (`detached: true`) and terminate the full process group (`-pid`) on stop so grandchild processes are never orphaned on macOS/Linux.
-            - Enrich macOS/Linux desktop terminal `PATH` with `/opt/homebrew/bin` and `/usr/local/bin`, and use UTF-8 safe base64 encoding for account sync and OAuth scripts so non-ASCII usernames never break.
-            - Update macOS `Info.plist` permission descriptions (`NSMicrophoneUsageDescription`, `NSAppleEventsUsageDescription`) to NanamiWork wording.
+            On OpenCode v1, the running-task list starts fresh after reopening NanamiWork.
 
-            ### Safety, Browser & Session Polish
-            - Disable OS-level Computer Use completely across runtime config, agent tools, and renderer UI while preserving the embedded NanamiWork browser and its Chrome DevTools integration.
-            - Restore automatic AI session title generation by letting OpenCode generate concise task titles instead of pre-filling the raw first chat message as the session name.
-
-            ### Notes
-            - Model access still depends on the selected account's provider entitlements.
-            - Windows installers are unsigned, and macOS packages are not notarized.
-
-            ### Downloads
-            - **Windows**: NSIS installer and AppX package
-            - **macOS**: Apple Silicon DMG and ZIP
-            - **Linux**: x86-64 AppImage and Debian package
+            Windows includes an NSIS installer and AppX package. macOS includes an Apple Silicon DMG and ZIP. Linux includes an x64 AppImage and Debian package.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
