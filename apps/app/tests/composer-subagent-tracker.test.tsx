@@ -54,20 +54,32 @@ function turn(parts: UIMessage["parts"], earlier: UIMessage["parts"] = []): UIMe
   ]
 }
 
-async function render(messages: UIMessage[], options: { parentActive?: boolean; onOpen?: (id: string) => void; onStop?: (id: string) => void } = {}) {
+async function render(messages: UIMessage[], options: {
+  parentActive?: boolean
+  onOpen?: (id: string) => void
+  onStop?: (id: string) => void | Promise<void>
+  interaction?: { sessionId: string; kind: "permission" | "question" }
+} = {}) {
   const container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
     root?.render(
-      <tracker.ComposerSubagentTracker
-        messages={messages}
-        workspaceId={WORKSPACE}
-        parentActive={options.parentActive ?? true}
-        syncDegraded={false}
-        onOpenSubagentSession={options.onOpen}
-        onStopSubagentSession={options.onStop}
-      />,
+      <>
+        <tracker.ComposerSubagentTracker
+          messages={messages}
+          workspaceId={WORKSPACE}
+          parentActive={options.parentActive ?? true}
+          syncDegraded={false}
+          onOpenSubagentSession={options.onOpen}
+          onStopSubagentSession={options.onStop}
+        />
+        {options.interaction && (
+          <div data-composer-interaction={options.interaction.kind} data-composer-interaction-session={options.interaction.sessionId}>
+            <button type="button" data-test-local-approval>Allow once</button>
+          </div>
+        )}
+      </>,
     )
   })
   return container
@@ -83,6 +95,98 @@ test("only the current turn's sub-agents are tracked", () => {
   )
   expect(tracker.currentTurnSubagentParts(messages).map((part) => part.toolCallId)).toEqual(["t1"])
   expect(tracker.currentTurnSubagentParts(messages.slice(0, 3))).toEqual([])
+})
+
+test("a repeated update to a task uses the latest state and child identity", () => {
+  const messages = turn([
+    taskPart("t1", "explore", "Map the billing service", "working", "ses_old"),
+    taskPart("t1", "explore", "Map the billing service", "done", "ses_actual"),
+  ])
+  expect(tracker.currentTurnSubagentParts(messages)).toEqual([messages[3].parts[1]])
+})
+
+test("a child from an earlier turn stays visible until it settles", async () => {
+  const child = "ses_earlier_running"
+  store.getState().setRunStatus(WORKSPACE, child, { type: "busy" })
+  const container = await render(turn([], [
+    taskPart("t-older", "general", "Update the glossary", "done", "ses_earlier_settled"),
+    taskPart("t-live", "explore", "Map the billing service", "done", child),
+  ]), { parentActive: false })
+  expect(rowKinds(container)).toEqual(["working"])
+  expect(container.querySelector("[data-subagent-tracker-row='t-live']")).not.toBeNull()
+  await act(async () => { store.getState().setRunStatus(WORKSPACE, child, { type: "idle" }) })
+  expect(container.querySelector("[data-subagent-tracker]")).toBeNull()
+})
+
+test("a background launch stays Starting until the child reports its own status", async () => {
+  const child = "ses_background_launch"
+  const now = Date.now()
+  store.getState().seedSessionRun(WORKSPACE, child, { type: "idle" }, undefined, { snapshotStartedAt: now - 1000 })
+  const { parseDynamicToolUIPart } = await import("../src/react-app/domains/session/sync/parse-tool-parts")
+  const launch = parseDynamicToolUIPart({
+    id: "native-part",
+    messageID: "a1",
+    sessionID: "ses_parent",
+    type: "tool",
+    callID: "t-launch",
+    tool: "task",
+    state: {
+      status: "completed",
+      input: { description: "Prepare the glossary", prompt: "Prepare the glossary", subagent_type: "general" },
+      output: "The subagent is working in the background.",
+      title: "Prepare the glossary",
+      metadata: { sessionID: child, status: "running" },
+      time: { start: now - 10, end: now },
+    },
+  })
+  if (!launch) throw new Error("Expected a native launch receipt")
+  const container = await render(turn([launch]), { parentActive: false })
+  expect(container.querySelector("[data-subagent-tracker-status]")?.textContent).toBe("Starting")
+  expect(rowKinds(container)).toEqual(["working"])
+  await act(async () => { store.getState().setRunStatus(WORKSPACE, child, { type: "busy" }) })
+  expect(container.querySelector("[data-subagent-tracker-row]")?.getAttribute("data-subagent-session-id")).toBe(child)
+  await act(async () => { store.getState().setRunStatus(WORKSPACE, child, { type: "idle" }) })
+  expect(container.querySelector("[data-subagent-tracker]")).toBeNull()
+})
+
+test("Review focuses the matching approval in this composer", async () => {
+  const child = "ses_review_matching"
+  const unrelated = document.createElement("div")
+  unrelated.innerHTML = '<div data-composer-interaction="permission" data-composer-interaction-session="ses_other"><button>Other pane</button></div>'
+  document.body.append(unrelated)
+  store.getState().setWaitingRequest(WORKSPACE, child, "permission", "perm_matching", true)
+  const opened: string[] = []
+  const container = await render(turn([taskPart("t-review", "explore", "Read the glossary", "working", child)]), {
+    onOpen: (id) => opened.push(id),
+    interaction: { sessionId: child, kind: "permission" },
+  })
+  await act(async () => { container.querySelector<HTMLButtonElement>("[data-subagent-tracker-review]")?.click() })
+  expect(document.activeElement).toBe(container.querySelector("[data-test-local-approval]"))
+  expect(opened).toEqual([])
+})
+
+test("Review opens the child when the current approval belongs to another session", async () => {
+  const child = "ses_review_child"
+  store.getState().setWaitingRequest(WORKSPACE, child, "permission", "perm_review_child", true)
+  const opened: string[] = []
+  const container = await render(turn([taskPart("t-review", "general", "Organize the photos", "working", child)]), {
+    onOpen: (id) => opened.push(id),
+    interaction: { sessionId: "ses_unrelated", kind: "permission" },
+  })
+  await act(async () => { container.querySelector<HTMLButtonElement>("[data-subagent-tracker-review]")?.click() })
+  expect(opened).toEqual([child])
+})
+
+test("Stop reports a rejected request and leaves the button available", async () => {
+  const child = "ses_stop_failed"
+  store.getState().setRunStatus(WORKSPACE, child, { type: "busy" })
+  const container = await render(turn([taskPart("t-stop", "general", "Organize the photos", "working", child)]), {
+    onStop: async () => { throw new Error("Session stop unavailable") },
+  })
+  const stop = container.querySelector<HTMLButtonElement>("[data-subagent-tracker-stop]")
+  await act(async () => { stop?.click() })
+  expect(container.querySelector("[role='alert']")?.textContent).toBe("Stop failed. Try again.")
+  expect(stop?.disabled).toBe(false)
 })
 
 test("the header counts what needs the person first and folds finished agents together", () => {

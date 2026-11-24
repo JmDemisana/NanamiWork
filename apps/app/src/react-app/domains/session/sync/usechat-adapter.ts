@@ -15,7 +15,13 @@ import {
   STRUCTURED_OUTPUT_TOOL,
 } from "./parse-tool-parts";
 import { readComposerPill } from "../surface/composer/composer-pills";
-import { BACKGROUND_SHELL_NOTICE_KEY, readBackgroundShellNotice } from "../../../../app/lib/background-shell-tasks";
+import {
+  BACKGROUND_SHELL_NOTICE_KEY,
+  backgroundShellNoticeLabel,
+  projectBackgroundTaskMessage,
+  readBackgroundShellNotice,
+  readPluginBackgroundNotice,
+} from "../../../../app/lib/background-shell-tasks";
 import { SUBAGENT_NOTICE_KEY, readSubagentNotice } from "../../../../app/lib/subagent-notices";
 import {
   presentOpencodeSessionError,
@@ -151,6 +157,15 @@ export function attachmentNoteToUIParts(part: TextPart): UIMessage["parts"] {
 }
 
 export function textPartToUIPart(part: TextPart): UIMessage["parts"][number] | null {
+  const pluginNotice = readPluginBackgroundNotice(part);
+  if (pluginNotice) {
+    return {
+      type: "text",
+      text: backgroundShellNoticeLabel(pluginNotice),
+      state: "done",
+      providerMetadata: { opencode: { partId: part.id, backgroundShell: pluginNotice } },
+    };
+  }
   if (part.synthetic || part.ignored) return null;
   const composerToken = part.metadata?.openworkComposerToken;
   const composerPill = readComposerPill(part.metadata?.openworkComposerPill);
@@ -164,7 +179,7 @@ export function textPartToUIPart(part: TextPart): UIMessage["parts"][number] | n
       partId: part.id,
       ...(typeof composerToken === "string" ? { composerToken } : {}),
       ...(composerPill ? { composerPill } : {}),
-      ...(backgroundShell ? { backgroundShell } : {}),
+      ...(backgroundShell && !backgroundShell.shellId.startsWith("bg_") ? { backgroundShell } : {}),
       ...(subagentNotice ? { subagentNotice } : {}),
       ...(part.metadata?.openworkPastedText === true ? { pastedText: true } : {}),
     } },
@@ -239,7 +254,7 @@ export function snapshotToUIMessages(snapshot: Pick<OpenworkSessionSnapshot, "me
     // error still gets its own message. An empty assistant carcass for the
     // errored turn is dropped so the error reads as that turn's outcome.
     const error = message.info.role === "assistant" && "error" in message.info ? message.info.error : undefined;
-    let result: UIMessage[] = [uiMessage];
+    let result: UIMessage[] = [projectBackgroundTaskMessage(uiMessage)];
     if (error) {
       const errorMessage = createSessionErrorUIMessage(message.info.id, presentOpencodeSessionError(error), { created });
       result = uiMessage.parts.length > 0 ? [uiMessage, errorMessage] : [errorMessage];

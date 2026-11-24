@@ -14,7 +14,7 @@ import { autoNotOffered, autoPickerCopy, autoQuietlyUnavailable, freeAutoSwitche
 import type { MenuAction } from "@/components/ui/action-menu-model";
 import { Command, CommandCollection, CommandGroup, CommandGroupLabel, CommandItem, CommandList, CommandPanel } from "@/components/ui/command";
 import { AUTO_ROUTER_GROUP, fixedModelTitle, immutableModelPin, isAutoModel, isAutoRouterModel, isPinModelShortcut, markExplicitModelChoice, modelGroups, modelMakerId, modelSource, modelStateLabel, modelSubtitle, modelTitle, orderedModelPins, retainedModelCopy, withAutoDefaultPin, MODEL_SOURCE_LABELS, type ModelGroup, type ModelPickerCatalogState, type RetainedModelSelection } from "./model-catalog";
-import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem, type ThinkingTier } from "./antigravity-accounts-store";
+import { findAntigravityModelItem, formatQuotaResetShort, resolveAntigravityModelForTier, resolveAntigravityModelVariant, useAntigravityAccountsStore, type AntigravityAccountInfo, type AntigravityModelItem, type ThinkingTier } from "./antigravity-accounts-store";
 import {
   ORCHESTRATOR_MODEL_ID,
   getAntigravityOrchestratorModels,
@@ -370,12 +370,13 @@ function ConnectedAccountGroup({
             variant="ghost"
             size="icon-sm"
             className="size-6 text-muted-foreground hover:text-foreground"
-            title="Refresh account limits"
+            title="Refresh account models and limits"
             aria-label={`Refresh limits for ${account.email}`}
+            disabled={account.quotaLoading}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              void useAntigravityAccountsStore.getState().refreshQuotas();
+              void useAntigravityAccountsStore.getState().refreshQuotas(account.email);
             }}
           >
             <RefreshCw className={`size-3 ${account.quotaLoading ? "animate-spin" : ""}`} />
@@ -1033,6 +1034,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
     selectingAccount.current = true;
     setAccountPreparing(true);
     const resolvedModelID = resolveAntigravityModelForTier(item, thinkingTier);
+    const variant = resolveAntigravityModelVariant(item, thinkingTier);
     void useAntigravityAccountsStore.getState().selectAccount(account.email, undefined, resolvedModelID).then(() => {
       onSelect(
         {
@@ -1041,7 +1043,7 @@ function ModelPickerRows({ options, current, query, onQueryChange, onSelect, onN
           title: item.displayName,
           description: `${account.email} (Antigravity)`,
         } as unknown as ModelOption,
-        item.supportsThinkingTier ? { variant: thinkingTier } : undefined,
+        variant ? { variant } : undefined,
       );
     }).catch((error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Could not select this Antigravity account.");

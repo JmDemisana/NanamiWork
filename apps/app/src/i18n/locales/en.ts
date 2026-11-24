@@ -1683,6 +1683,7 @@ export default {
   "session.subagent_tracker_retrying": "Retrying",
   "session.subagent_tracker_reconnecting": "Reconnecting",
   "session.subagent_tracker_starting": "Starting",
+  "session.subagent_tracker_stop_failed": "Stop failed. Try again.",
   "session.subagent_tracker_working_prefix": "Working",
   "session.subagent_tracker_done": "Done",
   "session.subagent_tracker_stopped": "Stopped",

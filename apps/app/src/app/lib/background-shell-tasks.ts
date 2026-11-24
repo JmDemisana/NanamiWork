@@ -1,3 +1,6 @@
+import type { Part, TextPart } from "@opencode-ai/sdk/v2/client";
+import type { UIMessage } from "ai";
+
 /**
  * Commands the agent leaves running with the shell tool's `background: true`
  * (OpenCode v2 only). The engine reports each command's life on its event
@@ -41,6 +44,7 @@ export type BackgroundShellNotice = {
 
 /** The text part metadata key that marks a notice row in the transcript. */
 export const BACKGROUND_SHELL_NOTICE_KEY = "openworkBackgroundShell";
+const PLUGIN_BACKGROUND_TASK_KEY = "openworkBackgroundTask";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -133,6 +137,45 @@ export function readBackgroundShellNotice(value: unknown): BackgroundShellNotice
   if (outcome !== "finished" && outcome !== "failed" && outcome !== "timed-out" && outcome !== "stopped") return null;
   if (exit !== null && (typeof exit !== "number" || !Number.isFinite(exit))) return null;
   return { shellId, command, outcome, exit };
+}
+
+/** The v1 plugin's structured tool result. Ordinary commands and transcript text are not lifecycle signals. */
+export function readPluginBackgroundTaskPart(part: Part) {
+  if (part.type !== "tool" || part.state.status !== "completed") return null;
+  if (part.tool !== "run_background_task" && part.tool !== "stop_background_task") return null;
+  const metadata = part.state.metadata[PLUGIN_BACKGROUND_TASK_KEY];
+  const id = readString(metadata, "taskId");
+  const label = readString(metadata, "label");
+  const startedAt = readNumber(metadata, "startedAt");
+  const status = readString(metadata, "status");
+  if (!id?.startsWith("bg_") || !label || !startedAt || startedAt < 0) return null;
+  if (status !== "running" && status !== "completed" && status !== "failed" && status !== "stopped") return null;
+  return { id, label, startedAt, status };
+}
+
+export function readPluginBackgroundNotice(part: TextPart): BackgroundShellNotice | null {
+  if (part.synthetic !== true || part.ignored) return null;
+  const notice = readBackgroundShellNotice(part.metadata?.[BACKGROUND_SHELL_NOTICE_KEY]);
+  return notice?.shellId.startsWith("bg_") ? notice : null;
+}
+
+function isPluginBackgroundNoticePart(part: UIMessage["parts"][number]): boolean {
+  return part.type === "text" &&
+    readBackgroundShellNotice(part.providerMetadata?.opencode?.backgroundShell)?.shellId.startsWith("bg_") === true;
+}
+
+/**
+ * V1 stores a synthetic input under its user-role envelope. Only a message
+ * carrying exclusively verified task notices gets the neutral UI role.
+ */
+export function projectBackgroundTaskMessage(message: UIMessage): UIMessage {
+  if (message.role === "assistant") return message;
+  const notices = message.parts.filter(isPluginBackgroundNoticePart);
+  if (notices.length === 0) return message;
+  if (notices.length === message.parts.length) {
+    return message.role === "system" ? message : { ...message, role: "system" };
+  }
+  return { ...message, role: "user", parts: message.parts.filter((part) => !isPluginBackgroundNoticePart(part)) };
 }
 
 /** The row's words: what happened, in the person's terms. */

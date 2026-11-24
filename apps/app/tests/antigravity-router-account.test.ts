@@ -76,6 +76,62 @@ test("an unavailable optional quota summary does not reject the model response",
   expect(result.verificationRequired).toBe(false);
 });
 
+test("refresh exposes Carbon only from the selected account's live model catalog", async () => {
+  const makeAccount = (email: string, refreshToken: string) => ({
+    email, refreshToken, projectId: "project", managedProjectId: "", addedAt: 0, lastUsed: 0,
+    isActive: false, isPlus: false, models: [], quotas: [], quotaLoading: false, quotaError: null,
+  });
+  const account = makeAccount("pro@example.invalid", "eligible");
+  const other = makeAccount("other@example.invalid", "other");
+  let catalogRequests = 0;
+  useAntigravityAccountsStore.setState({ accounts: [account, other], thinkingTier: "high" });
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) {
+      catalogRequests++;
+      return Response.json({
+        models: {
+          "gemini-4-carbon-high": { selectable: false },
+          "gemini-4-carbon-tiered-high": { quotaInfo: { remainingFraction: 0.62 } },
+        },
+        agentModelSorts: [{ groups: [{ modelIds: ["gemini-4-carbon-tiered-high"] }] }],
+      });
+    }
+    if (url.includes("retrieveUserQuotaSummary")) return Response.json({ groups: [] });
+    throw new Error("Unexpected request");
+  };
+  await useAntigravityAccountsStore.getState().refreshQuotas(account.email);
+  const [updated, untouched] = useAntigravityAccountsStore.getState().accounts;
+  expect(updated.models.find((model) => model.familyKey === "gemini-4-carbon")?.modelID).toBe("antigravity-gemini-4-carbon-tiered-high");
+  expect(untouched).toBe(other);
+  expect(catalogRequests).toBe(1);
+});
+
+test("an old catalog result cannot grant Carbon after the account is reconnected", async () => {
+  const initial = {
+    email: "reconnected@example.invalid", refreshToken: "previous", projectId: "a", managedProjectId: "",
+    addedAt: 0, lastUsed: 0, isActive: true, isPlus: false, models: [], quotas: [], quotaLoading: false, quotaError: null,
+  };
+  const reconnected = { ...initial, refreshToken: "new", projectId: "b" };
+  let release: (() => void) | undefined;
+  const waitForRelease = new Promise<void>((resolve) => { release = resolve; });
+  quotaFetch = async (url) => {
+    if (url.includes("oauth2.googleapis.com")) return Response.json({ access_token: "test" });
+    if (url.includes("fetchAvailableModels")) {
+      await waitForRelease;
+      return Response.json({ models: { "gemini-4-carbon-high": {} } });
+    }
+    if (url.includes("retrieveUserQuotaSummary")) return Response.json({ groups: [] });
+    throw new Error("Unexpected request");
+  };
+  useAntigravityAccountsStore.setState({ accounts: [initial] });
+  const pending = useAntigravityAccountsStore.getState().refreshQuotas();
+  useAntigravityAccountsStore.setState({ accounts: [reconnected] });
+  release?.();
+  await pending;
+  expect(useAntigravityAccountsStore.getState().accounts[0]).toBe(reconnected);
+});
+
 test("direct model selection recovers and pins the chosen account before confirming it", async () => {
   accountsFile = JSON.stringify({ version: 4, activeIndex: 0, accounts: [{ refreshToken: "first-token", enabled: true }] });
   metadataConfig = JSON.stringify({ x_nanami_antigravity: { accounts: [

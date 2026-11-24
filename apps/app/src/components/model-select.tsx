@@ -164,8 +164,13 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
   );
 
   const cycleThinkingTier = () => {
-    const nextTier: ThinkingTier =
+    let nextTier: ThinkingTier =
       thinkingTier === "low" ? "medium" : thinkingTier === "medium" ? "high" : "low";
+    const activeTiers = activeAntigravityItem?.tierModelIds;
+    if (activeTiers && !activeTiers[nextTier]) {
+      const following = nextTier === "low" ? "medium" : nextTier === "medium" ? "high" : "low";
+      if (activeTiers[following]) nextTier = following;
+    }
     void useAntigravityAccountsStore.getState().setThinkingTier(nextTier);
     if (isOrchestrator) {
       onChange(value, nextTier);
@@ -188,11 +193,11 @@ export function ModelSelect({ open, value, hideValue = false, onOpenChange, onCh
         ? "Gemini 4 Argon"
         : value.modelID === "antigravity-gemini-4-argon-high"
           ? "Gemini 4 Argon (High)"
-          : value.modelID.startsWith("antigravity-gemini-4-neon-")
+          : /^antigravity-gemini-4-neon(?:-|$)/.test(value.modelID)
             ? "Gemini 4 Neon"
-            : value.modelID.startsWith("antigravity-gemini-4-hydrogen-")
+            : /^antigravity-gemini-4-hydrogen(?:-|$)/.test(value.modelID)
               ? "Gemini 4 Hydrogen"
-              : value.modelID.startsWith("antigravity-gemini-4-carbon-")
+              : /^antigravity-gemini-4-carbon(?:-|$)/.test(value.modelID)
                 ? "Gemini 4 Carbon"
                 : undefined))
     : undefined;

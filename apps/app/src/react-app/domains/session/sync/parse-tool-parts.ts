@@ -76,9 +76,9 @@ function toolCallProviderMetadata(part: ToolPart): ProviderMetadata {
     ?? (part.state.status === "error" ? connectionActionMcpResultFromError(part.state.error) : null);
   // The engine's task tool reports the sub-agent's session id in state
   // metadata. Forward it so the transcript card can open that child session.
-  const childSessionId = part.tool === "task" && typeof stateMetadata.sessionId === "string" && stateMetadata.sessionId.trim()
-    ? stateMetadata.sessionId.trim()
-    : null;
+  const rawChildSession = stateMetadata.sessionId ?? stateMetadata.sessionID;
+  const childSessionId = part.tool === "task" && typeof rawChildSession === "string" ? rawChildSession.trim() : "";
+  const launchedSubagent = Boolean(childSessionId) && part.state.status === "completed" && stateMetadata.status === "running";
   const appBuilder = /(?:^|_)(?:search_capabilities|prepare_app|create_app|update_app)$/.test(part.tool);
   // A task started or followed up on another computer keeps its start time after it returns.
   const remoteSession = /(?:^|_)execute_capability$/.test(part.tool) && isRecord(part.state.input)
@@ -105,6 +105,7 @@ function toolCallProviderMetadata(part: ToolPart): ProviderMetadata {
     ...(part.id !== part.callID ? { sourcePartId: part.id } : {}),
     ...(mcpResult ? { mcpResult } : {}),
     ...(childSessionId ? { childSessionId } : {}),
+    ...(launchedSubagent ? { launchedSubagent: true } : {}),
     ...(toolStartedAt === null ? {} : { toolStartedAt }),
     ...(toolCompletedAt === null ? {} : { toolCompletedAt }),
     ...(part.metadata?.openworkV2CodeMode === true ? {

@@ -82,20 +82,29 @@ export function useSubagentRunState(part: TaskToolPart, parentActive: boolean, w
   const permissionPending = (child?.waitingPermissionIds.length ?? 0) > 0
   const questionPending = (child?.waitingQuestionIds.length ?? 0) > 0
   const childRunning = child?.runActive === true || childStatus?.type === "busy" || childStatus?.type === "retry"
-  const inFlight = isToolPartInFlight(part) || childRunning
   const isFailed = part.state === "output-error"
   // Native start time survives reload; optimistic timing survives remounts.
-  const startedAt = childRunning && child && child.runStartedAt > 0 ? child.runStartedAt : getToolCallStartedAt(part)
+  const recordedStart = part.callProviderMetadata?.openwork?.toolStartedAt
+  const toolStartedAt = typeof recordedStart === "number" && Number.isFinite(recordedStart)
+    ? recordedStart
+    : getToolCallStartedAt(part)
+  const startedAt = childRunning && child && child.runStartedAt > 0 ? child.runStartedAt : toolStartedAt
+  const sawCurrentChild = (child?.runStatusAt ?? 0) >= (toolStartedAt ?? 1)
+  // Native background calls complete immediately with a launch receipt. A stale
+  // idle record from the same child can also precede a new delegated round.
+  const awaitingChildStart = part.state === "output-available"
+    && part.callProviderMetadata?.openwork?.launchedSubagent === true && !sawCurrentChild && !childRunning
+  const inFlight = isToolPartInFlight(part) || childRunning || awaitingChildStart
   const lastProgressAt = child?.lastProgressAt || startedAt || 0
   const noNewActivity = hasNoNewActivity({
     active: inFlight, lastProgressAt, now: Date.now(),
   })
   const activity = subagentRunActivity({
     permissionPending, questionPending, retrying: childStatus?.type === "retry" || child?.retrying, noNewActivity,
-    timingUnknown: startedAt === null,
+    timingUnknown: awaitingChildStart || startedAt === null,
     syncDegraded, inFlight, failed: isFailed,
-    childFailed: child?.errorActive,
-    resultPending: !childRunning && (Boolean(child && !child.runActive && child.runStatusAt > 0) || !parentActive),
+    childFailed: !awaitingChildStart && child?.errorActive,
+    resultPending: !awaitingChildStart && !childRunning && (Boolean(child && !child.runActive && child.runStatusAt > 0) || !parentActive),
   })
   const errorText = part.state === "output-error" ? part.errorText : undefined
   return {

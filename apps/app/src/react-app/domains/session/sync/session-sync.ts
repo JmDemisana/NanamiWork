@@ -76,11 +76,14 @@ import {
   SHELL_DELETED_EVENT,
   SHELL_EXITED_EVENT,
   backgroundShellIdFromToolMetadata,
+  projectBackgroundTaskMessage,
   readEngineShell,
+  readPluginBackgroundNotice,
   type EngineShell,
 } from "@/app/lib/background-shell-tasks";
 import {
   addBackgroundShell,
+  applyPluginBackgroundPart,
   clearBackgroundShellSession,
   resyncBackgroundShells,
   settleBackgroundShell,
@@ -991,7 +994,10 @@ function toUIPart(part: Part): UIMessage["parts"][number] | null {
 }
 
 function toUIParts(part: Part): UIMessage["parts"] {
-  if (part.type === "text" && part.synthetic) return attachmentNoteToUIParts(part);
+  if (part.type === "text" && part.synthetic) {
+    const mapped = textPartToUIPart(part);
+    return mapped ? [mapped] : attachmentNoteToUIParts(part);
+  }
   if (part.type === "file") return toFileUIParts(part);
   const mapped = toUIPart(part);
   if (!mapped) return [];
@@ -1019,16 +1025,16 @@ function upsertMessage(messages: UIMessage[], next: UIMessage) {
   if (next.metadata !== undefined) {
     const existing = messages[index];
     const merged = existing ? { ...existing, ...next, metadata: keepFirstCreated(mergeReplyMetadata(existing.metadata, next.metadata), messageCreated(existing)), parts: next.parts.length > 0 ? next.parts : existing.parts } : next;
-    return upsertMessageByChronology(messages, merged);
+    return upsertMessageByChronology(messages, projectBackgroundTaskMessage(merged));
   }
   if (index === -1) return [...messages, next];
   return messages.map((message, messageIndex) =>
     messageIndex === index
-      ? {
+      ? projectBackgroundTaskMessage({
           ...message,
           ...next,
           parts: next.parts.length > 0 ? next.parts : message.parts,
-        }
+        })
       : message,
   );
 }
@@ -1040,11 +1046,11 @@ function upsertPart(messages: UIMessage[], messageId: string, partId: string, ne
       ("toolCallId" in part && part.toolCallId === partId) || getPartMetadataId(part) === partId,
     );
     if (index === -1) {
-      return { ...message, parts: [...message.parts, next] };
+      return projectBackgroundTaskMessage({ ...message, parts: [...message.parts, next] });
     }
     const parts = message.parts.slice();
     parts[index] = next;
-    return { ...message, parts };
+    return projectBackgroundTaskMessage({ ...message, parts });
   });
 }
 
@@ -1640,6 +1646,10 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     const props = (event.properties ?? {}) as { part?: Part };
     const part = props.part;
     if (!part?.sessionID || !part.messageID) return;
+    const isPluginNotice = part.type === "text" && readPluginBackgroundNotice(part) !== null;
+    if ((part.type === "tool" && (part.tool === "run_background_task" || part.tool === "stop_background_task")) || isPluginNotice) {
+      useBackgroundShellStore.getState().update(workspaceId, (book) => applyPluginBackgroundPart(book, part, Date.now(), true));
+    }
     if (partHasVisibleAssistantOutput(part)) {
       clearSessionRetry(entry, workspaceId, part.sessionID);
       useSessionActivityStore.getState().markAssistantOutput(workspaceId, part.sessionID, part.messageID);
@@ -1662,7 +1672,7 @@ function applyEvent(entry: SyncEntry, workspaceId: string, event: OpencodeEvent)
     // in both). Without this, reasoning text shows up duplicated in the
     // streaming UI.
     const seededPart =
-      pending && (mapped.type === "text" || mapped.type === "reasoning")
+      pending && !isPluginNotice && (mapped.type === "text" || mapped.type === "reasoning")
         ? {
             ...mapped,
             text: pending.text.length > mapped.text.length ? pending.text : mapped.text,
@@ -2031,7 +2041,8 @@ function applySessionRunStatus(
       trackTaskCompleted(sessionId, Date.now() - runStartedAt);
       noteActivationRunCompleted(sessionId, Date.now() - runStartedAt);
       notifyDesktopEvent({ type: "task.completed", sessionId });
-      entry.titleRecovery?.observe(sessionId);
+      const title = getReactQueryClient().getQueryData<OpenworkSessionHistory>(snapshotKey(workspaceId, sessionId))?.session.title;
+      if (!title || isGeneratedSessionTitle(title)) entry.titleRecovery?.observe(sessionId);
     }
     const shouldRecordTerminal = wasLive || runStartedAt !== null;
     const shouldConvergeTerminal = shouldRecordTerminal || options.terminalEvent === true;
@@ -2456,15 +2467,19 @@ export function ensureWorkspaceSessionSync(input: SyncOptions) {
   created.titleRecovery = createSessionTitleRecovery({
     fetch: async (sessionId) => {
       const client = createSyncClient(input.baseUrl, created.openworkToken);
-      const [session, messages] = await Promise.all([
-        client.session.get({ sessionID: sessionId }).then(unwrap),
-        client.session.messages({ sessionID: sessionId, limit: 20 }).then(unwrap),
-      ]);
+      const session = unwrap(await client.session.get({ sessionID: sessionId }));
+      if (session.title && !isGeneratedSessionTitle(session.title)) return { title: session.title, messages: [] };
+      const messages = unwrap(await client.session.messages({ sessionID: sessionId, limit: 20 }));
       return {
         title: session.title,
         messages: messages.map((message) => ({
           role: message.info.role,
-          synthetic: Reflect.get(message.info, "synthetic") === true,
+          synthetic: Reflect.get(message.info, "synthetic") === true || (
+            message.info.role === "user" && message.parts.length > 0 &&
+            message.parts.every((part) => part.type === "text" && (part.synthetic || part.ignored))
+          ),
+          completed: message.info.role === "assistant" &&
+            Number.isFinite(message.info.time.completed) && message.info.finish !== "tool-calls",
           error: Reflect.get(message.info, "error"),
         })),
       };
@@ -2613,6 +2628,18 @@ export function seedSessionState(
   const queryClient = getReactQueryClient();
   const key = transcriptKey(workspaceId, snapshot.session.id);
   observeProviderCredentialMessages(workspaceId, snapshot.messages);
+  // A completion missed during a stream outage still settles a known task.
+  // A historical start cannot establish that a v1 subprocess survived a restart.
+  if (options.engine !== "v2") {
+    useBackgroundShellStore.getState().update(workspaceId, (book) => {
+      let next = book;
+      const observedAt = Date.now();
+      for (const message of snapshot.messages) {
+        for (const part of message.parts) next = applyPluginBackgroundPart(next, part, observedAt, false);
+      }
+      return next;
+    });
+  }
   const projected = snapshotToUIMessages(snapshot);
   let incoming = projected;
   // Commit against the old text before merging a cumulative snapshot, never

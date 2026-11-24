@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { discoverNewAntigravityModels } from "../src/react-app/domains/models/antigravity-new-models";
+import { discoverNewAntigravityModels, selectableAntigravityModelIds } from "../src/react-app/domains/models/antigravity-new-models";
 
 test("discovers only enabled Hydrogen and Carbon tiers for each account", () => {
   const models = discoverNewAntigravityModels({
@@ -20,7 +20,40 @@ test("an enabled Carbon account can select its reported tier without inventing q
   const models = discoverNewAntigravityModels({ "gemini-4-carbon-high": {} }, "high");
   assert.equal(models[0].modelID, "antigravity-gemini-4-carbon-high");
   assert.equal(models[0].remainingFraction, null);
+  assert.equal(models[0].supportsThinkingTier, false);
   assert.deepEqual(discoverNewAntigravityModels({ "gemini-4-hydrogen-disabled": { disabled: true } }, "low"), []);
+});
+
+test("selectable Carbon tiers retain the advertised wire IDs and exclude hidden placeholders", () => {
+  const catalog = {
+    models: {
+      "gemini-4-carbon-low": {},
+      "gemini-4-carbon-medium": { selectable: false },
+      "gemini-4-carbon-tiered-medium": { quotaInfo: { remainingFraction: 0.72 } },
+      "gemini-4-carbon-tiered-high": { disabled: true },
+      "gemini-4-carbon-high": { quotaInfo: { remainingFraction: 0.66 } },
+      "gemini-4-hydrogen": { disabled: true },
+    },
+    agentModelSorts: [{ groups: [{ modelIds: ["gemini-4-carbon-high", "gemini-4-hydrogen"] }] }],
+    tieredModelIds: { carbon: ["gemini-4-carbon-medium", "gemini-4-carbon-tiered-medium", "gemini-4-carbon-tiered-high"] },
+  };
+  const models = discoverNewAntigravityModels(catalog.models, "medium", selectableAntigravityModelIds(catalog));
+  assert.equal(models.length, 1);
+  assert.equal(models[0].modelID, "antigravity-gemini-4-carbon-tiered-medium");
+  assert.equal(models[0].remainingFraction, 0.72);
+  assert.equal(models[0].supportsThinkingTier, true);
+  assert.deepEqual(models[0].tierModelIds, {
+    medium: "antigravity-gemini-4-carbon-tiered-medium",
+    high: "antigravity-gemini-4-carbon-high",
+  });
+});
+
+test("a Carbon family-only ID is selectable only when it is in the account catalog", () => {
+  const models = { "gemini-4-carbon": {}, "gemini-4-carbon-tiered": {} };
+  assert.deepEqual(discoverNewAntigravityModels(models, "medium", new Set(["gemini-4-neon"])), []);
+  const visible = discoverNewAntigravityModels(models, "medium", new Set(["gemini-4-carbon"]));
+  assert.equal(visible[0].modelID, "antigravity-gemini-4-carbon");
+  assert.equal(visible[0].supportsThinkingTier, false);
 });
 
 test("treats resetTime-only quotaInfo as 0% exhausted rather than unknown", () => {

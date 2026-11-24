@@ -697,42 +697,14 @@ select:disabled {
   .ow-app-progress-dot, .ow-app-loading-grid { animation: none; }
 }
 
-/* iOS-inspired fluid spring motion system: GPU-composited transform + opacity
-   curves so overlays, navigation, and controls flow naturally at 60fps without
-   jittering live streaming text. */
-:root {
-  --nanami-spring-fluid: cubic-bezier(0.22, 1, 0.36, 1);
-  --nanami-spring-bouncy: cubic-bezier(0.22, 1.24, 0.36, 1);
-  --nanami-spring-snappy: cubic-bezier(0.34, 1.38, 0.64, 1);
+@keyframes nanami-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes nanami-rise {
-  from { opacity: 0; transform: translateY(10px) scale(0.985); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
 @keyframes nanami-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-@keyframes nanami-ios-sheet-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.95); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes nanami-ios-pop-in {
-  from { opacity: 0; transform: scale(0.92) translateY(5px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-@keyframes nanami-ios-pop-out {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.96); }
-}
-@keyframes nanami-ios-panel-reveal {
-  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes nanami-ios-tab-flow {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes nanami-pulse-beacon {
@@ -740,84 +712,11 @@ select:disabled {
   70% { transform: scale(1.08); box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
 }
-.nanami-pulse-beacon {
-  animation: nanami-pulse-beacon 2s var(--nanami-spring-fluid) infinite;
-}
 
-.nanami-rise {
-  animation: nanami-rise 320ms var(--nanami-spring-fluid) both;
-}
-.nanami-fade {
-  animation: nanami-fade 220ms var(--nanami-spring-fluid) both;
-}
-
-/* Shared iOS-like tactile physics across navigation, overlays, and controls. */
 @media (prefers-reduced-motion: no-preference) {
-  [data-slot="dialog-content"][data-open] {
-    animation: nanami-ios-sheet-in 300ms var(--nanami-spring-fluid) both;
-  }
-  [data-slot="popover-content"][data-open],
-  [data-slot="dropdown-menu-content"][data-open],
-  [data-slot="tooltip-content"][data-open],
-  [data-slot="tooltip-content"][data-state="delayed-open"] {
-    animation: nanami-ios-pop-in 240ms var(--nanami-spring-bouncy) both;
-  }
-  [data-slot="popover-content"][data-closed],
-  [data-slot="dropdown-menu-content"][data-closed] {
-    animation: nanami-ios-pop-out 130ms ease-out both;
-  }
-  [data-slot="collapsible-content"][data-open] {
-    animation: nanami-ios-panel-reveal 240ms var(--nanami-spring-fluid) both;
-  }
-  [data-slot="tabs-content"][data-active] {
-    animation: nanami-ios-tab-flow 260ms var(--nanami-spring-fluid) both;
-  }
-  [data-slot="sidebar-menu-button"] {
-    transition: background-color 180ms ease-out, color 180ms ease-out, box-shadow 200ms ease-out, transform 240ms var(--nanami-spring-fluid);
-  }
-  [data-slot="sidebar-menu-button"]:hover:not(:disabled) {
-    transform: translateX(2px);
-  }
-  [data-slot="sidebar-menu-button"]:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-  [data-slot="switch"], [data-slot="checkbox"] {
-    transition: background-color 200ms var(--nanami-spring-fluid), border-color 200ms ease-out, box-shadow 200ms ease-out, transform 220ms var(--nanami-spring-bouncy);
-  }
-  [data-slot="switch"]:active:not(:disabled), [data-slot="checkbox"]:active:not(:disabled) {
-    transform: scale(0.94);
-  }
-  [data-slot="switch-thumb"] {
-    transition: transform 280ms var(--nanami-spring-snappy);
-  }
-  [data-slot="checkbox-indicator"] {
-    transition: opacity 180ms ease-out, transform 240ms var(--nanami-spring-snappy);
-  }
-  [data-composer-menu-open], [data-composer-toolbar] {
-    transition: border-color 220ms var(--nanami-spring-fluid), background-color 220ms var(--nanami-spring-fluid), box-shadow 240ms var(--nanami-spring-fluid);
-  }
-  [data-slot="autocomplete-item"], [data-slot="dropdown-menu-item"], [data-slot="collapsible-trigger"] {
-    transition: background-color 160ms ease-out, color 160ms ease-out, transform 220ms var(--nanami-spring-bouncy);
-  }
-  [data-slot="autocomplete-item"]:active:not([data-disabled]),
-  [data-slot="dropdown-menu-item"]:active:not([data-disabled]) {
-    transform: scale(0.985);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-slot="dialog-content"], [data-slot="popover-content"],
-  [data-slot="dropdown-menu-content"], [data-slot="tooltip-content"],
-  [data-slot="collapsible-content"], [data-slot="tabs-content"] {
-    animation: none;
-  }
-  [data-slot="sidebar-menu-button"],
-  [data-slot="switch"], [data-slot="switch-thumb"], [data-slot="checkbox"],
-  [data-slot="checkbox-indicator"], [data-slot="autocomplete-item"],
-  [data-slot="dropdown-menu-item"], [data-slot="collapsible-trigger"],
-  [data-composer-menu-open], [data-composer-toolbar] {
-    transition: none;
-    transform: none;
-  }
+  .nanami-rise { animation: nanami-rise 160ms ease-out; }
+  .nanami-fade { animation: nanami-fade 150ms ease-out; }
+  .nanami-pulse-beacon { animation: nanami-pulse-beacon 2s ease-out infinite; }
 }
 /* A slow breath on the brand mark. Faint on purpose: it should read as alive,
    not as a loading spinner. */
@@ -830,9 +729,7 @@ select:disabled {
   transform-origin: center;
 }
 @media (prefers-reduced-motion: reduce) {
-  .nanami-rise, .nanami-fade { animation: none; }
   .nanami-breathe { animation: none; }
-  .nanami-pulse-beacon { animation: none; }
 }
 
 

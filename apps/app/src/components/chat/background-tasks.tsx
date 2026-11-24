@@ -24,15 +24,16 @@ export function commandPreview(command: string): string {
   return oneLine.length > COMMAND_PREVIEW_LENGTH ? `${oneLine.slice(0, COMMAND_PREVIEW_LENGTH - 1)}…` : oneLine
 }
 
-/** The completion notice a transcript message carries, if it is one. */
-export function backgroundShellNoticeFromMessage(message: UIMessage): BackgroundShellNotice | null {
-  if (message.role !== "system") return null
+/** One synthetic wakeup can report several tasks that finished together. */
+export function backgroundShellNoticesFromMessage(message: UIMessage): BackgroundShellNotice[] {
+  if (message.role !== "system") return []
+  const notices = new Map<string, BackgroundShellNotice>()
   for (const part of message.parts) {
     if (part.type !== "text") continue
     const notice = readBackgroundShellNotice(part.providerMetadata?.opencode?.backgroundShell)
-    if (notice) return notice
+    if (notice) notices.set(notice.shellId, notice)
   }
-  return null
+  return [...notices.values()]
 }
 
 /**
@@ -40,21 +41,26 @@ export function backgroundShellNoticeFromMessage(message: UIMessage): Background
  * step rail's shape (sentence and command), never the engine's
  * raw `<shell>` hand-off text. The text-first rail drops the glyph.
  */
-export const BackgroundTaskNotice = React.memo(function BackgroundTaskNotice({ message, notice }: { message: UIMessage; notice: BackgroundShellNotice }) {
-  const command = commandPreview(notice.command)
+export const BackgroundTaskNotice = React.memo(function BackgroundTaskNotice({ message, notices }: { message: UIMessage; notices: BackgroundShellNotice[] }) {
   return (
     <Message
       className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
       data-message-id={message.id}
       data-message-role={message.role}
     >
-      <div
-        data-background-task-notice={notice.outcome}
-        className="flex w-full min-w-0 items-center gap-2 py-1 text-sm text-muted-foreground"
-      >
-        <span className="shrink-0">{backgroundShellNoticeLabel(notice)}</span>
-        {command ? <code className="min-w-0 truncate font-mono text-xs text-slate-9" title={notice.command}>{command}</code> : null}
-      </div>
+      {notices.map((notice) => {
+        const command = commandPreview(notice.command)
+        return (
+          <div
+            key={notice.shellId}
+            data-background-task-notice={notice.outcome}
+            className="flex w-full min-w-0 items-center gap-2 py-1 text-sm text-muted-foreground"
+          >
+            <span className="shrink-0">{backgroundShellNoticeLabel(notice)}</span>
+            {command ? <code className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={notice.command}>{command}</code> : null}
+          </div>
+        )
+      })}
     </Message>
   )
 })

@@ -31,9 +31,12 @@ export function isOrchestratorModel(model: ModelRef | null | undefined): boolean
 }
 
 export function isAntigravityOrchestratorSupported(
-  account: Pick<AntigravityAccountInfo, "isPlus"> | null | undefined,
+  account: Pick<AntigravityAccountInfo, "isPlus"> & Partial<Pick<AntigravityAccountInfo, "models" | "verificationRequired">> | null | undefined,
 ): boolean {
-  return Boolean(account?.isPlus);
+  if (!account || account.verificationRequired) return false;
+  return account.isPlus || Boolean(account.models?.some((model) =>
+    ["gemini-4-neon", "gemini-4-carbon", "gemini-4-hydrogen"].includes(model.familyKey),
+  ));
 }
 
 export function isChatGptOrchestratorSupported(
@@ -148,8 +151,8 @@ function findMatchingModel(
   if (savedId) {
     const exact = models.find((m) => m.modelID === savedId || m.familyKey === savedId);
     if (exact) return exact;
-    const base = savedId.replace(/-(low|medium|high)$/, "");
-    const byBase = models.find((m) => m.familyKey === base || m.modelID.startsWith(base));
+    const base = savedId.replace(/(?:-tiered)?-(low|medium|high)$/, "");
+    const byBase = models.find((m) => m.familyKey === base || m.modelID === base || m.modelID.startsWith(`${base}-`));
     if (byBase) return byBase;
   }
   for (const prefix of preferredPrefixes) {

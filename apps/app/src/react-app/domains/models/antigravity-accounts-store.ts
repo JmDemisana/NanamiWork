@@ -13,7 +13,11 @@ import {
   type OpencodeConfigFile,
 } from "@/app/lib/desktop";
 import { applyEdits, modify, parse, type ParseError } from "jsonc-parser";
-import { discoverNewAntigravityModels } from "./antigravity-new-models";
+import {
+  discoverNewAntigravityModels,
+  selectableAntigravityModelIds,
+  type AntigravityCatalog,
+} from "./antigravity-new-models";
 
 const ANTIGRAVITY_CLIENT_ID =
   "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com";
@@ -143,6 +147,12 @@ export function resolveAntigravityModelForTier(
   tier: ThinkingTier,
 ): string {
   return item.tierModelIds?.[tier] ?? item.modelID;
+}
+
+export function resolveAntigravityModelVariant(item: AntigravityModelItem, tier: ThinkingTier): ThinkingTier | undefined {
+  if (!item.supportsThinkingTier) return undefined;
+  if (!item.tierModelIds || item.tierModelIds[tier]) return tier;
+  return extractThinkingTierFromModelId(resolveAntigravityModelForTier(item, tier), tier);
 }
 
 export function findAntigravityModelItem(
@@ -339,7 +349,7 @@ export async function syncAntigravityDiskState(email?: string, modelId?: string,
     const lowerTarget = (email ?? "").toLowerCase();
     if (
       lastActivatedAntigravityRouterSession &&
-      (!options?.exactAccount || lowerTarget !== lastActivatedAntigravityRouterSession.email)
+      (!options?.exactAccount || lowerTarget !== lastActivatedAntigravityRouterSession.email.toLowerCase())
     ) {
       lastActivatedAntigravityRouterSession = null;
     }
@@ -598,8 +608,16 @@ if (fs.existsSync(accFile)) {
 const OAUTH_ACCESS_TOKEN_CACHE = new Map<string, { accessToken: string; expiresAt: number }>();
 const ROUTER_QUOTA_FRESH_TTL_MS = 45_000;
 const ROUTER_QUOTA_BG_REFRESH_MS = 15_000;
-const lastQuotaFetchedAtByEmail = new Map<string, number>();
-let lastActivatedAntigravityRouterSession: { email: string; refreshToken: string } | null = null;
+type CatalogIdentity = Pick<AntigravityAccountInfo, "email" | "refreshToken" | "projectId" | "managedProjectId">;
+const lastQuotaFetchedByEmail = new Map<string, { account: CatalogIdentity; at: number }>();
+
+function sameCatalogIdentity(a: CatalogIdentity, b: CatalogIdentity): boolean {
+  return a.email.toLowerCase() === b.email.toLowerCase()
+    && a.refreshToken === b.refreshToken
+    && a.projectId === b.projectId
+    && a.managedProjectId === b.managedProjectId;
+}
+let lastActivatedAntigravityRouterSession: CatalogIdentity | null = null;
 
 async function getAntigravityAccessToken(refreshToken: string, bypassCache = false): Promise<{ accessToken: string; fromCache: boolean }> {
   if (!bypassCache) {
@@ -722,19 +740,9 @@ export async function fetchAccountModelsAndQuota(
     }
     throw new Error(`fetchAvailableModels failed (${modelsRes.status})`);
   }
-  const payload = (await modelsRes.json()) as {
-    models?: Record<
-      string,
-      {
-        displayName?: string;
-        disabled?: boolean;
-        selectable?: boolean;
-        quotaInfo?: { remainingFraction?: number; resetTime?: string };
-      }
-    >;
-  };
-
+  const payload = (await modelsRes.json()) as AntigravityCatalog;
   const modelsMap = payload.models ?? {};
+  const selectable = selectableAntigravityModelIds(payload);
 
   const parseQuotaAny = (...rawIds: string[]): { remainingFraction: number; resetTime: string | null } => {
     for (const rawId of rawIds) {
@@ -829,7 +837,7 @@ export async function fetchAccountModelsAndQuota(
     return { remainingFraction: null, resetTime: null };
   };
 
-  const resolvedModels: AntigravityModelItem[] = discoverNewAntigravityModels(modelsMap, thinkingTier).map((model) => {
+  const resolvedModels: AntigravityModelItem[] = discoverNewAntigravityModels(modelsMap, thinkingTier, selectable).map((model) => {
     const chosen = pickDisplayQuotaWindow(geminiWeeklyBucket, gemini5hBucket, model);
     return chosen.remainingFraction === null
       ? model
@@ -1046,7 +1054,7 @@ export async function fetchAccountModelsAndQuota(
     );
   }
 
-  lastQuotaFetchedAtByEmail.set(account.email.toLowerCase(), Date.now());
+  lastQuotaFetchedByEmail.set(account.email.toLowerCase(), { account, at: Date.now() });
   return { isPlus, models: resolvedModels, quotas, verificationRequired: false };
 }
 
@@ -1059,7 +1067,7 @@ type AntigravityAccountsState = {
   setSelectedModel: (model: { providerID: string; modelID: string } | null) => void;
   setThinkingTier: (tier: ThinkingTier) => Promise<void>;
   loadAccounts: (client?: Client | null) => Promise<AntigravityAccountInfo[]>;
-  refreshQuotas: () => Promise<void>;
+  refreshQuotas: (email?: string) => Promise<void>;
   selectAccount: (email: string, client?: Client | null, modelID?: string) => Promise<void>;
   deleteAccount: (email: string, client?: Client | null) => Promise<void>;
   modalOpen: boolean;
@@ -1149,17 +1157,18 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       const nextAccounts: AntigravityAccountInfo[] = rawList.map((raw) => {
         const email = raw.email!;
         const lower = email.toLowerCase();
-        const existing = prevByEmail.get(lower);
+        const identity = {
+          email, refreshToken: raw.refreshToken!, projectId: raw.projectId ?? "", managedProjectId: raw.managedProjectId ?? "",
+        };
+        const previous = prevByEmail.get(lower);
+        const existing = previous && sameCatalogIdentity(previous, identity) ? previous : undefined;
         return {
-          email,
-          refreshToken: raw.refreshToken!,
-          projectId: raw.projectId ?? "",
-          managedProjectId: raw.managedProjectId ?? "",
+          ...identity,
           addedAt: raw.addedAt ?? Date.now(),
           lastUsed: raw.lastUsed ?? 0,
           isActive: lower === preferredEmail,
           isPlus: existing?.isPlus ?? false,
-          models: existing?.models?.length
+          models: existing
             ? existing.models.map((m) => ({
                 ...m,
                 modelID: resolveAntigravityModelForTier(m, savedTier),
@@ -1184,9 +1193,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       const activeAfterLoad = nextAccounts.find((a) => a.isActive);
       if (
         lastActivatedAntigravityRouterSession &&
-        (!activeAfterLoad ||
-          activeAfterLoad.email.toLowerCase() !== lastActivatedAntigravityRouterSession.email ||
-          activeAfterLoad.refreshToken !== lastActivatedAntigravityRouterSession.refreshToken)
+        (!activeAfterLoad || !sameCatalogIdentity(activeAfterLoad, lastActivatedAntigravityRouterSession))
       ) {
         lastActivatedAntigravityRouterSession = null;
       }
@@ -1211,13 +1218,15 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
     return operation;
   },
 
-  refreshQuotas: async () => {
-    const current = get().accounts;
+  refreshQuotas: async (email) => {
+    const target = email?.toLowerCase();
+    const current = get().accounts.filter((account) => !target || account.email.toLowerCase() === target);
     const tier = get().thinkingTier;
     if (current.length === 0) return;
 
     set({
-      accounts: current.map((a) => ({ ...a, quotaLoading: true, quotaError: null })),
+      accounts: get().accounts.map((account) => !target || account.email.toLowerCase() === target
+        ? { ...account, quotaLoading: true, quotaError: null } : account),
     });
 
     await Promise.all(
@@ -1226,7 +1235,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
           const result = await fetchAccountModelsAndQuota(account, tier);
           set((state) => ({
             accounts: state.accounts.map((item) =>
-              item.email.toLowerCase() === account.email.toLowerCase()
+              sameCatalogIdentity(item, account)
                 ? {
                     ...item,
                     isPlus: result.isPlus,
@@ -1247,7 +1256,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
         } catch (err) {
           set((state) => ({
             accounts: state.accounts.map((item) =>
-              item.email.toLowerCase() === account.email.toLowerCase()
+              sameCatalogIdentity(item, account)
                 ? {
                     ...item,
                     quotaLoading: false,
@@ -1324,7 +1333,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       }
       throw error;
     }
-    lastActivatedAntigravityRouterSession = { email: lower, refreshToken: target.refreshToken };
+    lastActivatedAntigravityRouterSession = target;
     set({
       selectedModel: { providerID: "google", modelID: selectedModelID },
       accounts: get().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === lower })),
@@ -1335,7 +1344,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       .then((result) => {
         set((state) => ({
           accounts: state.accounts.map((item) =>
-            item.email.toLowerCase() === lower
+            sameCatalogIdentity(item, target)
               ? {
                   ...item,
                   isPlus: result.isPlus,
@@ -1344,6 +1353,9 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
                     modelID: resolveAntigravityModelForTier(m, state.thinkingTier),
                   })),
                   quotas: result.quotas,
+                  verificationRequired: Boolean(result.verificationRequired),
+                  verificationUrl: result.verificationUrl,
+                  verificationReason: result.verificationReason,
                   quotaLoading: false,
                   quotaError: null,
                 }
@@ -1354,7 +1366,7 @@ export const useAntigravityAccountsStore = create<AntigravityAccountsState>((set
       .catch((err) => {
         set((state) => ({
           accounts: state.accounts.map((item) =>
-            item.email.toLowerCase() === lower
+            sameCatalogIdentity(item, target)
               ? {
                   ...item,
                   quotaLoading: false,
@@ -1425,11 +1437,11 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   const alreadyActivated = Boolean(
     target.isActive &&
     lastActivatedAntigravityRouterSession &&
-    lastActivatedAntigravityRouterSession.email === lower &&
-    lastActivatedAntigravityRouterSession.refreshToken === target.refreshToken,
+    sameCatalogIdentity(target, lastActivatedAntigravityRouterSession),
   );
   const cachedModel = findAntigravityModelItem(target.models, modelID);
-  const lastFetchedAt = lastQuotaFetchedAtByEmail.get(lower) ?? 0;
+  const lastFetch = lastQuotaFetchedByEmail.get(lower);
+  const lastFetchedAt = lastFetch && sameCatalogIdentity(target, lastFetch.account) ? lastFetch.at : 0;
   const quotaAgeMs = Date.now() - lastFetchedAt;
 
   // Fast path: when Local Router stays on the same already-active account and
@@ -1452,7 +1464,7 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
           }));
           useAntigravityAccountsStore.setState((current) => ({
             accounts: current.accounts.map((account) =>
-              account.email.toLowerCase() === lower
+              sameCatalogIdentity(account, target)
                 ? {
                     ...account,
                     isPlus: fresh.isPlus,
@@ -1474,10 +1486,13 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   }
 
   const fresh = await fetchAccountModelsAndQuota(target, state.thinkingTier);
+  if (!useAntigravityAccountsStore.getState().accounts.some((account) => sameCatalogIdentity(account, target))) {
+    throw new Error("The selected Antigravity account changed while its model list was loading.");
+  }
   const freshModels = fresh.models.map((model) => ({ ...model, modelID: resolveAntigravityModelForTier(model, state.thinkingTier) }));
   const freshModel = findAntigravityModelItem(freshModels, modelID);
   useAntigravityAccountsStore.setState((current) => ({ accounts: current.accounts.map((account) =>
-    account.email.toLowerCase() === lower ? { ...account, isPlus: fresh.isPlus, models: freshModels,
+    sameCatalogIdentity(account, target) ? { ...account, isPlus: fresh.isPlus, models: freshModels,
       quotas: fresh.quotas, quotaLoading: false, quotaError: null, verificationRequired: Boolean(fresh.verificationRequired),
       verificationUrl: fresh.verificationUrl, verificationReason: fresh.verificationReason } : account) }));
   if (fresh.verificationRequired || !freshModel) {
@@ -1507,7 +1522,7 @@ export async function activateAntigravityRouterAccount(email: string, modelID: s
   if (auth.error || auth.data !== true) throw new Error("Could not activate the Antigravity account.");
   const disposed = await client.instance.dispose();
   if (disposed.error || disposed.data !== true) throw new Error("Could not refresh the Antigravity provider.");
-  lastActivatedAntigravityRouterSession = { email: lower, refreshToken: target.refreshToken };
+  lastActivatedAntigravityRouterSession = target;
   useAntigravityAccountsStore.setState({
     selectedModel: { providerID: "google", modelID },
     accounts: useAntigravityAccountsStore.getState().accounts.map((account) => ({ ...account, isActive: account.email.toLowerCase() === lower })),

@@ -126,7 +126,7 @@ import { PermissionApprovalPanel } from "@/react-app/domains/session/chat/permis
 import { ComputerRequestPanel } from "@/react-app/domains/session/computer/computer-request-panel";
 import { useComputerRequest, useComputerStore } from "@/react-app/domains/session/computer/computer-store";
 import { QuestionPanel } from "@/react-app/domains/session/modals/question-modal";
-import { ComposerSubagentTracker, currentTurnSubagentParts, useComposerRemoteTasks } from "@/react-app/domains/session/surface/composer/composer-subagent-tracker";
+import { ComposerSubagentTracker, useComposerSubagentParts, useComposerRemoteTasks } from "@/react-app/domains/session/surface/composer/composer-subagent-tracker";
 import { ComposerBackgroundTasks } from "@/react-app/domains/session/surface/composer/composer-background-tasks";
 import { sessionBackgroundShells, settleBackgroundShell, useBackgroundShellStore } from "@/react-app/domains/session/status/background-shell-store";
 import { useDesktopFeature } from "@/react-app/domains/session/status/use-desktop-feature";
@@ -2279,13 +2279,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
     return "ready";
   }, [admissionOutcome, admissionOutcomeUnresolved, autoSending, evalThreadStatus, liveStatus, queuedDrainState.phase.kind, sending]);
   const composerBusy = chatStreaming || status === "submitted";
-  // Sub-agents of the current turn, attached to the composer (OpenCode v2 only).
+  // Follow native children while they are active on either engine.
   const subagentTrackerParentActive = status === "streaming" || status === "retrying" || status === "submitted";
+  const localSubagentParts = useComposerSubagentParts(visibleMessages, props.workspaceId);
   const subagentTrackerToolCallIds = useMemo<ReadonlySet<string>>(
-    () => new Set(snapshotEngine === "v2"
-      ? currentTurnSubagentParts(visibleMessages).map((part) => part.toolCallId)
-      : []),
-    [snapshotEngine, visibleMessages],
+    () => new Set(localSubagentParts.map((part) => part.toolCallId)),
+    [localSubagentParts],
   );
   // Tasks the turn started on other computers join the list on either engine;
   // their state comes from Den, not the local engine.
@@ -2299,7 +2298,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
   // Commands the agent left running, listed under the Agents list until each exits.
   const runningShells = useBackgroundShellStore((state) => state.booksByWorkspaceId[props.workspaceId]?.running);
   const backgroundShells = useMemo(() => sessionBackgroundShells(runningShells, props.sessionId), [runningShells, props.sessionId]);
-  const composerBackgroundTasksEnabled = useDesktopFeature("composerBackgroundTasks");
+  const nativeComposerBackgroundTasksEnabled = useDesktopFeature("composerBackgroundTasks");
+  const composerBackgroundTasksEnabled = nativeComposerBackgroundTasksEnabled || backgroundShells.some((shell) => shell.id.startsWith("bg_"));
   const backgroundTasksShown = composerBackgroundTasksEnabled && backgroundShells.length > 0 && !archived;
 
   useEffect(() => {
@@ -3316,7 +3316,8 @@ export function SessionSurface(props: SessionSurfaceProps) {
     let cancelled = false;
     void opencodeClient.session.messages({ sessionID: parentID, directory: props.workspaceRoot.trim() || undefined, limit: 50 }).then(unwrap).then(messages => {
       const task = messages.flatMap(message => message.parts).find(part => part.type === "tool" && part.tool === "task"
-        && "metadata" in part.state && part.state.metadata?.sessionId === props.sessionId);
+        && "metadata" in part.state
+        && (part.state.metadata?.sessionId === props.sessionId || part.state.metadata?.sessionID === props.sessionId));
       if (!cancelled && task?.type === "tool" && typeof task.state.input.prompt === "string") {
         setDelegatedBrief(task.state.input.prompt);
       }
@@ -4168,12 +4169,12 @@ export function SessionSurface(props: SessionSurfaceProps) {
                 {subagentTrackerShown && !archived ? (
                   <ComposerSubagentTracker
                     messages={visibleMessages}
+                    localParts={localSubagentParts}
                     workspaceId={props.workspaceId}
                     parentActive={subagentTrackerParentActive}
                     syncDegraded={runSyncHealth.degraded}
                     onOpenSubagentSession={openChild}
                     onStopSubagentSession={handleStopSubagentSession}
-                    includeLocal={subagentTrackerToolCallIds.size > 0}
                     remote={remoteTrackerTasks.length > 0 ? {
                       tasks: remoteTrackerTasks,
                       owner: remoteTrackerOwner,
@@ -4190,7 +4191,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
                   />
                 ) : null}
                 {composerQuestion ? (
-                  <div data-composer-interaction="question">
+                  <div data-composer-interaction="question" data-composer-interaction-session={composerQuestion.sessionID}>
                   <QuestionPanel
                     questions={composerQuestion.questions}
                     busy={props.questionReplyBusy ?? false}
@@ -4206,7 +4207,7 @@ export function SessionSurface(props: SessionSurfaceProps) {
                 ) : null}
                 {computerRequest ? <ComputerRequestPanel sessionId={props.sessionId} request={computerRequest} /> : null}
                 {props.activePermission ? (
-                  <div data-composer-interaction="permission">
+                  <div data-composer-interaction="permission" data-composer-interaction-session={props.activePermission.sessionID}>
                   <PermissionApprovalPanel
                     permission={props.activePermission}
                     sourceTitle={props.activePermissionSourceTitle ?? undefined}

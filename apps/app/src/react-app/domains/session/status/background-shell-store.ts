@@ -1,6 +1,11 @@
 import { create } from "zustand";
+import type { Part } from "@opencode-ai/sdk/v2/client";
 
-import type { EngineShell } from "../../../../app/lib/background-shell-tasks";
+import {
+  readPluginBackgroundNotice,
+  readPluginBackgroundTaskPart,
+  type EngineShell,
+} from "../../../../app/lib/background-shell-tasks";
 
 /** A command the agent left running in the background for one conversation. */
 export type BackgroundShell = {
@@ -48,6 +53,29 @@ export function settleBackgroundShell(book: BackgroundShellBook, shellId: string
     running = copy;
   }
   return { running, settled: known ? book.settled : [...book.settled, shellId].slice(-SETTLED_LIMIT) };
+}
+
+export function applyPluginBackgroundPart(
+  book: BackgroundShellBook,
+  part: Part,
+  observedAt: number,
+  allowStart: boolean,
+): BackgroundShellBook {
+  if (part.type === "text") {
+    const notice = readPluginBackgroundNotice(part);
+    return notice ? settleBackgroundShell(book, notice.shellId) : book;
+  }
+  const task = readPluginBackgroundTaskPart(part);
+  if (!task) return book;
+  if (task.status !== "running") return settleBackgroundShell(book, task.id);
+  if (!allowStart) return book;
+  return addBackgroundShell(book, {
+    id: task.id,
+    sessionId: part.sessionID,
+    command: task.label,
+    startedAt: task.startedAt,
+    observedAt,
+  });
 }
 
 export type BackgroundShellResync = {

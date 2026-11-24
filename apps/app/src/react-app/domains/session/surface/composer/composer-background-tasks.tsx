@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { ChevronRight } from "lucide-react"
 
 import { commandPreview } from "@/components/chat/background-tasks"
@@ -29,6 +29,7 @@ type ComposerBackgroundTasksProps = {
  */
 export function ComposerBackgroundTasks(props: ComposerBackgroundTasksProps) {
   const count = props.shells.length
+  const listId = useId()
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null)
   const expanded = manualExpanded ?? count <= 3
   const [now, setNow] = useState(() => Date.now())
@@ -50,13 +51,14 @@ export function ComposerBackgroundTasks(props: ComposerBackgroundTasksProps) {
       <button
         type="button"
         data-testid="background-tasks-toggle"
+        aria-controls={listId}
         aria-expanded={expanded}
-        className={cn("group/toggle flex w-full cursor-pointer items-center gap-1.5 px-4 pb-1.5 text-start text-xs", props.belowAgents ? "pt-2" : "pt-3")}
+        className={cn("group/toggle flex w-full cursor-pointer items-center gap-1.5 px-4 pb-1.5 text-start text-xs focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50", props.belowAgents ? "pt-2" : "pt-3")}
         onClick={() => setManualExpanded(!expanded)}
       >
         <span className="shrink-0 font-medium text-gray-12">{t("session.background_tasks_label")}</span>
         <span data-background-tasks-summary className="min-w-0 truncate text-gray-9 transition-colors group-hover/toggle:text-gray-11">
-          {t("session.background_tasks_summary_running", { count })}
+          {props.syncDegraded ? t("session.subagent_tracker_reconnecting") : t("session.background_tasks_summary_running", { count })}
         </span>
         <ChevronRight
           aria-hidden="true"
@@ -64,7 +66,7 @@ export function ComposerBackgroundTasks(props: ComposerBackgroundTasksProps) {
           className={cn("shrink-0 text-gray-9 transition-transform duration-150 ease-out group-hover/toggle:text-gray-11 motion-reduce:transition-none", expanded && "rotate-90")}
         />
       </button>
-      <div hidden={!expanded} className="max-h-44 overflow-y-auto pt-0.5 pb-2">
+      <div id={listId} hidden={!expanded} className="max-h-44 overflow-y-auto pt-0.5 pb-2">
         {props.shells.map((shell) => (
           <BackgroundTaskRow key={shell.id} shell={shell} now={now} syncDegraded={props.syncDegraded} onStop={props.onStop} />
         ))}

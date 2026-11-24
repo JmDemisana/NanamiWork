@@ -125,7 +125,7 @@ export function SessionEmptyHero(props: SessionEmptyHeroProps) {
         </h2>
       </div>
 
-      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock style={{ animationDelay: "90ms" }} className="nanami-rise shrink-0 px-0 pb-2 pt-2 max-lg:pb-0">
+      <div ref={composerDockRef} onFocusCapture={() => setComposing(true)} data-empty-composer-dock className="shrink-0 px-0 pb-2 pt-2 max-lg:pb-0">
         <NewTaskComposer
           flush={false}
           draft={prompt}

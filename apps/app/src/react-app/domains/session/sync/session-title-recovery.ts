@@ -1,10 +1,12 @@
 import { isGeneratedSessionTitle } from "@/app/lib/session-title";
 
-export const SESSION_TITLE_RECOVERY_DELAYS_MS = [1_000, 5_000, 25_000] as const;
+// The last read must outlast the title request's 60-second provider deadline.
+export const SESSION_TITLE_RECOVERY_DELAYS_MS = [1_000, 5_000, 25_000, 35_000] as const;
 
 export type SessionTitleRecoveryMessage = {
   role: string;
   synthetic: boolean;
+  completed: boolean;
   error: unknown;
 };
 
@@ -34,6 +36,7 @@ type PendingRecovery = {
 type RecoveryReadState = "pending" | "failed" | "not-applicable" | "resolved";
 
 export function classifySessionTitleRecoveryRead(read: SessionTitleRecoveryRead): RecoveryReadState {
+  if (!read.title?.trim()) return "pending";
   if (!isGeneratedSessionTitle(read.title)) return "resolved";
 
   const realUsers = read.messages.filter(
@@ -46,7 +49,7 @@ export function classifySessionTitleRecoveryRead(read: SessionTitleRecoveryRead)
   );
   const successfulAssistant = read.messages
     .slice(latestUserIndex + 1)
-    .some((message) => message.role === "assistant" && message.error == null);
+    .some((message) => message.role === "assistant" && message.completed && message.error == null);
 
   if (realUsers.length === 0 || !successfulAssistant) return "pending";
   return "failed";
@@ -71,6 +74,7 @@ export function createSessionTitleRecovery(options: SessionTitleRecoveryOptions)
   };
 
   const schedule = (sessionId: string, recovery: PendingRecovery) => {
+    if (disposed || pending.get(sessionId) !== recovery) return;
     const delayMs = delaysMs[recovery.attempt];
     if (delayMs === undefined) {
       finish(sessionId);

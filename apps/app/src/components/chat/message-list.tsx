@@ -36,7 +36,7 @@ import { useOpenTargets } from "@/lib/target-provider"
 import { openTargetFromUrl } from "@/react-app/domains/session/artifacts/open-target"
 import { presentOpencodeSessionError, sessionErrorPresentationFromUIMessage } from "@/react-app/domains/session/sync/session-error"
 import { TaskRecovery } from "./task-recovery"
-import { BackgroundTaskNotice, BackgroundTasksLabel, BackgroundTasksMessage, SubagentNoticeRow, backgroundShellNoticeFromMessage, subagentNoticeFromMessage } from "./background-tasks"
+import { BackgroundTaskNotice, BackgroundTasksLabel, BackgroundTasksMessage, SubagentNoticeRow, backgroundShellNoticesFromMessage, subagentNoticeFromMessage } from "./background-tasks"
 import { sessionBackgroundShells, useBackgroundShellStore, type BackgroundShell } from "@/react-app/domains/session/status/background-shell-store"
 import { messageAutoAccessWall } from "@/app/lib/inference-access"
 import { AutoAccessNotice } from "@/react-app/domains/cloud/auto-access-ui"
@@ -678,7 +678,7 @@ const AssistantMessage = React.memo(
 
     return (
       <Message
-        className="nanami-rise mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
+        className="mx-auto flex w-full max-w-3xl flex-col items-start gap-2 px-2 md:px-10"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -1013,7 +1013,7 @@ const UserMessage = React.memo(
 
     return (
       <Message
-        className="nanami-rise mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-2 md:px-10"
+        className="mx-auto flex w-full max-w-3xl flex-col items-end gap-2 px-2 md:px-10"
         data-message-id={message.id}
         data-message-role={message.role}
       >
@@ -1138,8 +1138,8 @@ const MessageComponent = React.memo(
       return errorMessage
     }
 
-    const backgroundShellNotice = backgroundShellNoticeFromMessage(message)
-    if (backgroundShellNotice) return <BackgroundTaskNotice message={message} notice={backgroundShellNotice} />
+    const backgroundShellNotices = backgroundShellNoticesFromMessage(message)
+    if (backgroundShellNotices.length > 0) return <BackgroundTaskNotice message={message} notices={backgroundShellNotices} />
     const subagentNotice = subagentNoticeFromMessage(message)
     if (subagentNotice) return <SubagentNoticeRow message={message} notice={subagentNotice} />
 

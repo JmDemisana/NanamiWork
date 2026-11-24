@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isToolUIPart, type UIMessage } from "ai"
 import { ChevronRight } from "lucide-react"
+import { useShallow } from "zustand/react/shallow"
 
 import {
   agentName,
   useElapsedSeconds,
   useSubagentRunState,
 } from "@/components/chat/subagent-run-line"
-import { isTaskToolPart, type TaskToolPart } from "@/lib/build-in-tools"
+import { isTaskToolPart, taskChildSessionId, type TaskToolPart } from "@/lib/build-in-tools"
+import { useSessionActivityStore } from "@/react-app/domains/session/status/session-activity-store"
 import { REMOTE_SESSION_STATUS_THREADS_MAX } from "@openwork/types/automations"
 import { readDenSettings } from "@/app/lib/den"
 import {
@@ -48,18 +50,45 @@ function currentTurnStart(messages: readonly UIMessage[]): number {
 
 /** Sub-agent tasks the current turn started: everything after the latest message the person sent. */
 export function currentTurnSubagentParts(messages: readonly UIMessage[]): TaskToolPart[] {
-  const start = currentTurnStart(messages)
-  const seen = new Set<string>()
-  const parts: TaskToolPart[] = []
-  for (const message of messages.slice(start)) {
+  return subagentParts(messages.slice(currentTurnStart(messages)))
+}
+
+function subagentParts(messages: readonly UIMessage[]): TaskToolPart[] {
+  const parts = new Map<string, TaskToolPart>()
+  for (const message of messages) {
     if (message.role !== "assistant") continue
     for (const part of message.parts) {
-      if (!isToolUIPart(part) || !isTaskToolPart(part) || seen.has(part.toolCallId)) continue
-      seen.add(part.toolCallId)
-      parts.push(part)
+      if (!isToolUIPart(part) || !isTaskToolPart(part)) continue
+      parts.set(part.toolCallId, part)
     }
   }
-  return parts
+  return [...parts.values()]
+}
+
+/**
+ * Starting a new parent turn does not stop detached child sessions. Retain their
+ * latest task rows while the engine reports work or an unanswered interaction.
+ */
+export function useComposerSubagentParts(messages: readonly UIMessage[], workspaceId: string): readonly TaskToolPart[] {
+  const { current, earlier } = useMemo(() => {
+    const start = currentTurnStart(messages)
+    const current = subagentParts(messages.slice(start))
+    const currentChildren = new Set(current.map(taskChildSessionId))
+    const earlier = new Map<string, TaskToolPart>()
+    for (const part of subagentParts(messages.slice(0, start))) {
+      const child = taskChildSessionId(part)
+      if (child && !currentChildren.has(child)) earlier.set(child, part)
+    }
+    return { current, earlier: [...earlier] }
+  }, [messages])
+  const activeEarlier = useSessionActivityStore(useShallow((state) => {
+    const records = state.recordsByWorkspaceId[workspaceId]
+    return earlier.flatMap(([child, part]) => {
+      const record = records?.[child]
+      return record && (record.runActive || record.waitingPermissionIds.length || record.waitingQuestionIds.length) ? [part] : []
+    })
+  }))
+  return useMemo(() => [...activeEarlier, ...current], [activeEarlier, current])
 }
 
 /** A task the current turn started on another computer. */
@@ -228,13 +257,14 @@ export function subagentTrackerSummary(kinds: readonly SubagentTrackerKind[]): {
 
 type ComposerSubagentTrackerProps = {
   messages: readonly UIMessage[]
+  localParts?: readonly TaskToolPart[]
   workspaceId: string
   /** The parent turn is still running. Once it ends and every agent has settled, the list goes away. */
   parentActive: boolean
   syncDegraded: boolean
   onOpenSubagentSession?: (sessionId: string) => void
   onStopSubagentSession?: (sessionId: string) => void | Promise<void>
-  /** Local helpers are listed only where their state can be followed (OpenCode v2); defaults to true. */
+  /** Whether to show local helpers, defaults to true. */
   includeLocal?: boolean
   /** Tasks the turn started on other computers, listed and counted with the local helpers. */
   remote?: {
@@ -245,6 +275,8 @@ type ComposerSubagentTrackerProps = {
 }
 
 const NO_REMOTE_TASKS: readonly RemoteTrackerTask[] = []
+const NO_MESSAGES: readonly UIMessage[] = []
+const NO_LOCAL_PARTS: readonly TaskToolPart[] = []
 
 /**
  * The current turn's sub-agents, attached to the top of the composer so they
@@ -254,12 +286,17 @@ const NO_REMOTE_TASKS: readonly RemoteTrackerTask[] = []
  */
 export function ComposerSubagentTracker(props: ComposerSubagentTrackerProps) {
   const includeLocal = props.includeLocal !== false
-  const parts = useMemo(() => includeLocal ? currentTurnSubagentParts(props.messages) : [], [includeLocal, props.messages])
+  const observed = useComposerSubagentParts(includeLocal && props.localParts === undefined ? props.messages : NO_MESSAGES, props.workspaceId)
+  const parts = includeLocal ? props.localParts ?? observed : NO_LOCAL_PARTS
   const remote = props.remote
   const remoteTasks = remote?.tasks ?? NO_REMOTE_TASKS
   const ids = [...parts.map((part) => part.toolCallId), ...remoteTasks.map((task) => task.start.key)]
   const [kinds, setKinds] = useState<Record<string, SubagentTrackerKind>>({})
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null)
+  const trackerRef = useRef<HTMLDivElement>(null)
+  const focusInteraction = useCallback((childSessionId: string, kind: "question" | "permission") => (
+    focusComposerInteraction(trackerRef.current?.parentElement, childSessionId, kind)
+  ), [])
   const report = useCallback((toolCallId: string, kind: SubagentTrackerKind) => {
     setKinds((current) => (current[toolCallId] === kind ? current : { ...current, [toolCallId]: kind }))
   }, [])
@@ -282,6 +319,7 @@ export function ComposerSubagentTracker(props: ComposerSubagentTrackerProps) {
 
   return (
     <div
+      ref={trackerRef}
       hidden={unresolved}
       data-subagent-tracker
       data-subagent-tracker-count={ids.length}
@@ -322,6 +360,7 @@ export function ComposerSubagentTracker(props: ComposerSubagentTrackerProps) {
             onOpenSubagentSession={props.onOpenSubagentSession}
             onStopSubagentSession={props.onStopSubagentSession}
             onKind={report}
+            focusInteraction={focusInteraction}
           />
         ))}
         {remote ? remoteTasks.map((task) => (
@@ -341,12 +380,19 @@ export function ComposerSubagentTracker(props: ComposerSubagentTrackerProps) {
   )
 }
 
-function focusComposerInteraction(): boolean {
-  const card = document.querySelector<HTMLElement>(COMPOSER_INTERACTION_SELECTOR)
+function focusComposerInteraction(
+  scope: HTMLElement | null | undefined,
+  childSessionId: string,
+  kind: "question" | "permission",
+): boolean {
+  const cards = scope?.querySelectorAll<HTMLElement>(COMPOSER_INTERACTION_SELECTOR)
+  const card = Array.from(cards ?? []).find((candidate) => candidate.dataset.composerInteractionSession === childSessionId
+    && candidate.dataset.composerInteraction === kind)
   if (!card) return false
-  card.scrollIntoView({ block: "nearest" })
   const first = card.querySelector<HTMLElement>("button:not([disabled]), [href], input, textarea, [tabindex]:not([tabindex='-1'])")
-  ;(first ?? card).focus()
+  if (!first) return false
+  card.scrollIntoView({ block: "nearest" })
+  first.focus()
   return true
 }
 
@@ -358,9 +404,11 @@ function SubagentTrackerRow(props: {
   onOpenSubagentSession?: (sessionId: string) => void
   onStopSubagentSession?: (sessionId: string) => void | Promise<void>
   onKind: (toolCallId: string, kind: SubagentTrackerKind) => void
+  focusInteraction: (childSessionId: string, kind: "question" | "permission") => boolean
 }) {
   const { part, onKind } = props
   const [stopping, setStopping] = useState(false)
+  const [stopFailed, setStopFailed] = useState(false)
   const stoppedByPerson = useRef(false)
   const state = useSubagentRunState(part, props.parentActive, props.workspaceId, props.syncDegraded)
   const elapsedSeconds = useElapsedSeconds(state.inFlight, state.startedAt, props.syncDegraded, part.toolCallId)
@@ -383,16 +431,15 @@ function SubagentTrackerRow(props: {
   }
   const stop = () => {
     if (!childSessionId || !props.onStopSubagentSession) return
+    setStopFailed(false)
     setStopping(true)
     void Promise.resolve()
       .then(() => props.onStopSubagentSession?.(childSessionId))
-      .then(() => { stoppedByPerson.current = true }, () => {})
+      .then(() => { stoppedByPerson.current = true }, () => setStopFailed(true))
       .finally(() => setStopping(false))
   }
   const review = () => {
-    // Approvals and answers for a sub-agent already sit above the composer;
-    // without one there, the agent's own chat is where it waits.
-    if (!focusComposerInteraction()) open()
+    if (childSessionId && !props.focusInteraction(childSessionId, state.permissionPending ? "permission" : "question")) open()
   }
 
   return (
@@ -403,9 +450,11 @@ function SubagentTrackerRow(props: {
       status={{
         kind,
         elapsed: formatElapsedSeconds(elapsedSeconds),
-        workingNote: state.activity === "retrying" ? "retrying" : state.activity === "reconnecting" ? "reconnecting" : null,
+        workingNote: state.activity === "retrying" ? "retrying" : state.activity === "reconnecting" ? "reconnecting"
+          : state.activity === "waiting-start" ? "starting" : null,
         waitingFor: state.activity === "waiting-permission" ? "permission" : state.activity === "waiting-question" ? "question" : null,
         stopping,
+        stopFailed: stopFailed && state.childRunning,
         shimmer: state.activity === "shimmer",
       }}
       onOpen={canOpen ? open : undefined}

@@ -80,6 +80,23 @@ jobs:
         working-directory: apps/app
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/prompt-navigation.test.ts
 
+      - name: Verify model entitlements and task and title UI
+        working-directory: apps/app
+        shell: pwsh
+        run: |
+          foreach ($test in @("tests/antigravity-new-models.test.ts", "tests/composer-background-tasks.test.tsx", "tests/plugin-background-task-ui.test.ts", "tests/composer-subagent-tracker.test.tsx", "tests/subagent-run-line-actions.test.tsx", "tests/subagent-notices.test.tsx", "tests/session-title-recovery.test.ts")) {
+            bun test $test --timeout 60000
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Verify background task and title plugins
+        working-directory: apps/server
+        shell: pwsh
+        run: |
+          bun test test/openwork-background-tasks.test.ts --timeout 30000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bun test test/openwork-title-request.test.ts --timeout 30000
+
       - name: Verify prompt navigation controls
         working-directory: apps/app
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File ../../scripts/ci-test.ps1 -TestFile tests/session-scroll.test.tsx -Filter prompt

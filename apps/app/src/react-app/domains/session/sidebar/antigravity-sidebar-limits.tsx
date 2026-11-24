@@ -45,8 +45,9 @@ export function AntigravitySidebarLimits() {
         </span>
         <button
           type="button"
+          disabled={anyQuotaLoading}
           onClick={() => {
-            void useAntigravityAccountsStore.getState().refreshQuotas();
+            void useAntigravityAccountsStore.getState().refreshQuotas(activeAccount?.email);
           }}
           title="Refresh account limits"
           aria-label="Refresh account limits"

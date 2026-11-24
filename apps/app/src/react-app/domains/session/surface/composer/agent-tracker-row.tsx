@@ -21,6 +21,7 @@ export type AgentTrackerStatus = {
   /** What the agent waits for while kind is attention. */
   waitingFor?: "permission" | "question" | null
   stopping?: boolean
+  stopFailed?: boolean
   shimmer?: boolean
 }
 
@@ -32,6 +33,7 @@ export type AgentTrackerStatus = {
  */
 export function agentTrackerStatusText(status: AgentTrackerStatus): { visible: string; spoken: string | null } {
   if (status.stopping) return { visible: t("session.subagent_tracker_stopping"), spoken: null }
+  if (status.stopFailed) return { visible: t("session.subagent_tracker_stop_failed"), spoken: null }
   switch (status.kind) {
     case "attention":
       return { visible: status.waitingFor === "permission" ? t("session.subagent_permission_needed") : t("session.subagent_question_pending"), spoken: null }
@@ -113,9 +115,11 @@ export function AgentTrackerRow(props: AgentTrackerRowProps) {
       )}
       <span
         data-subagent-tracker-status
+        role={status.stopFailed ? "alert" : undefined}
         className={cn(
           "shrink-0 text-xs tabular-nums",
-          attention ? "font-medium text-amber-11"
+          status.stopFailed ? "text-red-11"
+            : attention ? "font-medium text-amber-11"
             : status.kind === "error" ? "text-red-11"
             : "text-gray-9",
           status.shimmer && !status.stopping && "ow-text-shimmer",

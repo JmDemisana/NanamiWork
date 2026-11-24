@@ -58,13 +58,18 @@ const ANTIGRAVITY_GOOGLE_PROVIDER_CONFIG: Record<string, unknown> = {
       ["neon", "Neon"],
       ["hydrogen", "Hydrogen"],
       ["carbon", "Carbon"],
-    ] as const).flatMap(([model, label]) =>
-      ["low", "medium", "high"].map((tier) => [
-        `antigravity-gemini-4-${model}-${tier}`,
-        { name: `Gemini 4 ${label} (${tier})`,
-          limit: { context: 1048576, output: 65536 }, modalities: ANTIGRAVITY_MODALITIES },
-      ]),
-    )),
+    ] as const).flatMap(([model, label]) => {
+      const id = `antigravity-gemini-4-${model}`;
+      const name = `Gemini 4 ${label}`;
+      const metadata = { limit: { context: 1048576, output: 65536 }, modalities: ANTIGRAVITY_MODALITIES };
+      return [
+        [id, { name, ...metadata }],
+        ...["low", "medium", "high"].flatMap((tier) => [
+          [`${id}-${tier}`, { name: `${name} (${tier})`, ...metadata }],
+          [`${id}-tiered-${tier}`, { name: `${name} (${tier})`, ...metadata }],
+        ]),
+      ];
+    })),
     "antigravity-gemini-3.8-flash-high": {
       name: "Gemini 3.8 Flash (High)",
       limit: { context: 1048576, output: 65536 },

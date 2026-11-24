@@ -5,6 +5,7 @@
 const HEADER = "x-openwork-title-attempt";
 const DEADLINE_MS = 60_000;
 const MAX_ERROR_BYTES = 16_384;
+const MAX_TITLE_REQUEST_BYTES = 1_048_576;
 
 type Diagnostic = {
   sessionID: string;
@@ -43,8 +44,11 @@ function finish(id: string) {
   attempts.delete(id);
 }
 
-async function errorBody(response: Response): Promise<unknown> {
-  const reader = response.clone().body?.getReader();
+async function readBody(
+  body: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): Promise<string | null> {
+  const reader = body?.getReader();
   if (!reader) return null;
   let size = 0;
   let text = "";
@@ -54,17 +58,29 @@ async function errorBody(response: Response): Promise<unknown> {
       const chunk = await reader.read();
       if (chunk.done) break;
       size += chunk.value.byteLength;
-      if (size > MAX_ERROR_BYTES) return null;
+      if (size > maxBytes) return null;
       text += decoder.decode(chunk.value, { stream: true });
     }
     text += decoder.decode();
-    try { return JSON.parse(text); } catch { return text; }
+    return text;
   } catch {
     return null;
   } finally {
     // A clone's tee can wait for the original consumer when cancelled.
     void reader.cancel().catch(() => undefined);
   }
+}
+
+async function errorBody(response: Response): Promise<unknown> {
+  const text = await readBody(response.clone().body, MAX_ERROR_BYTES);
+  if (text === null) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+function requestCopyForRecovery(input: Parameters<typeof fetch>[0], init?: RequestInit): Request | null {
+  if (!(input instanceof Request) || input.bodyUsed || !input.body || init?.body != null) return null;
+  if (!/application\/json/i.test(new Headers(init?.headers ?? input.headers).get("content-type") ?? "")) return null;
+  try { return input.clone(); } catch { return null; }
 }
 
 function correction(body: string, value: unknown): { body: string; parameter: string } | null {
@@ -117,20 +133,24 @@ function install() {
     const id = headers.get(HEADER);
     if (!id) return base(input, init);
     // Removing a signed header here invalidates SigV4's canonical request.
-    if (!/^AWS4-HMAC-SHA256\s/i.test(headers.get("authorization") ?? "")) headers.delete(HEADER);
+    const signed = /^AWS4-HMAC-SHA256\s/i.test(headers.get("authorization") ?? "");
+    if (!signed) headers.delete(HEADER);
     const externalSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     const deadline = AbortSignal.timeout(DEADLINE_MS);
     const options = { ...init, headers, signal: externalSignal ? AbortSignal.any([externalSignal, deadline]) : deadline };
     const attempt = attempts.get(id);
     // Unknown/expired markers are stripped too, except when already signed.
     if (!attempt) return base(input, options);
+    const copy = !signed && !attempt.retried ? requestCopyForRecovery(input, init) : null;
     try {
       const response = await base(input, options);
       if (!response.ok) {
         const value = response.status === 400 || response.status === 403 ? await errorBody(response) : null;
         report(attempt, failure(response.status, value), response.status);
-        if (!attempt.retried && response.status === 400 && typeof init?.body === "string") {
-          const recovered = correction(init.body, value);
+        if (!signed && !attempt.retried && response.status === 400) {
+          const body = typeof init?.body === "string" ? init.body :
+            copy && record(value) && record(value.error) ? await readBody(copy.body, MAX_TITLE_REQUEST_BYTES) : null;
+          const recovered = body === null ? null : correction(body, value);
           if (recovered && attempts.get(id) === attempt && !options.signal.aborted) {
             attempt.retried = true;
             report(attempt, "retrying_parameter", response.status, recovered.parameter);
@@ -148,6 +168,8 @@ function install() {
     } catch (error) {
       report(attempt, externalSignal?.aborted ? "cancelled" : deadline.aborted ? "timed_out" : "transport_failed");
       throw error;
+    } finally {
+      if (copy?.body && !copy.body.locked) void copy.body.cancel().catch(() => undefined);
     }
   };
   globalThis.fetch = Object.assign(patched, base);
