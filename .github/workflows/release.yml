@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.2.9)"
+        description: "Release tag (e.g. v1.2.10)"
         required: false
-        default: "v1.2.9"
+        default: "v1.2.10"
   push:
     tags:
       - "v*"
@@ -191,22 +191,20 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.9' }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v1.2.10' }}
           target_commitish: ${{ github.sha }}
-          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.9' }}: Task Tracking and Chat Reliability"
+          name: "NanamiWork ${{ inputs.tag || github.ref_name || 'v1.2.10' }}: Antigravity Account Switch Hotfix"
           draft: false
           prerelease: false
           files: release-assets/*
           generate_release_notes: false
           body: |
-            Background tasks now appear above the composer while running. Their completions show as task updates in the transcript.
+            Fixes Antigravity account switching failing with "Could not prepare the selected Antigravity account."
 
-            - Keep active subagents visible across follow-up messages and open the correct child chat from Review.
-            - Show Carbon and its available tiers when the connected account reports access.
-            - Select compatible models for automatic chat titles on Antigravity and Copilot.
-            - Shorten interface transitions and keep chat rows steady while scrolling.
-
-            On OpenCode v1, the running-task list starts fresh after reopening NanamiWork.
+            - Discard a Local Router pin that the Antigravity plugin invalidated when it rotated accounts, instead of blocking every later switch.
+            - Leave the account file untouched and drop an unusable pin when the router leaves Antigravity.
+            - Recover automatically from a corrupt pin file.
+            - Show the underlying reason in the account switch error toast.
 
             Windows includes an NSIS installer and AppX package. macOS includes an Apple Silicon DMG and ZIP. Linux includes an x64 AppImage and Debian package.
         env:
